@@ -7,6 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { 
   ImagePlus, 
   Loader2, 
@@ -16,7 +17,9 @@ import {
   Camera,
   CheckCircle2,
   Clock,
-  PlayCircle
+  PlayCircle,
+  Wrench,
+  CheckCircle
 } from "lucide-react";
 import { toast } from "sonner";
 import { SupabaseEntradaRepository } from "@/infrastructure/repositories/SupabaseEntradaRepository";
@@ -149,29 +152,13 @@ export default function Oficina() {
     }));
   };
 
-  return (
-    <div className="min-h-screen bg-background">
-      <Header title="Oficina" />
+  // Separar motos por status
+  const motosEmAndamento = motos.filter(
+    (moto) => moto.status === "pendente" || moto.status === "alinhando"
+  );
+  const motosConcluidas = motos.filter((moto) => moto.status === "concluido");
 
-      <main className="pt-20 pb-32 px-6">
-        <div className="max-w-2xl mx-auto space-y-6">
-          {loading ? (
-            <Card className="card-samurai text-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-accent mx-auto mb-4" />
-              <p className="font-sans text-foreground/60">Carregando motos...</p>
-            </Card>
-          ) : error ? (
-            <Card className="card-samurai text-center py-12">
-              <p className="font-sans text-red-500">{error}</p>
-            </Card>
-          ) : motos.length === 0 ? (
-            <Card className="card-samurai text-center py-12">
-              <p className="font-sans text-foreground/60">
-                Nenhuma moto em processamento
-              </p>
-            </Card>
-          ) : (
-            motos.map((moto) => (
+  const renderMotoCard = (moto: typeof motos[0]) => (
               <Card
                 key={moto.entradaId}
                 className="card-samurai hover:shadow-lg transition-shadow"
@@ -280,7 +267,70 @@ export default function Oficina() {
                   </Button>
                 </div>
               </Card>
-            ))
+  );
+
+  return (
+    <div className="min-h-screen bg-background">
+      <Header title="Oficina" />
+
+      <main className="pt-20 pb-32 px-6">
+        <div className="max-w-2xl mx-auto space-y-6">
+          {loading ? (
+            <Card className="card-samurai text-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-accent mx-auto mb-4" />
+              <p className="font-sans text-foreground/60">Carregando motos...</p>
+            </Card>
+          ) : error ? (
+            <Card className="card-samurai text-center py-12">
+              <p className="font-sans text-red-500">{error}</p>
+            </Card>
+          ) : (
+            <Tabs defaultValue="em-andamento" className="w-full">
+              <TabsList className="w-full grid grid-cols-2">
+                <TabsTrigger value="em-andamento" className="flex items-center gap-2">
+                  <Wrench size={16} />
+                  Em Andamento
+                  {motosEmAndamento.length > 0 && (
+                    <span className="ml-1 px-1.5 py-0.5 text-xs bg-accent/20 text-accent rounded-full">
+                      {motosEmAndamento.length}
+                    </span>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="concluidos" className="flex items-center gap-2">
+                  <CheckCircle size={16} />
+                  Concluídos
+                  {motosConcluidas.length > 0 && (
+                    <span className="ml-1 px-1.5 py-0.5 text-xs bg-green-600/20 text-green-600 rounded-full">
+                      {motosConcluidas.length}
+                    </span>
+                  )}
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="em-andamento" className="space-y-6 mt-6">
+                {motosEmAndamento.length === 0 ? (
+                  <Card className="card-samurai text-center py-12">
+                    <p className="font-sans text-foreground/60">
+                      Nenhuma moto em processamento
+                    </p>
+                  </Card>
+                ) : (
+                  motosEmAndamento.map((moto) => renderMotoCard(moto))
+                )}
+              </TabsContent>
+
+              <TabsContent value="concluidos" className="space-y-6 mt-6">
+                {motosConcluidas.length === 0 ? (
+                  <Card className="card-samurai text-center py-12">
+                    <p className="font-sans text-foreground/60">
+                      Nenhum serviço concluído
+                    </p>
+                  </Card>
+                ) : (
+                  motosConcluidas.map((moto) => renderMotoCard(moto))
+                )}
+              </TabsContent>
+            </Tabs>
           )}
         </div>
       </main>
