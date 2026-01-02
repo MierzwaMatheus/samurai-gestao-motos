@@ -13,6 +13,9 @@ import { toast } from "sonner";
 import { ViaCepService } from "@/infrastructure/api/ViaCepService";
 import { BuscarEnderecoPorCepUseCase } from "@/domain/usecases/BuscarEnderecoPorCepUseCase";
 import { useBuscarCep } from "@/hooks/useBuscarCep";
+import { SupabaseFreteApi } from "@/infrastructure/api/SupabaseFreteApi";
+import { CalcularFreteUseCase } from "@/domain/usecases/CalcularFreteUseCase";
+import { useCalcularFrete } from "@/hooks/useCalcularFrete";
 
 export default function Cadastro() {
   // Inicialização das dependências seguindo DIP
@@ -23,6 +26,14 @@ export default function Cadastro() {
   );
   const { buscar, loading: loadingCep, error: errorCep, endereco: enderecoEncontrado } =
     useBuscarCep(buscarCepUseCase);
+
+  const freteApi = useMemo(() => new SupabaseFreteApi(), []);
+  const calcularFreteUseCase = useMemo(
+    () => new CalcularFreteUseCase(freteApi),
+    [freteApi]
+  );
+  const { calcular: calcularFrete, loading: loadingFrete, error: errorFrete } =
+    useCalcularFrete(calcularFreteUseCase);
 
   const [tipo, setTipo] = useState<EntryType>("entrada");
   const [formData, setFormData] = useState<DadosCadastro>({
@@ -97,15 +108,24 @@ export default function Cadastro() {
   };
 
   const handleCalcularFrete = async () => {
-    if (!formData.endereco && !formData.enderecoCompleto) {
-      toast.error("Busque um endereço por CEP ou digite um endereço para calcular o frete");
+    // Precisa ter CEP para calcular frete
+    const cepDestino = formData.cep?.replace(/\D/g, "");
+    if (!cepDestino || cepDestino.length !== 8) {
+      toast.error("Busque um endereço por CEP primeiro para calcular o frete");
       return;
     }
-    // Simulação de cálculo de frete
-    // Em produção, isso usaria as coordenadas do enderecoCompleto para cálculo real
-    const freteSimulado = Math.floor(Math.random() * 100) + 50;
-    setFormData({ ...formData, frete: freteSimulado });
-    toast.success(`Frete calculado: R$ ${freteSimulado.toFixed(2)}`);
+
+    try {
+      const resultado = await calcularFrete(cepDestino);
+      setFormData({ ...formData, frete: resultado.valorFrete });
+      toast.success(
+        `Frete calculado: R$ ${resultado.valorFrete.toFixed(2)} (${resultado.distanciaKm.toFixed(2)} km)`
+      );
+    } catch (err) {
+      const mensagem =
+        err instanceof Error ? err.message : "Erro ao calcular frete";
+      toast.error(mensagem);
+    }
   };
 
   const handleRegistrar = () => {
@@ -267,12 +287,15 @@ export default function Cadastro() {
                   onClick={handleCalcularFrete}
                   variant="outline"
                   className="flex-1"
-                  disabled={!formData.endereco && !formData.enderecoCompleto}
+                  disabled={loadingFrete || !formData.cep || formData.cep.replace(/\D/g, "").length !== 8}
                 >
                   <Truck size={16} className="mr-2" />
-                  Calcular Frete
+                  {loadingFrete ? "Calculando..." : "Calcular Frete"}
                 </Button>
               </div>
+              {errorFrete && (
+                <p className="text-xs text-red-500">{errorFrete}</p>
+              )}
 
               {/* Frete Calculado */}
               {(formData.frete ?? 0) > 0 && (

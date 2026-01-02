@@ -1,0 +1,51 @@
+# Configuração do Supabase CLI
+# Este arquivo é usado pelo Supabase CLI para gerenciar o projeto local
+
+[project]
+# ID do projeto Supabase (será preenchido após criar o projeto)
+# project_id = "your-project-id"
+
+[api]
+# Configurações da API
+enabled = true
+port = 54321
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+# Configurações do banco de dados
+port = 54322
+shadow_port = 54320
+major_version = 17
+
+[studio]
+# Configurações do Supabase Studio
+enabled = true
+port = 54323
+
+[inbucket]
+# Configurações do Inbucket (email testing)
+enabled = true
+port = 54324
+smtp_port = 54325
+pop3_port = 54326
+
+[storage]
+# Configurações do Storage
+enabled = true
+file_size_limit = "50MiB"
+
+[auth]
+# Configurações de autenticação
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["https://localhost:3000"]
+jwt_expiry = 3600
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false
+
