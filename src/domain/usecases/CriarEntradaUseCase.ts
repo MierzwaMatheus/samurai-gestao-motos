@@ -24,23 +24,38 @@ export class CriarEntradaUseCase {
 
     // 1. Buscar ou criar cliente
     let clienteId: string;
-    const clientesExistentes = await this.clienteRepo.buscarPorNome(dados.cliente);
-    const clienteExistente = clientesExistentes.find((c) => c.nome === dados.cliente);
-
-    if (clienteExistente) {
+    
+    // Se clienteId foi fornecido, usar cliente existente
+    if (dados.clienteId) {
+      const clienteExistente = await this.clienteRepo.buscarPorId(dados.clienteId);
+      if (!clienteExistente) {
+        throw new Error("Cliente não encontrado");
+      }
       clienteId = clienteExistente.id;
       // Atualiza telefone se fornecido
       if (dados.telefone && clienteExistente.telefone !== dados.telefone) {
         await this.clienteRepo.atualizar(clienteId, { telefone: dados.telefone });
       }
     } else {
-      const novoCliente = await this.clienteRepo.criar({
-        nome: dados.cliente,
-        telefone: dados.telefone,
-        endereco: dados.endereco,
-        cep: dados.cep?.replace(/\D/g, ""),
-      });
-      clienteId = novoCliente.id;
+      // Buscar cliente existente por nome ou criar novo
+      const clientesExistentes = await this.clienteRepo.buscarPorNome(dados.cliente);
+      const clienteExistente = clientesExistentes.find((c) => c.nome === dados.cliente);
+
+      if (clienteExistente) {
+        clienteId = clienteExistente.id;
+        // Atualiza telefone se fornecido
+        if (dados.telefone && clienteExistente.telefone !== dados.telefone) {
+          await this.clienteRepo.atualizar(clienteId, { telefone: dados.telefone });
+        }
+      } else {
+        const novoCliente = await this.clienteRepo.criar({
+          nome: dados.cliente,
+          telefone: dados.telefone,
+          endereco: dados.endereco,
+          cep: dados.cep?.replace(/\D/g, ""),
+        });
+        clienteId = novoCliente.id;
+      }
     }
 
     // 2. Criar moto

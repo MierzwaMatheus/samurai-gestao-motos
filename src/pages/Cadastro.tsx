@@ -2,14 +2,16 @@ import { useState, useMemo } from "react";
 import Header from "@/components/Header";
 import BottomNav from "@/components/BottomNav";
 import EntryTypeToggle from "@/components/EntryTypeToggle";
-import { EntryType, DadosCadastro } from "@shared/types";
+import { EntryType, DadosCadastro, Cliente } from "@shared/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import { ImagePlus, Truck, Search, MapPin } from "lucide-react";
 import { toast } from "sonner";
+import { ClienteSearch } from "@/components/ClienteSearch";
 import { ViaCepService } from "@/infrastructure/api/ViaCepService";
 import { BuscarEnderecoPorCepUseCase } from "@/domain/usecases/BuscarEnderecoPorCepUseCase";
 import { useBuscarCep } from "@/hooks/useBuscarCep";
@@ -61,6 +63,8 @@ export default function Cadastro() {
   const { upload: uploadFoto, loading: loadingUpload } = useUploadFoto(storageApi, fotoRepo);
 
   const [tipo, setTipo] = useState<EntryType>("entrada");
+  const [usarClienteExistente, setUsarClienteExistente] = useState(false);
+  const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(null);
   const [formData, setFormData] = useState<DadosCadastro>({
     tipo: "entrada",
     cliente: "",
@@ -85,6 +89,45 @@ export default function Cadastro() {
   const handleTipoChange = (novoTipo: EntryType) => {
     setTipo(novoTipo);
     setFormData({ ...formData, tipo: novoTipo });
+  };
+
+  const handleClienteSelecionado = (cliente: Cliente | null) => {
+    setClienteSelecionado(cliente);
+    if (cliente) {
+      setFormData({
+        ...formData,
+        cliente: cliente.nome,
+        clienteId: cliente.id,
+        telefone: cliente.telefone || "",
+        endereco: cliente.endereco || "",
+        cep: cliente.cep || "",
+      });
+    } else {
+      setFormData({
+        ...formData,
+        cliente: "",
+        clienteId: undefined,
+        telefone: "",
+        endereco: "",
+        cep: "",
+      });
+    }
+  };
+
+  const handleToggleClienteExistente = (checked: boolean) => {
+    setUsarClienteExistente(checked);
+    if (!checked) {
+      // Limpar seleção quando desativar
+      setClienteSelecionado(null);
+      setFormData({
+        ...formData,
+        cliente: "",
+        clienteId: undefined,
+        telefone: "",
+        endereco: "",
+        cep: "",
+      });
+    }
   };
 
   const handleInputChange = (
@@ -180,7 +223,17 @@ export default function Cadastro() {
 
   const handleRegistrar = async () => {
     // Validações
-    if (!formData.cliente || !formData.moto || !formData.telefone || !formData.valorCobrado) {
+    if (usarClienteExistente && !clienteSelecionado) {
+      toast.error("Selecione um cliente existente");
+      return;
+    }
+    
+    if (!usarClienteExistente && (!formData.cliente || !formData.telefone)) {
+      toast.error("Preencha todos os campos obrigatórios (*)");
+      return;
+    }
+
+    if (!formData.moto || !formData.valorCobrado) {
       toast.error("Preencha todos os campos obrigatórios (*)");
       return;
     }
@@ -229,6 +282,7 @@ export default function Cadastro() {
       setFormData({
         tipo: "entrada",
         cliente: "",
+        clienteId: undefined,
         telefone: "",
         endereco: "",
         cep: "",
@@ -246,6 +300,8 @@ export default function Cadastro() {
       });
       setFotos([]);
       setFotosArquivos([]);
+      setClienteSelecionado(null);
+      setUsarClienteExistente(false);
     } catch (err) {
       const mensagem = err instanceof Error ? err.message : "Erro ao registrar";
       toast.error(mensagem);
@@ -262,39 +318,75 @@ export default function Cadastro() {
         <div className="max-w-2xl mx-auto space-y-8">
           {/* Seção Cliente */}
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="cliente" className="text-xs uppercase tracking-widest">
-                Nome do Cliente *
-              </Label>
-              <Input
-                id="cliente"
-                name="cliente"
-                placeholder="Ex: João Silva"
-                value={formData.cliente}
-                onChange={handleInputChange}
-                className="bg-card border-foreground/10"
-                required
+            {/* Toggle para usar cliente existente */}
+            <div className="flex items-center justify-between p-4 bg-card border border-foreground/10 rounded-lg">
+              <div className="space-y-0.5">
+                <Label htmlFor="usar-cliente-existente" className="text-sm font-medium">
+                  Usar cliente existente
+                </Label>
+                <p className="text-xs text-foreground/60">
+                  Buscar e selecionar um cliente já cadastrado
+                </p>
+              </div>
+              <Switch
+                id="usar-cliente-existente"
+                checked={usarClienteExistente}
+                onCheckedChange={handleToggleClienteExistente}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="telefone" className="text-xs uppercase tracking-widest">
-                Telefone *
-              </Label>
-              <Input
-                id="telefone"
-                name="telefone"
-                type="tel"
-                placeholder="(11) 99999-9999"
-                value={formData.telefone}
-                onChange={(e) => {
-                  const value = e.target.value.replace(/\D/g, "");
-                  const formatted = value.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
-                  setFormData({ ...formData, telefone: formatted || value });
-                }}
-                className="bg-card border-foreground/10"
-                required
-              />
-            </div>
+
+            {usarClienteExistente ? (
+              /* Busca de cliente existente */
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase tracking-widest">
+                    Buscar Cliente *
+                  </Label>
+                  <ClienteSearch
+                    clienteRepo={clienteRepo}
+                    value={clienteSelecionado}
+                    onSelect={handleClienteSelecionado}
+                  />
+                </div>
+              </div>
+            ) : (
+              /* Campos de cadastro de novo cliente */
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="cliente" className="text-xs uppercase tracking-widest">
+                    Nome do Cliente *
+                  </Label>
+                  <Input
+                    id="cliente"
+                    name="cliente"
+                    placeholder="Ex: João Silva"
+                    value={formData.cliente}
+                    onChange={handleInputChange}
+                    className="bg-card border-foreground/10"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="telefone" className="text-xs uppercase tracking-widest">
+                    Telefone *
+                  </Label>
+                  <Input
+                    id="telefone"
+                    name="telefone"
+                    type="tel"
+                    placeholder="(11) 99999-9999"
+                    value={formData.telefone}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, "");
+                      const formatted = value.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
+                      setFormData({ ...formData, telefone: formatted || value });
+                    }}
+                    className="bg-card border-foreground/10"
+                    required
+                  />
+                </div>
+              </>
+            )}
           </div>
 
           {/* Seção Moto */}

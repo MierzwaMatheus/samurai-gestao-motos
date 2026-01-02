@@ -5,6 +5,7 @@ import Login from "@/pages/Login";
 import Cadastro from "@/pages/Cadastro";
 import Oficina from "@/pages/Oficina";
 import Orcamentos from "@/pages/Orcamentos";
+import Clientes from "@/pages/Clientes";
 import { Route, Switch, useLocation } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -69,6 +70,11 @@ function Router() {
       <Route path={"/orcamentos"}>
         <ProtectedRoute>
           <Orcamentos />
+        </ProtectedRoute>
+      </Route>
+      <Route path={"/clientes"}>
+        <ProtectedRoute>
+          <Clientes />
         </ProtectedRoute>
       </Route>
       <Route path={"/404"} component={NotFound} />

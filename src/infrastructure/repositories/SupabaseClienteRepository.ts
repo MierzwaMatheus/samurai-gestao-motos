@@ -110,6 +110,7 @@ export class SupabaseClienteRepository implements ClienteRepository {
       email: data.email,
       endereco: data.endereco,
       cep: data.cep,
+      numeroServicos: data.numero_servicos || 0,
       criadoEm: new Date(data.criado_em),
       atualizadoEm: new Date(data.atualizado_em),
     };

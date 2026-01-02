@@ -1,8 +1,8 @@
-import { Plus, Wrench, FileText } from "lucide-react";
+import { Plus, Wrench, FileText, Users } from "lucide-react";
 import { Link } from "wouter";
 
 interface BottomNavProps {
-  active: "cadastro" | "oficina" | "orcamentos";
+  active: "cadastro" | "oficina" | "orcamentos" | "clientes";
 }
 
 export default function BottomNav({ active }: BottomNavProps) {
@@ -10,6 +10,7 @@ export default function BottomNav({ active }: BottomNavProps) {
     { id: "cadastro", label: "Cadastro", icon: Plus, href: "/" },
     { id: "oficina", label: "Oficina", icon: Wrench, href: "/oficina" },
     { id: "orcamentos", label: "Orçamentos", icon: FileText, href: "/orcamentos" },
+    { id: "clientes", label: "Clientes", icon: Users, href: "/clientes" },
   ];
 
   return (

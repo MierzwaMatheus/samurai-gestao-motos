@@ -17,6 +17,7 @@ export interface Endereco {
 export interface DadosCadastro {
   tipo: EntryType;
   cliente: string;
+  clienteId?: string; // ID do cliente existente quando usar cliente existente
   telefone?: string;
   endereco?: string;
   cep?: string;
@@ -41,6 +42,7 @@ export interface Cliente {
   email?: string;
   endereco?: string;
   cep?: string;
+  numeroServicos: number;
   criadoEm: Date;
   atualizadoEm: Date;
 }
