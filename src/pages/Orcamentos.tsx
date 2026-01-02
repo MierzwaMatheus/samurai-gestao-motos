@@ -12,7 +12,7 @@ import { SupabaseClienteRepository } from "@/infrastructure/repositories/Supabas
 import { SupabaseMotoRepository } from "@/infrastructure/repositories/SupabaseMotoRepository";
 import { SupabaseFotoRepository } from "@/infrastructure/repositories/SupabaseFotoRepository";
 import { useOrcamentos } from "@/hooks/useOrcamentos";
-import { AtualizarOrcamentoUseCase } from "@/domain/usecases/AtualizarOrcamentoUseCase";
+import { ConverterOrcamentoEntradaUseCase } from "@/domain/usecases/ConverterOrcamentoEntradaUseCase";
 import { useGerarOS } from "@/hooks/useGerarOS";
 
 type FilterType = "ativos" | "expirados";
@@ -30,9 +30,9 @@ export default function Orcamentos() {
   const statusBanco = filtro === "ativos" ? "ativo" : "expirado";
   const { orcamentos, loading, error, recarregar, removerOrcamento } = useOrcamentos(orcamentoRepo, statusBanco);
   
-  const atualizarOrcamentoUseCase = useMemo(
-    () => new AtualizarOrcamentoUseCase(orcamentoRepo),
-    [orcamentoRepo]
+  const converterOrcamentoEntradaUseCase = useMemo(
+    () => new ConverterOrcamentoEntradaUseCase(orcamentoRepo, entradaRepo),
+    [orcamentoRepo, entradaRepo]
   );
 
   const { gerar: gerarOS, loading: loadingOS } = useGerarOS(
@@ -50,7 +50,7 @@ export default function Orcamentos() {
 
   const handleConverterEntrada = async (orcamentoId: string) => {
     try {
-      await atualizarOrcamentoUseCase.execute(orcamentoId, "convertido");
+      await converterOrcamentoEntradaUseCase.execute(orcamentoId);
       removerOrcamento(orcamentoId);
       toast.success("Orçamento convertido em entrada!");
     } catch (err) {

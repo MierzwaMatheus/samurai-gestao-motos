@@ -113,6 +113,7 @@ export class SupabaseEntradaRepository implements EntradaRepository {
 
   async atualizar(id: string, dados: Partial<Entrada>): Promise<Entrada> {
     const updateData: any = {};
+    if (dados.tipo !== undefined) updateData.tipo = dados.tipo;
     if (dados.endereco !== undefined) updateData.endereco = dados.endereco;
     if (dados.cep !== undefined) updateData.cep = dados.cep;
     if (dados.telefone !== undefined) updateData.telefone = dados.telefone;
