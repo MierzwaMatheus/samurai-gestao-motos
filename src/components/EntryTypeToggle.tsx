@@ -1,4 +1,4 @@
-import { EntryType } from "@/../../shared/types";
+import { EntryType } from "@shared/types";
 
 interface EntryTypeToggleProps {
   value: EntryType;

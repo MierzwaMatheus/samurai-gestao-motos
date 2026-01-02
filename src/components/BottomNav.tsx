@@ -19,20 +19,22 @@ export default function BottomNav({ active }: BottomNavProps) {
         const isActive = active === item.id;
 
         return (
-          <Link key={item.id} href={item.href}>
-            <a className="flex flex-col items-center gap-0.5 px-3 py-1 transition-colors">
-              <Icon
-                size={20}
-                className={isActive ? "text-accent" : "text-foreground/40"}
-              />
-              <span
-                className={`text-xs font-sans ${
-                  isActive ? "text-accent" : "text-foreground/40"
-                }`}
-              >
-                {item.label}
-              </span>
-            </a>
+          <Link
+            key={item.id}
+            href={item.href}
+            className="flex flex-col items-center gap-0.5 px-3 py-1 transition-colors"
+          >
+            <Icon
+              size={20}
+              className={isActive ? "text-accent" : "text-foreground/40"}
+            />
+            <span
+              className={`text-xs font-sans ${
+                isActive ? "text-accent" : "text-foreground/40"
+              }`}
+            >
+              {item.label}
+            </span>
           </Link>
         );
       })}
