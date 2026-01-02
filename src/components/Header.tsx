@@ -1,4 +1,4 @@
-import { Sword, LogOut, Settings } from "lucide-react";
+import { LogOut, Settings } from "lucide-react";
 import { JapaneseThemeSwitch } from "./JapaneseThemeSwitch";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "./ui/button";
@@ -40,7 +40,6 @@ export default function Header({ title }: HeaderProps) {
         >
           <LogOut size={20} />
         </Button>
-        <Sword size={28} className="text-accent" />
       </div>
     </header>
   );
