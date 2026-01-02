@@ -12,5 +12,6 @@ export interface TipoServicoRepository {
   atualizar(id: string, dados: Partial<Omit<TipoServico, "id" | "criadoEm" | "atualizadoEm" | "quantidadeServicos">>): Promise<TipoServico>;
   deletar(id: string): Promise<void>;
   vincularTiposServicoAEntrada(entradaId: string, tiposServicoIds: string[]): Promise<void>;
+  buscarPorEntradaId(entradaId: string): Promise<TipoServico[]>;
 }
 

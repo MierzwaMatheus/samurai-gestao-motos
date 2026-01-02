@@ -122,6 +122,7 @@ export interface OrcamentoCompleto extends Orcamento {
   cep?: string;
   valorCobrado?: number;
   dataOrcamento?: Date;
+  tiposServico?: TipoServico[];
 }
 
 export interface MotoCompleta extends Moto {
@@ -131,6 +132,7 @@ export interface MotoCompleta extends Moto {
   progresso: number;
   fotosStatus?: FotoStatus[];
   fotos: string[]; // Legado - fotos do tipo "moto"
+  tiposServico?: TipoServico[];
 }
 
 export interface TipoServico {

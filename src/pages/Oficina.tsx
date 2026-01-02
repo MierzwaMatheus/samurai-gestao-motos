@@ -25,7 +25,9 @@ import { toast } from "sonner";
 import { SupabaseEntradaRepository } from "@/infrastructure/repositories/SupabaseEntradaRepository";
 import { SupabaseClienteRepository } from "@/infrastructure/repositories/SupabaseClienteRepository";
 import { SupabaseMotoRepository } from "@/infrastructure/repositories/SupabaseMotoRepository";
+import { SupabaseTipoServicoRepository } from "@/infrastructure/repositories/SupabaseTipoServicoRepository";
 import { SupabaseStorageApi } from "@/infrastructure/storage/SupabaseStorageApi";
+import { Badge } from "@/components/ui/badge";
 import { useMotosOficina } from "@/hooks/useMotosOficina";
 import { AdicionarFotoStatusUseCase } from "@/domain/usecases/AdicionarFotoStatusUseCase";
 import { AtualizarProgressoStatusUseCase } from "@/domain/usecases/AtualizarProgressoStatusUseCase";
@@ -37,8 +39,9 @@ export default function Oficina() {
   const entradaRepo = useMemo(() => new SupabaseEntradaRepository(), []);
   const clienteRepo = useMemo(() => new SupabaseClienteRepository(), []);
   const motoRepo = useMemo(() => new SupabaseMotoRepository(), []);
+  const tipoServicoRepo = useMemo(() => new SupabaseTipoServicoRepository(), []);
   const storageApi = useMemo(() => new SupabaseStorageApi(), []);
-  const { motos, loading, error, recarregar, atualizarMoto } = useMotosOficina(entradaRepo, clienteRepo, motoRepo);
+  const { motos, loading, error, recarregar, atualizarMoto } = useMotosOficina(entradaRepo, clienteRepo, motoRepo, tipoServicoRepo);
 
   const [entradaSelecionada, setEntradaSelecionada] = useState<string | null>(null);
   const [mostrarModalFoto, setMostrarModalFoto] = useState(false);
@@ -171,6 +174,21 @@ export default function Oficina() {
                     <p className="font-sans text-sm text-foreground/60">
                       {moto.placa ? `Placa: ${moto.placa} • ` : ""}{moto.cliente}
                     </p>
+                    {/* Tipos de Serviço */}
+                    {moto.tiposServico && moto.tiposServico.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {moto.tiposServico.map((tipo) => (
+                          <Badge
+                            key={tipo.id}
+                            variant="secondary"
+                            className="flex items-center gap-1 text-xs"
+                          >
+                            <Wrench size={10} />
+                            {tipo.nome}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 

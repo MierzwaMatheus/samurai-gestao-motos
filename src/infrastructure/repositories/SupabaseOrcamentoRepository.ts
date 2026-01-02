@@ -1,4 +1,5 @@
 import { OrcamentoRepository } from "@/domain/interfaces/OrcamentoRepository";
+import { TipoServicoRepository } from "@/domain/interfaces/TipoServicoRepository";
 import { Orcamento, OrcamentoCompleto } from "@shared/types";
 import { supabase } from "@/infrastructure/supabase/client";
 
@@ -7,6 +8,9 @@ import { supabase } from "@/infrastructure/supabase/client";
  * Esta é uma implementação de infraestrutura que conhece detalhes do Supabase
  */
 export class SupabaseOrcamentoRepository implements OrcamentoRepository {
+  constructor(private tipoServicoRepo?: TipoServicoRepository) {
+    // Permite instanciação sem parâmetros
+  }
   async criar(orcamento: Omit<Orcamento, "id" | "criadoEm" | "atualizadoEm">): Promise<Orcamento> {
     const { data, error } = await supabase
       .from("orcamentos")
@@ -172,6 +176,22 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
       const clientesMap = new Map(clientes.map((c: any) => [c.id, c]));
       const motosMap = new Map(motos.map((m: any) => [m.id, m]));
 
+      // Busca tipos de serviço para todas as entradas
+      let tiposServicoMap: Record<string, any[]> = {};
+      if (this.tipoServicoRepo && entradaIds.length > 0) {
+        const tiposServicoPromises = entradaIds.map(async (entradaId) => {
+          try {
+            const tipos = await this.tipoServicoRepo!.buscarPorEntradaId(entradaId);
+            return [entradaId, tipos];
+          } catch (error) {
+            console.error(`Erro ao buscar tipos de serviço para entrada ${entradaId}:`, error);
+            return [entradaId, []];
+          }
+        });
+        const tiposServicoResults = await Promise.all(tiposServicoPromises);
+        tiposServicoMap = Object.fromEntries(tiposServicoResults);
+      }
+
       // Mapeia os dados completos
       return orcamentos.map((orcamento: any) => {
         const entrada = entradasMap.get(orcamento.entrada_id);
@@ -192,6 +212,7 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
           cep: entrada?.cep,
           fotoMoto: entrada?.id ? fotosMapFinal[entrada.id] : undefined,
           dataOrcamento: entrada?.data_orcamento ? new Date(entrada.data_orcamento) : undefined,
+          tiposServico: entrada?.id ? tiposServicoMap[entrada.id] || [] : [],
         };
       });
     } catch (error) {

@@ -3,12 +3,14 @@ import { ListarEntradasUseCase } from "@/domain/usecases/ListarEntradasUseCase";
 import { EntradaRepository } from "@/domain/interfaces/EntradaRepository";
 import { ClienteRepository } from "@/domain/interfaces/ClienteRepository";
 import { MotoRepository } from "@/domain/interfaces/MotoRepository";
+import { TipoServicoRepository } from "@/domain/interfaces/TipoServicoRepository";
 import { MotoCompleta } from "@shared/types";
 
 export function useMotosOficina(
   entradaRepo: EntradaRepository,
   clienteRepo: ClienteRepository,
-  motoRepo: MotoRepository
+  motoRepo: MotoRepository,
+  tipoServicoRepo?: TipoServicoRepository
 ) {
   const [motos, setMotos] = useState<MotoCompleta[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,9 +34,10 @@ export function useMotosOficina(
       // Busca dados completos (cliente e moto) para cada entrada
       const motosCompletas: MotoCompleta[] = await Promise.all(
         entradasFiltradas.map(async (entrada) => {
-          const [cliente, moto] = await Promise.all([
+          const [cliente, moto, tiposServico] = await Promise.all([
             clienteRepo.buscarPorId(entrada.clienteId),
             motoRepo.buscarPorId(entrada.motoId),
+            tipoServicoRepo?.buscarPorEntradaId(entrada.id).catch(() => []) || Promise.resolve([]),
           ]);
 
           return {
@@ -51,6 +54,7 @@ export function useMotosOficina(
             progresso: entrada.progresso,
             fotosStatus: entrada.fotosStatus || [],
             fotos: [], // Fotos do tipo "moto" (legado)
+            tiposServico: tiposServico || [],
           };
         })
       );

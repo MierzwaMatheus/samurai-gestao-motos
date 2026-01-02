@@ -4,13 +4,15 @@ import BottomNav from "@/components/BottomNav";
 import { OrcamentoCompleto } from "@shared/types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, Clock, CheckCircle2, Loader2, Phone, MapPin, Truck, Image as ImageIcon } from "lucide-react";
+import { FileText, Clock, CheckCircle2, Loader2, Phone, MapPin, Truck, Image as ImageIcon, Wrench } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { SupabaseOrcamentoRepository } from "@/infrastructure/repositories/SupabaseOrcamentoRepository";
 import { SupabaseEntradaRepository } from "@/infrastructure/repositories/SupabaseEntradaRepository";
 import { SupabaseClienteRepository } from "@/infrastructure/repositories/SupabaseClienteRepository";
 import { SupabaseMotoRepository } from "@/infrastructure/repositories/SupabaseMotoRepository";
 import { SupabaseFotoRepository } from "@/infrastructure/repositories/SupabaseFotoRepository";
+import { SupabaseTipoServicoRepository } from "@/infrastructure/repositories/SupabaseTipoServicoRepository";
 import { useOrcamentos } from "@/hooks/useOrcamentos";
 import { ConverterOrcamentoEntradaUseCase } from "@/domain/usecases/ConverterOrcamentoEntradaUseCase";
 import { useGerarOS } from "@/hooks/useGerarOS";
@@ -25,10 +27,11 @@ export default function Orcamentos() {
   const clienteRepo = useMemo(() => new SupabaseClienteRepository(), []);
   const motoRepo = useMemo(() => new SupabaseMotoRepository(), []);
   const fotoRepo = useMemo(() => new SupabaseFotoRepository(), []);
+  const tipoServicoRepo = useMemo(() => new SupabaseTipoServicoRepository(), []);
   
   // Converte filtro UI para status do banco
   const statusBanco = filtro === "ativos" ? "ativo" : "expirado";
-  const { orcamentos, loading, error, recarregar, removerOrcamento } = useOrcamentos(orcamentoRepo, statusBanco);
+  const { orcamentos, loading, error, recarregar, removerOrcamento } = useOrcamentos(orcamentoRepo, statusBanco, tipoServicoRepo);
   
   const converterOrcamentoEntradaUseCase = useMemo(
     () => new ConverterOrcamentoEntradaUseCase(orcamentoRepo, entradaRepo),
@@ -229,6 +232,22 @@ export default function Orcamentos() {
                             <p className="font-sans text-xs text-foreground/40 line-clamp-2">
                               {orcamento.descricao}
                             </p>
+                          )}
+
+                          {/* Tipos de Serviço */}
+                          {orcamento.tiposServico && orcamento.tiposServico.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mt-2">
+                              {orcamento.tiposServico.map((tipo) => (
+                                <Badge
+                                  key={tipo.id}
+                                  variant="secondary"
+                                  className="flex items-center gap-1 text-xs"
+                                >
+                                  <Wrench size={10} />
+                                  {tipo.nome}
+                                </Badge>
+                              ))}
+                            </div>
                           )}
                         </div>
                       </div>

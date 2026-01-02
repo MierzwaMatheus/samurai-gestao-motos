@@ -126,6 +126,39 @@ export class SupabaseTipoServicoRepository implements TipoServicoRepository {
     }
   }
 
+  async buscarPorEntradaId(entradaId: string): Promise<TipoServico[]> {
+    // Primeiro busca os IDs dos tipos de serviço vinculados
+    const { data: vinculos, error: vinculosError } = await supabase
+      .from("entradas_tipos_servico")
+      .select("tipo_servico_id")
+      .eq("entrada_id", entradaId);
+
+    if (vinculosError) {
+      throw new Error(`Erro ao buscar vínculos de tipos de serviço: ${vinculosError.message}`);
+    }
+
+    if (!vinculos || vinculos.length === 0) {
+      return [];
+    }
+
+    // Depois busca os tipos de serviço pelos IDs
+    const tipoServicoIds = vinculos.map((v: any) => v.tipo_servico_id);
+    const { data: tiposServico, error: tiposError } = await supabase
+      .from("tipos_servico")
+      .select("*")
+      .in("id", tipoServicoIds);
+
+    if (tiposError) {
+      throw new Error(`Erro ao buscar tipos de serviço: ${tiposError.message}`);
+    }
+
+    if (!tiposServico || tiposServico.length === 0) {
+      return [];
+    }
+
+    return tiposServico.map((tipo: any) => this.mapToTipoServico(tipo));
+  }
+
   private mapToTipoServico(data: any): TipoServico {
     return {
       id: data.id,
