@@ -143,3 +143,10 @@ export interface TipoServico {
   atualizadoEm: Date;
 }
 
+export interface ConfiguracaoFrete {
+  id: string;
+  cepOrigem: string;
+  valorPorKm: number;
+  criadoEm: Date;
+  atualizadoEm: Date;
+}

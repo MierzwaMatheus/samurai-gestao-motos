@@ -1,4 +1,4 @@
-import { Sword, LogOut } from "lucide-react";
+import { Sword, LogOut, Settings } from "lucide-react";
 import { JapaneseThemeSwitch } from "./JapaneseThemeSwitch";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "./ui/button";
@@ -22,6 +22,15 @@ export default function Header({ title }: HeaderProps) {
       <h1 className="font-serif text-2xl text-foreground">{title}</h1>
       <div className="flex items-center gap-4">
         <JapaneseThemeSwitch />
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setLocation("/configuracoes")}
+          className="text-foreground/60 hover:text-foreground"
+          title="Configurações"
+        >
+          <Settings size={20} />
+        </Button>
         <Button
           variant="ghost"
           size="icon"

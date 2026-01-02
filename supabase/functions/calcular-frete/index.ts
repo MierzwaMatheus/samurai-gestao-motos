@@ -40,8 +40,9 @@ interface OpenRouteResponse {
 // Lê a API key do OpenRouteService do ambiente
 // No Supabase Edge Functions, secrets são acessados via Deno.env.get()
 const OPENROUTE_API_KEY = Deno.env.get("OPENROUTE_API_KEY");
-const CEP_ORIGEM = "06653010"; // CEP fixo de origem
-const VALOR_POR_KM = 2.0; // R$ 2,00 por km
+// Valores padrão caso não encontre configuração no banco
+const CEP_ORIGEM_DEFAULT = "06653010";
+const VALOR_POR_KM_DEFAULT = 2.0;
 
 Deno.serve(async (req: Request) => {
   // CORS headers
@@ -69,12 +70,13 @@ Deno.serve(async (req: Request) => {
     }
 
     // Parse request body
-    const body: RequestBody = await req.json();
-    const { cepDestino } = body;
-
-    if (!cepDestino || cepDestino.replace(/\D/g, "").length !== 8) {
+    let body: RequestBody;
+    try {
+      body = await req.json();
+    } catch (parseError) {
+      console.error("Erro ao fazer parse do body:", parseError);
       return new Response(
-        JSON.stringify({ error: "CEP destino inválido" }),
+        JSON.stringify({ error: "Body da requisição inválido ou ausente" }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -82,9 +84,67 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Busca coordenadas do CEP de origem (fixo)
-    console.log(`Buscando coordenadas do CEP de origem: ${CEP_ORIGEM}`);
-    const origemCoords = await buscarCoordenadasPorCep(CEP_ORIGEM);
+    const { cepDestino } = body;
+
+    if (!cepDestino || cepDestino.replace(/\D/g, "").length !== 8) {
+      return new Response(
+        JSON.stringify({ error: "CEP destino inválido. Deve conter 8 dígitos." }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // Busca configurações do banco de dados
+    // Nas Edge Functions do Supabase, as variáveis são injetadas automaticamente
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    
+    let cepOrigem = CEP_ORIGEM_DEFAULT;
+    let valorPorKm = VALOR_POR_KM_DEFAULT;
+
+    // Tenta buscar configurações do banco se tiver as credenciais e token de auth
+    const authHeader = req.headers.get("authorization");
+    if (supabaseUrl && supabaseAnonKey && authHeader) {
+      try {
+        const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+          global: {
+            headers: {
+              Authorization: authHeader,
+            },
+          },
+        });
+
+        // Busca configuração do usuário
+        const { data: config, error: configError } = await supabaseClient
+          .from("configuracoes_frete")
+          .select("cep_origem, valor_por_km")
+          .single();
+
+        if (!configError && config) {
+          cepOrigem = config.cep_origem;
+          valorPorKm = parseFloat(config.valor_por_km) || VALOR_POR_KM_DEFAULT;
+          console.log(`Configuração encontrada: CEP origem=${cepOrigem}, Valor por km=${valorPorKm}`);
+        } else {
+          // Se não encontrar configuração, usa valores padrão (não é erro)
+          console.log(`Configuração não encontrada, usando valores padrão: CEP origem=${cepOrigem}, Valor por km=${valorPorKm}`);
+        }
+      } catch (configErr) {
+        // Se der erro ao buscar configuração, continua com valores padrão (não é crítico)
+        console.log("Erro ao buscar configuração, usando valores padrão:", configErr instanceof Error ? configErr.message : String(configErr));
+      }
+    } else {
+      if (!authHeader) {
+        console.log("Token de autorização não encontrado, usando valores padrão");
+      } else if (!supabaseUrl || !supabaseAnonKey) {
+        console.log("Variáveis SUPABASE_URL ou SUPABASE_ANON_KEY não configuradas, usando valores padrão");
+      }
+    }
+
+    // Busca coordenadas do CEP de origem
+    console.log(`Buscando coordenadas do CEP de origem: ${cepOrigem}`);
+    const origemCoords = await buscarCoordenadasPorCep(cepOrigem);
     if (!origemCoords) {
       console.error("Falha ao buscar coordenadas da origem");
       return new Response(
@@ -134,7 +194,7 @@ Deno.serve(async (req: Request) => {
             destino: destinoCoords,
             apiKeyPresent: !!OPENROUTE_API_KEY,
             apiKeyLength: OPENROUTE_API_KEY?.length || 0,
-            cepOrigem: CEP_ORIGEM,
+            cepOrigem: cepOrigem,
             cepDestino: cepDestino.replace(/\D/g, ""),
           }
         }),
@@ -160,7 +220,7 @@ Deno.serve(async (req: Request) => {
             destino: destinoCoords,
             apiKeyPresent: !!OPENROUTE_API_KEY,
             apiKeyLength: OPENROUTE_API_KEY?.length || 0,
-            cepOrigem: CEP_ORIGEM,
+            cepOrigem: cepOrigem,
             cepDestino: cepDestino.replace(/\D/g, ""),
           }
         }),
@@ -173,13 +233,13 @@ Deno.serve(async (req: Request) => {
     console.log(`Distância calculada: ${distanciaKm} km`);
 
     // Calcula valor do frete (distância * valor por km)
-    const valorFrete = distanciaKm * VALOR_POR_KM;
+    const valorFrete = distanciaKm * valorPorKm;
 
     return new Response(
       JSON.stringify({
         distanciaKm: Math.round(distanciaKm * 100) / 100, // 2 casas decimais
         valorFrete: Math.round(valorFrete * 100) / 100,
-        cepOrigem: CEP_ORIGEM,
+        cepOrigem: cepOrigem,
         cepDestino: cepDestino.replace(/\D/g, ""),
       }),
       {
