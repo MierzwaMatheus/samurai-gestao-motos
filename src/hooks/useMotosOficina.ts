@@ -38,7 +38,9 @@ export function useMotosOficina(
           ]);
 
           return {
-            id: moto?.id || entrada.motoId, // ID da moto, não da entrada
+            id: entrada.id, // ID da entrada para ações
+            entradaId: entrada.id,
+            motoId: moto?.id || entrada.motoId,
             clienteId: entrada.clienteId,
             modelo: moto?.modelo || "Modelo não informado",
             placa: moto?.placa,
@@ -47,7 +49,8 @@ export function useMotosOficina(
             cliente: cliente?.nome || "Cliente não informado",
             status: entrada.status,
             progresso: entrada.progresso,
-            fotos: [], // TODO: buscar fotos quando implementar
+            fotosStatus: entrada.fotosStatus || [],
+            fotos: [], // Fotos do tipo "moto" (legado)
           };
         })
       );

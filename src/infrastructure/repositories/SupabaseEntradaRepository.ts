@@ -128,6 +128,17 @@ export class SupabaseEntradaRepository implements EntradaRepository {
     if (dados.progresso !== undefined) updateData.progresso = dados.progresso;
     if (dados.finalNumeroQuadro !== undefined) updateData.final_numero_quadro = dados.finalNumeroQuadro;
     if (dados.osAssinadaUrl !== undefined) updateData.os_assinada_url = dados.osAssinadaUrl;
+    if (dados.fotosStatus !== undefined) {
+      // Converte array de FotoStatus para JSONB
+      updateData.fotos_status = JSON.stringify(
+        dados.fotosStatus.map((foto) => ({
+          url: foto.url,
+          data: foto.data.toISOString(),
+          observacao: foto.observacao,
+          progresso: foto.progresso,
+        }))
+      );
+    }
 
     const { data, error } = await supabase
       .from("entradas")
@@ -155,6 +166,20 @@ export class SupabaseEntradaRepository implements EntradaRepository {
   }
 
   private mapToEntrada(data: any): Entrada {
+    // Converte fotos_status JSONB para array de FotoStatus
+    let fotosStatus: any[] = [];
+    if (data.fotos_status) {
+      try {
+        const parsed = typeof data.fotos_status === 'string' 
+          ? JSON.parse(data.fotos_status) 
+          : data.fotos_status;
+        fotosStatus = Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        console.error("Erro ao parsear fotos_status:", e);
+        fotosStatus = [];
+      }
+    }
+
     return {
       id: data.id,
       tipo: data.tipo,
@@ -175,6 +200,12 @@ export class SupabaseEntradaRepository implements EntradaRepository {
       progresso: data.progresso || 0,
       finalNumeroQuadro: data.final_numero_quadro,
       osAssinadaUrl: data.os_assinada_url,
+      fotosStatus: fotosStatus.map((foto: any) => ({
+        url: foto.url,
+        data: new Date(foto.data),
+        observacao: foto.observacao,
+        progresso: foto.progresso,
+      })),
       criadoEm: new Date(data.criado_em),
       atualizadoEm: new Date(data.atualizado_em),
     };

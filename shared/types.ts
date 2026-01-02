@@ -75,6 +75,7 @@ export interface Entrada {
   progresso: number;
   finalNumeroQuadro?: string;
   osAssinadaUrl?: string;
+  fotosStatus?: FotoStatus[];
   criadoEm: Date;
   atualizadoEm: Date;
 }
@@ -97,6 +98,13 @@ export interface Foto {
   criadoEm: Date;
 }
 
+export interface FotoStatus {
+  url: string;
+  data: Date;
+  observacao?: string;
+  progresso: number;
+}
+
 // Tipos para visualização (com joins)
 export interface OrcamentoCompleto extends Orcamento {
   cliente: string;
@@ -114,9 +122,11 @@ export interface OrcamentoCompleto extends Orcamento {
 }
 
 export interface MotoCompleta extends Moto {
+  entradaId: string;
   cliente: string;
   status: "pendente" | "alinhando" | "concluido";
   progresso: number;
-  fotos: string[];
+  fotosStatus?: FotoStatus[];
+  fotos: string[]; // Legado - fotos do tipo "moto"
 }
 
