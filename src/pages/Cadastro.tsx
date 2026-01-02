@@ -64,13 +64,20 @@ export default function Cadastro() {
   const [formData, setFormData] = useState<DadosCadastro>({
     tipo: "entrada",
     cliente: "",
+    telefone: "",
     endereco: "",
     cep: "",
     moto: "",
     placa: "",
+    finalNumeroQuadro: "",
+    valorCobrado: undefined,
     descricao: "",
+    observacoes: "",
     fotos: [],
     frete: 0,
+    dataOrcamento: undefined,
+    dataEntrada: undefined,
+    dataEntrega: undefined,
   });
   const [fotos, setFotos] = useState<string[]>([]); // URLs para preview
   const [fotosArquivos, setFotosArquivos] = useState<File[]>([]); // Arquivos reais para upload
@@ -149,7 +156,7 @@ export default function Cadastro() {
   };
 
   const handleCalcularFrete = async () => {
-    // Precisa ter CEP para calcular frete
+    // Precisa ter CEP para calcular frete (obrigatório para orçamento)
     const cepDestino = formData.cep?.replace(/\D/g, "");
     if (!cepDestino || cepDestino.length !== 8) {
       toast.error("Busque um endereço por CEP primeiro para calcular o frete");
@@ -158,9 +165,11 @@ export default function Cadastro() {
 
     try {
       const resultado = await calcularFrete(cepDestino);
-      setFormData({ ...formData, frete: resultado.valorFrete });
+      // Frete ida e volta = dobra o valor
+      const freteIdaVolta = resultado.valorFrete * 2;
+      setFormData({ ...formData, frete: freteIdaVolta });
       toast.success(
-        `Frete calculado: R$ ${resultado.valorFrete.toFixed(2)} (${resultado.distanciaKm.toFixed(2)} km)`
+        `Frete calculado (ida e volta): R$ ${freteIdaVolta.toFixed(2)} (${resultado.distanciaKm.toFixed(2)} km)`
       );
     } catch (err) {
       const mensagem =
@@ -170,14 +179,21 @@ export default function Cadastro() {
   };
 
   const handleRegistrar = async () => {
-    if (!formData.cliente || !formData.moto) {
-      toast.error("Preencha todos os campos obrigatórios");
+    // Validações
+    if (!formData.cliente || !formData.moto || !formData.telefone || !formData.valorCobrado) {
+      toast.error("Preencha todos os campos obrigatórios (*)");
       return;
     }
 
-    if (tipo === "orcamento" && !formData.descricao) {
-      toast.error("Descrição é obrigatória para orçamentos");
-      return;
+    if (tipo === "orcamento") {
+      if (!formData.descricao) {
+        toast.error("Descrição é obrigatória para orçamentos");
+        return;
+      }
+      if (!formData.cep || formData.cep.replace(/\D/g, "").length !== 8) {
+        toast.error("CEP é obrigatório para orçamentos (para cálculo de frete)");
+        return;
+      }
     }
 
     try {
@@ -206,13 +222,20 @@ export default function Cadastro() {
       setFormData({
         tipo: "entrada",
         cliente: "",
+        telefone: "",
         endereco: "",
         cep: "",
         moto: "",
         placa: "",
+        finalNumeroQuadro: "",
+        valorCobrado: undefined,
         descricao: "",
+        observacoes: "",
         fotos: [],
         frete: 0,
+        dataOrcamento: undefined,
+        dataEntrada: undefined,
+        dataEntrega: undefined,
       });
       setFotos([]);
       setFotosArquivos([]);
@@ -232,24 +255,46 @@ export default function Cadastro() {
         <div className="max-w-2xl mx-auto space-y-8">
           {/* Seção Cliente */}
           <div className="space-y-4">
-            <Label htmlFor="cliente" className="text-xs uppercase tracking-widest">
-              Nome do Cliente
-            </Label>
-            <Input
-              id="cliente"
-              name="cliente"
-              placeholder="Ex: João Silva"
-              value={formData.cliente}
-              onChange={handleInputChange}
-              className="bg-card border-foreground/10"
-            />
+            <div className="space-y-2">
+              <Label htmlFor="cliente" className="text-xs uppercase tracking-widest">
+                Nome do Cliente *
+              </Label>
+              <Input
+                id="cliente"
+                name="cliente"
+                placeholder="Ex: João Silva"
+                value={formData.cliente}
+                onChange={handleInputChange}
+                className="bg-card border-foreground/10"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="telefone" className="text-xs uppercase tracking-widest">
+                Telefone *
+              </Label>
+              <Input
+                id="telefone"
+                name="telefone"
+                type="tel"
+                placeholder="(11) 99999-9999"
+                value={formData.telefone}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, "");
+                  const formatted = value.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
+                  setFormData({ ...formData, telefone: formatted || value });
+                }}
+                className="bg-card border-foreground/10"
+                required
+              />
+            </div>
           </div>
 
           {/* Seção Moto */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-4">
+          <div className="space-y-4">
+            <div className="space-y-2">
               <Label htmlFor="moto" className="text-xs uppercase tracking-widest">
-                Modelo da Moto
+                Modelo da Moto *
               </Label>
               <Input
                 id="moto"
@@ -258,30 +303,44 @@ export default function Cadastro() {
                 value={formData.moto}
                 onChange={handleInputChange}
                 className="bg-card border-foreground/10"
+                required
               />
             </div>
-            {tipo === "entrada" && (
-              <div className="space-y-4">
-                <Label htmlFor="placa" className="text-xs uppercase tracking-widest">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="placa" className="text-xs text-foreground/70">
                   Placa
                 </Label>
                 <Input
                   id="placa"
                   name="placa"
                   placeholder="Ex: ABC-1234"
-                  value={formData.placa}
+                  value={formData.placa || ""}
                   onChange={handleInputChange}
                   className="bg-card border-foreground/10"
                 />
               </div>
-            )}
+              <div className="space-y-2">
+                <Label htmlFor="finalNumeroQuadro" className="text-xs text-foreground/70">
+                  Final Nº Quadro
+                </Label>
+                <Input
+                  id="finalNumeroQuadro"
+                  name="finalNumeroQuadro"
+                  placeholder="Últimos dígitos do chassi"
+                  value={formData.finalNumeroQuadro || ""}
+                  onChange={handleInputChange}
+                  className="bg-card border-foreground/10"
+                />
+              </div>
+            </div>
           </div>
 
-          {/* Seção Endereço (apenas para Entrada) */}
-          {tipo === "entrada" && (
+          {/* Seção Endereço (obrigatório para Orçamento, opcional para Entrada) */}
+          {(tipo === "entrada" || tipo === "orcamento") && (
             <div className="space-y-4">
               <Label className="text-xs uppercase tracking-widest">
-                Endereço para Entrega
+                Endereço para Entrega {tipo === "orcamento" && "*"}
               </Label>
 
               {/* Campo CEP */}
@@ -382,22 +441,114 @@ export default function Cadastro() {
             </div>
           )}
 
-          {/* Seção Descrição (apenas para Orçamento) */}
-          {tipo === "orcamento" && (
-            <div className="space-y-4">
-              <Label htmlFor="descricao" className="text-xs uppercase tracking-widest">
-                Descrição do Serviço
+          {/* Seção Valor Cobrado */}
+          <div className="space-y-2">
+            <Label htmlFor="valorCobrado" className="text-xs uppercase tracking-widest">
+              Valor Cobrado *
+            </Label>
+            <Input
+              id="valorCobrado"
+              name="valorCobrado"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="0.00"
+              value={formData.valorCobrado || ""}
+              onChange={(e) => {
+                const value = parseFloat(e.target.value) || undefined;
+                setFormData({ ...formData, valorCobrado: value });
+              }}
+              className="bg-card border-foreground/10"
+              required
+            />
+          </div>
+
+          {/* Seção Descrição/Observações */}
+          <div className="space-y-4">
+            {tipo === "orcamento" && (
+              <div className="space-y-2">
+                <Label htmlFor="descricao" className="text-xs uppercase tracking-widest">
+                  Descrição do Serviço *
+                </Label>
+                <Textarea
+                  id="descricao"
+                  name="descricao"
+                  placeholder="Descreva o serviço de alinhamento..."
+                  value={formData.descricao || ""}
+                  onChange={handleInputChange}
+                  className="bg-card border-foreground/10 min-h-24"
+                  required
+                />
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="observacoes" className="text-xs uppercase tracking-widest">
+                Detalhes ou Observações
               </Label>
               <Textarea
-                id="descricao"
-                name="descricao"
-                placeholder="Descreva o serviço de alinhamento..."
-                value={formData.descricao}
+                id="observacoes"
+                name="observacoes"
+                placeholder="Observações adicionais..."
+                value={formData.observacoes || ""}
                 onChange={handleInputChange}
                 className="bg-card border-foreground/10 min-h-24"
               />
             </div>
-          )}
+          </div>
+
+          {/* Seção Datas */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {tipo === "orcamento" && (
+              <div className="space-y-2">
+                <Label htmlFor="dataOrcamento" className="text-xs uppercase tracking-widest">
+                  Data Orçamento
+                </Label>
+                <Input
+                  id="dataOrcamento"
+                  name="dataOrcamento"
+                  type="date"
+                  value={formData.dataOrcamento ? new Date(formData.dataOrcamento).toISOString().split('T')[0] : ""}
+                  onChange={(e) => {
+                    const date = e.target.value ? new Date(e.target.value) : undefined;
+                    setFormData({ ...formData, dataOrcamento: date });
+                  }}
+                  className="bg-card border-foreground/10"
+                />
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="dataEntrada" className="text-xs uppercase tracking-widest">
+                Data Entrada
+              </Label>
+              <Input
+                id="dataEntrada"
+                name="dataEntrada"
+                type="date"
+                value={formData.dataEntrada ? new Date(formData.dataEntrada).toISOString().split('T')[0] : ""}
+                onChange={(e) => {
+                  const date = e.target.value ? new Date(e.target.value) : undefined;
+                  setFormData({ ...formData, dataEntrada: date });
+                }}
+                className="bg-card border-foreground/10"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dataEntrega" className="text-xs uppercase tracking-widest">
+                Data Entrega
+              </Label>
+              <Input
+                id="dataEntrega"
+                name="dataEntrega"
+                type="date"
+                value={formData.dataEntrega ? new Date(formData.dataEntrega).toISOString().split('T')[0] : ""}
+                onChange={(e) => {
+                  const date = e.target.value ? new Date(e.target.value) : undefined;
+                  setFormData({ ...formData, dataEntrega: date });
+                }}
+                className="bg-card border-foreground/10"
+              />
+            </div>
+          </div>
 
           {/* Seção Fotos */}
           <div className="space-y-4">

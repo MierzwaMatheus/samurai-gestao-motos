@@ -7,8 +7,13 @@ import { Button } from "@/components/ui/button";
 import { FileText, Clock, CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { SupabaseOrcamentoRepository } from "@/infrastructure/repositories/SupabaseOrcamentoRepository";
+import { SupabaseEntradaRepository } from "@/infrastructure/repositories/SupabaseEntradaRepository";
+import { SupabaseClienteRepository } from "@/infrastructure/repositories/SupabaseClienteRepository";
+import { SupabaseMotoRepository } from "@/infrastructure/repositories/SupabaseMotoRepository";
+import { SupabaseFotoRepository } from "@/infrastructure/repositories/SupabaseFotoRepository";
 import { useOrcamentos } from "@/hooks/useOrcamentos";
 import { AtualizarOrcamentoUseCase } from "@/domain/usecases/AtualizarOrcamentoUseCase";
+import { useGerarOS } from "@/hooks/useGerarOS";
 
 type FilterType = "ativos" | "expirados";
 
@@ -16,11 +21,25 @@ export default function Orcamentos() {
   const [filtro, setFiltro] = useState<FilterType>("ativos");
   
   const orcamentoRepo = useMemo(() => new SupabaseOrcamentoRepository(), []);
-  const { orcamentos, loading, error, recarregar } = useOrcamentos(orcamentoRepo, filtro);
+  const entradaRepo = useMemo(() => new SupabaseEntradaRepository(), []);
+  const clienteRepo = useMemo(() => new SupabaseClienteRepository(), []);
+  const motoRepo = useMemo(() => new SupabaseMotoRepository(), []);
+  const fotoRepo = useMemo(() => new SupabaseFotoRepository(), []);
+  
+  // Converte filtro UI para status do banco
+  const statusBanco = filtro === "ativos" ? "ativo" : "expirado";
+  const { orcamentos, loading, error, recarregar } = useOrcamentos(orcamentoRepo, statusBanco);
   
   const atualizarOrcamentoUseCase = useMemo(
     () => new AtualizarOrcamentoUseCase(orcamentoRepo),
     [orcamentoRepo]
+  );
+
+  const { gerar: gerarOS, loading: loadingOS } = useGerarOS(
+    entradaRepo,
+    clienteRepo,
+    motoRepo,
+    fotoRepo
   );
 
   const calcularDiasRestantes = (data: Date): number => {
@@ -40,9 +59,21 @@ export default function Orcamentos() {
     }
   };
 
-  const handleGerarOS = (orcamentoId: string) => {
-    toast.success("Ordem de Serviço gerada com sucesso!");
-    // Implementar geração de PDF
+  const handleGerarOS = async (orcamentoId: string) => {
+    try {
+      // Busca entradaId do orçamento
+      const orcamento = await orcamentoRepo.buscarPorId(orcamentoId);
+      if (!orcamento) {
+        toast.error("Orçamento não encontrado");
+        return;
+      }
+
+      await gerarOS(orcamento.entradaId);
+      toast.success("Ordem de Serviço gerada com sucesso!");
+    } catch (err) {
+      const mensagem = err instanceof Error ? err.message : "Erro ao gerar OS";
+      toast.error(mensagem);
+    }
   };
 
   return (
@@ -177,9 +208,10 @@ export default function Orcamentos() {
                             onClick={() => handleGerarOS(orcamento.id)}
                             variant="default"
                             className="flex-1 text-sm bg-accent hover:brightness-110"
+                            disabled={loadingOS}
                           >
                             <FileText size={16} className="mr-2" />
-                            Gerar OS
+                            {loadingOS ? "Gerando..." : "Gerar OS"}
                           </Button>
                         </>
                       )}

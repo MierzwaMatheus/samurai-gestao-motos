@@ -61,59 +61,86 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
   }
 
   async buscarCompletosPorStatus(status: Orcamento["status"]): Promise<OrcamentoCompleto[]> {
-    // Busca orçamentos com joins para obter dados completos
-    const { data: orcamentos, error: orcamentosError } = await supabase
-      .from("orcamentos")
-      .select("*")
-      .eq("status", status)
-      .order("criado_em", { ascending: false });
+    try {
+      // Primeiro, atualiza orçamentos expirados
+      await this.atualizarOrcamentosExpirados();
 
-    if (orcamentosError) {
-      throw new Error(`Erro ao buscar orçamentos: ${orcamentosError.message}`);
+      // Busca orçamentos com joins para obter dados completos
+      const { data: orcamentos, error: orcamentosError } = await supabase
+        .from("orcamentos")
+        .select("*")
+        .eq("status", status)
+        .order("criado_em", { ascending: false });
+
+      if (orcamentosError) {
+        throw new Error(`Erro ao buscar orçamentos: ${orcamentosError.message}`);
+      }
+
+      if (!orcamentos || orcamentos.length === 0) {
+        return [];
+      }
+
+      // Busca entradas relacionadas
+      const entradaIds = orcamentos.map((o: any) => o.entrada_id);
+
+      const { data: entradas, error: entradasError } = await supabase
+        .from("entradas")
+        .select("id, descricao, cliente_id, moto_id")
+        .in("id", entradaIds);
+
+      if (entradasError) {
+        throw new Error(`Erro ao buscar entradas: ${entradasError.message}`);
+      }
+
+      // Busca clientes e motos
+      const clienteIds = [...new Set(entradas?.map((e: any) => e.cliente_id).filter(Boolean) || [])];
+      const motoIds = [...new Set(entradas?.map((e: any) => e.moto_id).filter(Boolean) || [])];
+
+      let clientes: any[] = [];
+      let motos: any[] = [];
+
+      if (clienteIds.length > 0) {
+        const { data: clientesData, error: clientesError } = await supabase
+          .from("clientes")
+          .select("id, nome")
+          .in("id", clienteIds);
+
+        if (clientesError) {
+          throw new Error(`Erro ao buscar clientes: ${clientesError.message}`);
+        } else {
+          clientes = clientesData || [];
+        }
+      }
+
+      if (motoIds.length > 0) {
+        const { data: motosData, error: motosError } = await supabase
+          .from("motos")
+          .select("id, modelo")
+          .in("id", motoIds);
+
+        if (motosError) {
+          throw new Error(`Erro ao buscar motos: ${motosError.message}`);
+        } else {
+          motos = motosData || [];
+        }
+      }
+
+      // Mapeia os dados completos
+      return orcamentos.map((orcamento: any) => {
+        const entrada = entradas?.find((e: any) => e.id === orcamento.entrada_id);
+        const cliente = clientes.find((c: any) => c.id === entrada?.cliente_id);
+        const moto = motos.find((m: any) => m.id === entrada?.moto_id);
+
+        return {
+          ...this.mapToOrcamento(orcamento),
+          cliente: cliente?.nome || "Cliente não encontrado",
+          moto: moto?.modelo || "Moto não encontrada",
+          descricao: entrada?.descricao,
+        };
+      });
+    } catch (error) {
+      throw error;
     }
-
-    if (!orcamentos || orcamentos.length === 0) {
-      return [];
-    }
-
-    // Busca entradas relacionadas
-    const entradaIds = orcamentos.map((o: any) => o.entrada_id);
-    const { data: entradas, error: entradasError } = await supabase
-      .from("entradas")
-      .select("id, descricao, cliente_id, moto_id")
-      .in("id", entradaIds);
-
-    if (entradasError) {
-      throw new Error(`Erro ao buscar entradas: ${entradasError.message}`);
-    }
-
-    // Busca clientes e motos
-    const clienteIds = [...new Set(entradas?.map((e: any) => e.cliente_id) || [])];
-    const motoIds = [...new Set(entradas?.map((e: any) => e.moto_id) || [])];
-
-    const { data: clientes } = await supabase
-      .from("clientes")
-      .select("id, nome")
-      .in("id", clienteIds);
-
-    const { data: motos } = await supabase
-      .from("motos")
-      .select("id, modelo")
-      .in("id", motoIds);
-
-    // Mapeia os dados completos
-    return orcamentos.map((orcamento: any) => {
-      const entrada = entradas?.find((e: any) => e.id === orcamento.entrada_id);
-      const cliente = clientes?.find((c: any) => c.id === entrada?.cliente_id);
-      const moto = motos?.find((m: any) => m.id === entrada?.moto_id);
-
-      return {
-        ...this.mapToOrcamento(orcamento),
-        cliente: cliente?.nome || "",
-        moto: moto?.modelo || "",
-        descricao: entrada?.descricao,
-      };
-    });
   }
 
   async listar(): Promise<Orcamento[]> {
@@ -157,6 +184,30 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
 
     if (error) {
       throw new Error(`Erro ao deletar orçamento: ${error.message}`);
+    }
+  }
+
+  private async atualizarOrcamentosExpirados(): Promise<void> {
+    try {
+      const { error } = await supabase.rpc("atualizar_orcamentos_expirados");
+      if (error) {
+        // Se a função não existir, faz update manual
+        if (error.code === "42883") {
+          const { error: updateError } = await supabase
+            .from("orcamentos")
+            .update({ status: "expirado" })
+            .eq("status", "ativo")
+            .lt("data_expiracao", new Date().toISOString());
+          
+          if (updateError) {
+            console.error("Erro ao atualizar orçamentos expirados:", updateError);
+          }
+        } else {
+          console.error("Erro ao chamar função de atualização:", error);
+        }
+      }
+    } catch (err) {
+      console.error("Erro ao atualizar orçamentos expirados:", err);
     }
   }
 

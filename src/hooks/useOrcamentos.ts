@@ -3,7 +3,7 @@ import { ListarOrcamentosUseCase } from "@/domain/usecases/ListarOrcamentosUseCa
 import { OrcamentoRepository } from "@/domain/interfaces/OrcamentoRepository";
 import { OrcamentoCompleto } from "@shared/types";
 
-export function useOrcamentos(orcamentoRepo: OrcamentoRepository, status: "ativo" | "expirado") {
+export function useOrcamentos(orcamentoRepo: OrcamentoRepository, status: "ativo" | "expirado" | "convertido") {
   const [orcamentos, setOrcamentos] = useState<OrcamentoCompleto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +29,8 @@ export function useOrcamentos(orcamentoRepo: OrcamentoRepository, status: "ativo
 
   useEffect(() => {
     carregar();
-  }, [status, useCase]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
 
   return { orcamentos, loading, error, recarregar: carregar };
 }

@@ -23,9 +23,11 @@ export function useMotosOficina(
     setLoading(true);
     setError(null);
     try {
-      // Busca apenas entradas do tipo "entrada" (não orçamentos)
+      // Busca apenas entradas do tipo "entrada" (não orçamentos) e que não estão entregues
       const entradas = await useCase.execute();
-      const entradasFiltradas = entradas.filter((e) => e.tipo === "entrada");
+      const entradasFiltradas = entradas.filter(
+        (e) => e.tipo === "entrada" && e.statusEntrega !== "entregue" && e.statusEntrega !== "retirado"
+      );
 
       // Busca dados completos (cliente e moto) para cada entrada
       const motosCompletas: MotoCompleta[] = await Promise.all(

@@ -29,9 +29,14 @@ export class CriarEntradaUseCase {
 
     if (clienteExistente) {
       clienteId = clienteExistente.id;
+      // Atualiza telefone se fornecido
+      if (dados.telefone && clienteExistente.telefone !== dados.telefone) {
+        await this.clienteRepo.atualizar(clienteId, { telefone: dados.telefone });
+      }
     } else {
       const novoCliente = await this.clienteRepo.criar({
         nome: dados.cliente,
+        telefone: dados.telefone,
         endereco: dados.endereco,
         cep: dados.cep?.replace(/\D/g, ""),
       });
@@ -43,6 +48,7 @@ export class CriarEntradaUseCase {
       clienteId,
       modelo: dados.moto,
       placa: dados.placa || undefined,
+      finalNumeroQuadro: dados.finalNumeroQuadro || undefined,
     });
 
     // 3. Criar entrada
@@ -52,23 +58,30 @@ export class CriarEntradaUseCase {
       motoId: moto.id,
       endereco: dados.endereco,
       cep: dados.cep?.replace(/\D/g, ""),
+      telefone: dados.telefone,
       frete: dados.frete || 0,
+      valorCobrado: dados.valorCobrado,
       descricao: dados.descricao,
+      observacoes: dados.observacoes,
+      dataOrcamento: dados.dataOrcamento,
+      dataEntrada: dados.dataEntrada || (dados.tipo === "entrada" ? new Date() : undefined),
+      dataEntrega: dados.dataEntrega,
       status: dados.tipo === "entrada" ? "pendente" : "pendente",
+      statusEntrega: "pendente",
       progresso: 0,
     });
 
     // 4. Se for orçamento, criar orçamento
     let orcamentoId: string | undefined;
-    if (dados.tipo === "orcamento" && dados.descricao) {
-      // Calcula valor base (pode ser melhorado com lógica de negócio)
-      const valorBase = 300; // Valor padrão, pode ser calculado baseado na descrição
-      const dataExpiracao = new Date();
-      dataExpiracao.setDate(dataExpiracao.getDate() + 7); // 7 dias para expirar
+    if (dados.tipo === "orcamento" && dados.descricao && dados.valorCobrado) {
+      // Usa o valor cobrado informado
+      const dataExpiracao = dados.dataOrcamento 
+        ? new Date(dados.dataOrcamento.getTime() + 7 * 24 * 60 * 60 * 1000) // 7 dias após data do orçamento
+        : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 dias a partir de agora
 
       const orcamento = await this.orcamentoRepo.criar({
         entradaId: entrada.id,
-        valor: valorBase,
+        valor: dados.valorCobrado,
         dataExpiracao,
         status: "ativo",
       });

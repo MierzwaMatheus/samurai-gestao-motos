@@ -17,13 +17,20 @@ export interface Endereco {
 export interface DadosCadastro {
   tipo: EntryType;
   cliente: string;
-  endereco: string;
-  cep: string;
+  telefone?: string;
+  endereco?: string;
+  cep?: string;
   moto: string;
-  placa: string;
-  descricao: string;
+  placa?: string;
+  finalNumeroQuadro?: string;
+  valorCobrado?: number;
+  descricao?: string;
+  observacoes?: string;
   fotos: string[];
   frete: number;
+  dataOrcamento?: Date;
+  dataEntrada?: Date;
+  dataEntrega?: Date;
   enderecoCompleto?: Endereco;
 }
 
@@ -43,6 +50,7 @@ export interface Moto {
   clienteId: string;
   modelo: string;
   placa?: string;
+  finalNumeroQuadro?: string;
   criadoEm: Date;
   atualizadoEm: Date;
 }
@@ -54,10 +62,19 @@ export interface Entrada {
   motoId: string;
   endereco?: string;
   cep?: string;
+  telefone?: string;
   frete: number;
+  valorCobrado?: number;
   descricao?: string;
+  observacoes?: string;
+  dataOrcamento?: Date;
+  dataEntrada?: Date;
+  dataEntrega?: Date;
   status: "pendente" | "alinhando" | "concluido";
+  statusEntrega?: "pendente" | "entregue" | "retirado";
   progresso: number;
+  finalNumeroQuadro?: string;
+  osAssinadaUrl?: string;
   criadoEm: Date;
   atualizadoEm: Date;
 }

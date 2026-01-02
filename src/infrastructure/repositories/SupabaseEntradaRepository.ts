@@ -16,10 +16,18 @@ export class SupabaseEntradaRepository implements EntradaRepository {
         moto_id: entrada.motoId,
         endereco: entrada.endereco,
         cep: entrada.cep,
+        telefone: entrada.telefone,
         frete: entrada.frete,
+        valor_cobrado: entrada.valorCobrado,
         descricao: entrada.descricao,
+        observacoes: entrada.observacoes,
+        data_orcamento: entrada.dataOrcamento?.toISOString(),
+        data_entrada: entrada.dataEntrada?.toISOString(),
+        data_entrega: entrada.dataEntrega?.toISOString(),
         status: entrada.status,
+        status_entrega: entrada.statusEntrega || "pendente",
         progresso: entrada.progresso,
+        final_numero_quadro: entrada.finalNumeroQuadro,
       })
       .select()
       .single();
@@ -104,16 +112,26 @@ export class SupabaseEntradaRepository implements EntradaRepository {
   }
 
   async atualizar(id: string, dados: Partial<Entrada>): Promise<Entrada> {
+    const updateData: any = {};
+    if (dados.endereco !== undefined) updateData.endereco = dados.endereco;
+    if (dados.cep !== undefined) updateData.cep = dados.cep;
+    if (dados.telefone !== undefined) updateData.telefone = dados.telefone;
+    if (dados.frete !== undefined) updateData.frete = dados.frete;
+    if (dados.valorCobrado !== undefined) updateData.valor_cobrado = dados.valorCobrado;
+    if (dados.descricao !== undefined) updateData.descricao = dados.descricao;
+    if (dados.observacoes !== undefined) updateData.observacoes = dados.observacoes;
+    if (dados.dataOrcamento !== undefined) updateData.data_orcamento = dados.dataOrcamento.toISOString();
+    if (dados.dataEntrada !== undefined) updateData.data_entrada = dados.dataEntrada.toISOString();
+    if (dados.dataEntrega !== undefined) updateData.data_entrega = dados.dataEntrega.toISOString();
+    if (dados.status !== undefined) updateData.status = dados.status;
+    if (dados.statusEntrega !== undefined) updateData.status_entrega = dados.statusEntrega;
+    if (dados.progresso !== undefined) updateData.progresso = dados.progresso;
+    if (dados.finalNumeroQuadro !== undefined) updateData.final_numero_quadro = dados.finalNumeroQuadro;
+    if (dados.osAssinadaUrl !== undefined) updateData.os_assinada_url = dados.osAssinadaUrl;
+
     const { data, error } = await supabase
       .from("entradas")
-      .update({
-        endereco: dados.endereco,
-        cep: dados.cep,
-        frete: dados.frete,
-        descricao: dados.descricao,
-        status: dados.status,
-        progresso: dados.progresso,
-      })
+      .update(updateData)
       .eq("id", id)
       .select()
       .single();
@@ -144,10 +162,19 @@ export class SupabaseEntradaRepository implements EntradaRepository {
       motoId: data.moto_id,
       endereco: data.endereco,
       cep: data.cep,
+      telefone: data.telefone,
       frete: parseFloat(data.frete || 0),
+      valorCobrado: data.valor_cobrado ? parseFloat(data.valor_cobrado) : undefined,
       descricao: data.descricao,
+      observacoes: data.observacoes,
+      dataOrcamento: data.data_orcamento ? new Date(data.data_orcamento) : undefined,
+      dataEntrada: data.data_entrada ? new Date(data.data_entrada) : undefined,
+      dataEntrega: data.data_entrega ? new Date(data.data_entrega) : undefined,
       status: data.status,
+      statusEntrega: data.status_entrega,
       progresso: data.progresso || 0,
+      finalNumeroQuadro: data.final_numero_quadro,
+      osAssinadaUrl: data.os_assinada_url,
       criadoEm: new Date(data.criado_em),
       atualizadoEm: new Date(data.atualizado_em),
     };

@@ -14,6 +14,7 @@ export class SupabaseMotoRepository implements MotoRepository {
         cliente_id: moto.clienteId,
         modelo: moto.modelo,
         placa: moto.placa,
+        final_numero_quadro: moto.finalNumeroQuadro,
       })
       .select()
       .single();
@@ -103,6 +104,7 @@ export class SupabaseMotoRepository implements MotoRepository {
       clienteId: data.cliente_id,
       modelo: data.modelo,
       placa: data.placa,
+      finalNumeroQuadro: data.final_numero_quadro,
       criadoEm: new Date(data.criado_em),
       atualizadoEm: new Date(data.atualizado_em),
     };
