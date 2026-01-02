@@ -35,7 +35,7 @@ export default function Oficina() {
   const clienteRepo = useMemo(() => new SupabaseClienteRepository(), []);
   const motoRepo = useMemo(() => new SupabaseMotoRepository(), []);
   const storageApi = useMemo(() => new SupabaseStorageApi(), []);
-  const { motos, loading, error, recarregar } = useMotosOficina(entradaRepo, clienteRepo, motoRepo);
+  const { motos, loading, error, recarregar, atualizarMoto } = useMotosOficina(entradaRepo, clienteRepo, motoRepo);
 
   const [entradaSelecionada, setEntradaSelecionada] = useState<string | null>(null);
   const [mostrarModalFoto, setMostrarModalFoto] = useState(false);
@@ -124,8 +124,8 @@ export default function Oficina() {
   const handleAtualizarProgresso = async (entradaId: string, novoProgresso: number) => {
     const sucesso = await atualizarProgresso(entradaId, { progresso: novoProgresso });
     if (sucesso) {
+      atualizarMoto(entradaId, { progresso: novoProgresso });
       toast.success("Progresso atualizado!");
-      recarregar();
     } else {
       toast.error("Erro ao atualizar progresso");
     }
@@ -134,8 +134,8 @@ export default function Oficina() {
   const handleAtualizarStatus = async (entradaId: string, novoStatus: "pendente" | "alinhando" | "concluido") => {
     const sucesso = await atualizarProgresso(entradaId, { status: novoStatus });
     if (sucesso) {
+      atualizarMoto(entradaId, { status: novoStatus });
       toast.success("Status atualizado!");
-      recarregar();
     } else {
       toast.error("Erro ao atualizar status");
     }

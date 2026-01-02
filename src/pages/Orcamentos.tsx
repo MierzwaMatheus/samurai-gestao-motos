@@ -28,7 +28,7 @@ export default function Orcamentos() {
   
   // Converte filtro UI para status do banco
   const statusBanco = filtro === "ativos" ? "ativo" : "expirado";
-  const { orcamentos, loading, error, recarregar } = useOrcamentos(orcamentoRepo, statusBanco);
+  const { orcamentos, loading, error, recarregar, removerOrcamento } = useOrcamentos(orcamentoRepo, statusBanco);
   
   const atualizarOrcamentoUseCase = useMemo(
     () => new AtualizarOrcamentoUseCase(orcamentoRepo),
@@ -51,8 +51,8 @@ export default function Orcamentos() {
   const handleConverterEntrada = async (orcamentoId: string) => {
     try {
       await atualizarOrcamentoUseCase.execute(orcamentoId, "convertido");
+      removerOrcamento(orcamentoId);
       toast.success("Orçamento convertido em entrada!");
-      recarregar();
     } catch (err) {
       const mensagem = err instanceof Error ? err.message : "Erro ao converter orçamento";
       toast.error(mensagem);

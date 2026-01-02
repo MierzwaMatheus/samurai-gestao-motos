@@ -32,6 +32,20 @@ export function useOrcamentos(orcamentoRepo: OrcamentoRepository, status: "ativo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
-  return { orcamentos, loading, error, recarregar: carregar };
+  const atualizarOrcamento = (orcamentoId: string, atualizacoes: Partial<OrcamentoCompleto>) => {
+    setOrcamentos((prevOrcamentos) =>
+      prevOrcamentos.map((orcamento) =>
+        orcamento.id === orcamentoId ? { ...orcamento, ...atualizacoes } : orcamento
+      )
+    );
+  };
+
+  const removerOrcamento = (orcamentoId: string) => {
+    setOrcamentos((prevOrcamentos) =>
+      prevOrcamentos.filter((orcamento) => orcamento.id !== orcamentoId)
+    );
+  };
+
+  return { orcamentos, loading, error, recarregar: carregar, atualizarOrcamento, removerOrcamento };
 }
 

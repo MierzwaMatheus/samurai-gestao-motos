@@ -68,6 +68,14 @@ export function useMotosOficina(
     carregar();
   }, [useCase, clienteRepo, motoRepo]);
 
-  return { motos, loading, error, recarregar: carregar };
+  const atualizarMoto = (entradaId: string, atualizacoes: Partial<MotoCompleta>) => {
+    setMotos((prevMotos) =>
+      prevMotos.map((moto) =>
+        moto.entradaId === entradaId ? { ...moto, ...atualizacoes } : moto
+      )
+    );
+  };
+
+  return { motos, loading, error, recarregar: carregar, atualizarMoto };
 }
 
