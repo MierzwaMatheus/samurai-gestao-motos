@@ -4,7 +4,7 @@ import BottomNav from "@/components/BottomNav";
 import { OrcamentoCompleto } from "@shared/types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, Clock, CheckCircle2, Loader2, Phone, MapPin, Truck, Image as ImageIcon, Wrench } from "lucide-react";
+import { FileText, Clock, CheckCircle2, Loader2, Phone, MapPin, Truck, Image as ImageIcon, Wrench, ClipboardList } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { SupabaseOrcamentoRepository } from "@/infrastructure/repositories/SupabaseOrcamentoRepository";
@@ -16,11 +16,14 @@ import { SupabaseTipoServicoRepository } from "@/infrastructure/repositories/Sup
 import { useOrcamentos } from "@/hooks/useOrcamentos";
 import { ConverterOrcamentoEntradaUseCase } from "@/domain/usecases/ConverterOrcamentoEntradaUseCase";
 import { useGerarOS } from "@/hooks/useGerarOS";
+import { PrepararDadosOrcamentoParaOSUseCase } from "@/domain/usecases/PrepararDadosOrcamentoParaOSUseCase";
+import { useLocation } from "wouter";
 
 type FilterType = "ativos" | "expirados";
 
 export default function Orcamentos() {
   const [filtro, setFiltro] = useState<FilterType>("ativos");
+  const [, setLocation] = useLocation();
   
   const orcamentoRepo = useMemo(() => new SupabaseOrcamentoRepository(), []);
   const entradaRepo = useMemo(() => new SupabaseEntradaRepository(), []);
@@ -38,11 +41,24 @@ export default function Orcamentos() {
     [orcamentoRepo, entradaRepo]
   );
 
+  const prepararDadosOSUseCase = useMemo(
+    () => new PrepararDadosOrcamentoParaOSUseCase(
+      orcamentoRepo,
+      entradaRepo,
+      clienteRepo,
+      motoRepo,
+      fotoRepo,
+      tipoServicoRepo
+    ),
+    [orcamentoRepo, entradaRepo, clienteRepo, motoRepo, fotoRepo, tipoServicoRepo]
+  );
+
   const { gerar: gerarOS, loading: loadingOS } = useGerarOS(
     entradaRepo,
     clienteRepo,
     motoRepo,
-    fotoRepo
+    fotoRepo,
+    tipoServicoRepo
   );
 
   const calcularDiasRestantes = (data: Date): number => {
@@ -71,10 +87,28 @@ export default function Orcamentos() {
         return;
       }
 
+      // Gera o PDF da OS
       await gerarOS(orcamento.entradaId);
       toast.success("Ordem de Serviço gerada com sucesso!");
     } catch (err) {
       const mensagem = err instanceof Error ? err.message : "Erro ao gerar OS";
+      toast.error(mensagem);
+    }
+  };
+
+  const handlePreencherFormulario = async (orcamentoId: string) => {
+    try {
+      // Prepara dados do orçamento para preencher o formulário
+      const dadosCadastro = await prepararDadosOSUseCase.execute(orcamentoId);
+      
+      // Salva os dados no sessionStorage para a página de Cadastro acessar
+      sessionStorage.setItem("dadosOrcamentoParaOS", JSON.stringify(dadosCadastro));
+      
+      // Navega para a página de Cadastro
+      setLocation("/");
+      toast.success("Dados do orçamento carregados! Preencha os campos restantes.");
+    } catch (err) {
+      const mensagem = err instanceof Error ? err.message : "Erro ao preparar dados do orçamento";
       toast.error(mensagem);
     }
   };
@@ -289,21 +323,31 @@ export default function Orcamentos() {
                     </div>
 
                     {/* Ações */}
-                    <div className="flex gap-2">
+                    <div className="flex flex-col gap-2">
                       {orcamento.status === "ativo" && (
                         <>
-                          <Button
-                            onClick={() => handleConverterEntrada(orcamento.id)}
-                            variant="outline"
-                            className="flex-1 text-sm"
-                          >
-                            <CheckCircle2 size={16} className="mr-2" />
-                            Converter em Entrada
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button
+                              onClick={() => handleConverterEntrada(orcamento.id)}
+                              variant="outline"
+                              className="flex-1 text-sm"
+                            >
+                              <CheckCircle2 size={16} className="mr-2" />
+                              Converter em Entrada
+                            </Button>
+                            <Button
+                              onClick={() => handlePreencherFormulario(orcamento.id)}
+                              variant="outline"
+                              className="flex-1 text-sm"
+                            >
+                              <ClipboardList size={16} className="mr-2" />
+                              Preencher Formulário
+                            </Button>
+                          </div>
                           <Button
                             onClick={() => handleGerarOS(orcamento.id)}
                             variant="default"
-                            className="flex-1 text-sm bg-accent hover:brightness-110"
+                            className="w-full text-sm bg-accent hover:brightness-110"
                             disabled={loadingOS}
                           >
                             <FileText size={16} className="mr-2" />

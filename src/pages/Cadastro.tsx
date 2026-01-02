@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Header from "@/components/Header";
 import BottomNav from "@/components/BottomNav";
 import EntryTypeToggle from "@/components/EntryTypeToggle";
@@ -91,6 +91,89 @@ export default function Cadastro() {
   });
   const [fotos, setFotos] = useState<string[]>([]); // URLs para preview
   const [fotosArquivos, setFotosArquivos] = useState<File[]>([]); // Arquivos reais para upload
+
+  // Efeito para preencher formulário com dados do orçamento quando disponível
+  useEffect(() => {
+    const dadosSalvos = sessionStorage.getItem("dadosOrcamentoParaOS");
+    if (dadosSalvos) {
+      try {
+        const dadosParsed = JSON.parse(dadosSalvos);
+        
+        // Converte strings de data para Date objects (JSON.stringify converte Date para string ISO)
+        // Campos opcionais só são preenchidos se tiverem valores
+        const dadosCadastro: DadosCadastro = {
+          // Campos obrigatórios
+          tipo: dadosParsed.tipo || "entrada",
+          cliente: dadosParsed.cliente || "",
+          clienteId: dadosParsed.clienteId,
+          moto: dadosParsed.moto || "",
+          valorCobrado: dadosParsed.valorCobrado,
+          // Campos opcionais - só preenche se tiverem valores
+          telefone: dadosParsed.telefone && dadosParsed.telefone.trim() !== "" ? dadosParsed.telefone : "",
+          endereco: dadosParsed.endereco && dadosParsed.endereco.trim() !== "" ? dadosParsed.endereco : "",
+          cep: dadosParsed.cep && dadosParsed.cep.trim() !== "" ? dadosParsed.cep : "",
+          placa: dadosParsed.placa && dadosParsed.placa.trim() !== "" ? dadosParsed.placa : "",
+          finalNumeroQuadro: dadosParsed.finalNumeroQuadro && dadosParsed.finalNumeroQuadro.trim() !== "" ? dadosParsed.finalNumeroQuadro : "",
+          descricao: dadosParsed.descricao && dadosParsed.descricao.trim() !== "" ? dadosParsed.descricao : "",
+          observacoes: "", // NÃO preenche observações/detalhes
+          fotos: dadosParsed.fotos && Array.isArray(dadosParsed.fotos) && dadosParsed.fotos.length > 0 ? dadosParsed.fotos : [],
+          frete: dadosParsed.frete || 0,
+          dataOrcamento: dadosParsed.dataOrcamento 
+            ? (dadosParsed.dataOrcamento instanceof Date 
+                ? dadosParsed.dataOrcamento 
+                : new Date(dadosParsed.dataOrcamento))
+            : undefined,
+          dataEntrada: dadosParsed.dataEntrada 
+            ? (dadosParsed.dataEntrada instanceof Date 
+                ? dadosParsed.dataEntrada 
+                : new Date(dadosParsed.dataEntrada))
+            : undefined,
+          dataEntrega: dadosParsed.dataEntrega 
+            ? (dadosParsed.dataEntrega instanceof Date 
+                ? dadosParsed.dataEntrega 
+                : new Date(dadosParsed.dataEntrega))
+            : undefined,
+          tiposServico: dadosParsed.tiposServico && Array.isArray(dadosParsed.tiposServico) && dadosParsed.tiposServico.length > 0 ? dadosParsed.tiposServico : [],
+        };
+
+        // Preenche o formulário com os dados
+        setFormData(dadosCadastro);
+        setTipo(dadosCadastro.tipo);
+        
+        // Se há clienteId, ativa o modo de cliente existente
+        if (dadosCadastro.clienteId) {
+          setUsarClienteExistente(true);
+          // Busca o cliente para preencher o clienteSelecionado
+          clienteRepo.buscarPorId(dadosCadastro.clienteId).then((cliente) => {
+            if (cliente) {
+              setClienteSelecionado(cliente);
+            }
+          }).catch((err) => {
+            console.error("Erro ao buscar cliente:", err);
+          });
+        }
+
+        // Preenche tipos de serviço selecionados
+        if (dadosCadastro.tiposServico && dadosCadastro.tiposServico.length > 0) {
+          setTiposServicoSelecionados(dadosCadastro.tiposServico);
+        }
+
+        // Preenche fotos (URLs para preview)
+        if (dadosCadastro.fotos && dadosCadastro.fotos.length > 0) {
+          setFotos(dadosCadastro.fotos);
+        }
+
+        // Remove os dados do sessionStorage após usar
+        sessionStorage.removeItem("dadosOrcamentoParaOS");
+        
+        toast.success("Formulário preenchido com dados do orçamento!");
+      } catch (err) {
+        console.error("Erro ao processar dados do orçamento:", err);
+        sessionStorage.removeItem("dadosOrcamentoParaOS");
+        toast.error("Erro ao carregar dados do orçamento");
+      }
+    }
+  }, [clienteRepo]);
 
   const handleTipoChange = (novoTipo: EntryType) => {
     setTipo(novoTipo);

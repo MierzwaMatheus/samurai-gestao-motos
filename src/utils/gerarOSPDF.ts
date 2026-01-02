@@ -25,6 +25,7 @@ interface DadosOS {
     finalNumeroQuadro?: string;
   };
   fotos: Array<{ url: string; tipo: string }>;
+  tiposServico?: Array<{ nome: string }>;
 }
 
 export async function gerarOSPDF(dados: DadosOS): Promise<Blob> {
@@ -71,6 +72,9 @@ export async function gerarOSPDF(dados: DadosOS): Promise<Blob> {
         .label {
           font-weight: bold;
         }
+        .row > span:not(.label) {
+          text-align: right;
+        }
         .fotos {
           display: grid;
           grid-template-columns: repeat(2, 1fr);
@@ -84,6 +88,7 @@ export async function gerarOSPDF(dados: DadosOS): Promise<Blob> {
         .foto img {
           width: 100%;
           height: auto;
+          display: block;
         }
         .assinatura {
           margin-top: 50px;
@@ -144,16 +149,16 @@ export async function gerarOSPDF(dados: DadosOS): Promise<Blob> {
 
       <div class="section">
         <h2>SERVIÇO</h2>
+        ${dados.tiposServico && dados.tiposServico.length > 0 ? `
+        <div class="row">
+          <span class="label">Tipos de Serviço:</span>
+          <span>${dados.tiposServico.map(t => t.nome).join(', ')}</span>
+        </div>
+        ` : ''}
         ${dados.entrada.descricao ? `
         <div class="row">
           <span class="label">Descrição:</span>
           <span>${dados.entrada.descricao}</span>
-        </div>
-        ` : ''}
-        ${dados.entrada.observacoes ? `
-        <div class="row">
-          <span class="label">Observações:</span>
-          <span>${dados.entrada.observacoes}</span>
         </div>
         ` : ''}
         ${dados.entrada.dataEntrada ? `
@@ -225,7 +230,77 @@ export function imprimirOS(html: string) {
   if (printWindow) {
     printWindow.document.write(html);
     printWindow.document.close();
-    printWindow.print();
+    
+    // Função para aguardar imagens e imprimir
+    const aguardarImagensEImprimir = () => {
+      const images = printWindow.document.querySelectorAll('img');
+      const totalImages = images.length;
+      
+      if (totalImages === 0) {
+        // Se não há imagens, imprime imediatamente
+        setTimeout(() => {
+          printWindow.print();
+        }, 100);
+        return;
+      }
+      
+      let loadedImages = 0;
+      let hasError = false;
+      
+      // Aguarda todas as imagens carregarem
+      images.forEach((img: HTMLImageElement) => {
+        // Mostra a imagem imediatamente se já estiver carregada
+        if (img.complete && img.naturalHeight !== 0) {
+          loadedImages++;
+          img.style.display = 'block';
+        } else {
+          // Aguarda o carregamento
+          img.onload = () => {
+            loadedImages++;
+            img.style.display = 'block';
+            if (loadedImages === totalImages && !hasError) {
+              setTimeout(() => {
+                printWindow.print();
+              }, 200);
+            }
+          };
+          img.onerror = () => {
+            loadedImages++;
+            hasError = true;
+            img.style.display = 'none';
+            if (loadedImages === totalImages) {
+              setTimeout(() => {
+                printWindow.print();
+              }, 200);
+            }
+          };
+        }
+      });
+      
+      // Se todas as imagens já estavam carregadas
+      if (loadedImages === totalImages) {
+        setTimeout(() => {
+          printWindow.print();
+        }, 200);
+      }
+      
+      // Timeout de segurança: imprime após 2 segundos mesmo se algumas imagens não carregarem
+      setTimeout(() => {
+        images.forEach((img: HTMLImageElement) => {
+          if (img.complete || img.naturalHeight !== 0) {
+            img.style.display = 'block';
+          }
+        });
+        printWindow.print();
+      }, 2000);
+    };
+    
+    // Aguarda o documento estar pronto
+    if (printWindow.document.readyState === 'complete') {
+      aguardarImagensEImprimir();
+    } else {
+      printWindow.addEventListener('load', aguardarImagensEImprimir);
+    }
   }
 }
 

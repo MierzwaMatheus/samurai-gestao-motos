@@ -11,3 +11,4 @@ export interface ConfiguracaoFreteRepository {
   ): Promise<ConfiguracaoFrete>;
 }
 
+

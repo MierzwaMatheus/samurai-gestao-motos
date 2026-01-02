@@ -29,3 +29,4 @@ export function useAtualizarProgressoStatus(useCase: AtualizarProgressoStatusUse
   return { atualizar, loading, error };
 }
 
+

@@ -22,3 +22,4 @@ CREATE TRIGGER update_tipos_servico_atualizado_em
   FOR EACH ROW
   EXECUTE FUNCTION update_atualizado_em();
 
+

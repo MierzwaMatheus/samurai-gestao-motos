@@ -4,20 +4,22 @@ import { EntradaRepository } from "@/domain/interfaces/EntradaRepository";
 import { ClienteRepository } from "@/domain/interfaces/ClienteRepository";
 import { MotoRepository } from "@/domain/interfaces/MotoRepository";
 import { FotoRepository } from "@/domain/interfaces/FotoRepository";
+import { TipoServicoRepository } from "@/domain/interfaces/TipoServicoRepository";
 import { gerarOSPDF, imprimirOS } from "@/utils/gerarOSPDF";
 
 export function useGerarOS(
   entradaRepo: EntradaRepository,
   clienteRepo: ClienteRepository,
   motoRepo: MotoRepository,
-  fotoRepo: FotoRepository
+  fotoRepo: FotoRepository,
+  tipoServicoRepo: TipoServicoRepository
 ) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const useCase = useMemo(
-    () => new GerarOSUseCase(entradaRepo, clienteRepo, motoRepo, fotoRepo),
-    [entradaRepo, clienteRepo, motoRepo, fotoRepo]
+    () => new GerarOSUseCase(entradaRepo, clienteRepo, motoRepo, fotoRepo, tipoServicoRepo),
+    [entradaRepo, clienteRepo, motoRepo, fotoRepo, tipoServicoRepo]
   );
 
   const gerar = async (entradaId: string) => {

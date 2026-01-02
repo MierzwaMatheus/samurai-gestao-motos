@@ -29,3 +29,4 @@ export function useAdicionarFotoStatus(useCase: AdicionarFotoStatusUseCase) {
   return { adicionar, loading, error };
 }
 
+
