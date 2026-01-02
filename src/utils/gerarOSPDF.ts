@@ -77,7 +77,7 @@ export async function gerarOSPDF(dados: DadosOS): Promise<Blob> {
         }
         .fotos {
           display: grid;
-          grid-template-columns: repeat(2, 1fr);
+          grid-template-columns: repeat(4, 1fr);
           gap: 10px;
           margin-top: 10px;
         }
