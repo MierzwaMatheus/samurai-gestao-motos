@@ -9,6 +9,17 @@ supabase/
 ├── functions/
 │   └── calcular-frete/
 │       └── index.ts          # Edge function para cálculo de frete
+├── migrations/
+│   ├── 20240101000001_create_clientes.sql
+│   ├── 20240101000002_create_motos.sql
+│   ├── 20240101000003_create_entradas.sql
+│   ├── 20240101000004_create_orcamentos.sql
+│   ├── 20240101000005_create_fotos.sql
+│   ├── 20240101000006_rls_clientes.sql
+│   ├── 20240101000007_rls_motos.sql
+│   ├── 20240101000008_rls_entradas.sql
+│   ├── 20240101000009_rls_orcamentos.sql
+│   └── 20240101000010_rls_fotos.sql
 ├── config.toml              # Configuração do Supabase CLI
 └── README.md                # Este arquivo
 ```
@@ -252,11 +263,107 @@ A edge function já inclui headers CORS. Se ainda houver problemas, verifique se
 - Verifique se a API do ViaCEP está respondendo
 - Verifique se o OpenStreetMap Nominatim está acessível
 
-## Próximos Passos
+## Banco de Dados
 
-1. **Criar tabelas**: Se necessário, crie migrations para tabelas do banco
-2. **Configurar RLS**: Configure Row Level Security para proteger dados
-3. **Adicionar mais functions**: Crie outras edge functions conforme necessário
+### Tabelas Criadas
+
+O projeto possui as seguintes tabelas:
+
+1. **clientes** - Armazena informações dos clientes
+   - `id` (UUID, PK)
+   - `nome` (TEXT, obrigatório)
+   - `telefone` (TEXT, opcional)
+   - `email` (TEXT, opcional)
+   - `endereco` (TEXT, opcional)
+   - `cep` (TEXT, opcional)
+   - `user_id` (UUID, FK para auth.users)
+   - `criado_em` (TIMESTAMPTZ)
+   - `atualizado_em` (TIMESTAMPTZ)
+
+2. **motos** - Armazena informações das motos dos clientes
+   - `id` (UUID, PK)
+   - `cliente_id` (UUID, FK para clientes)
+   - `modelo` (TEXT, obrigatório)
+   - `placa` (TEXT, opcional)
+   - `user_id` (UUID, FK para auth.users)
+   - `criado_em` (TIMESTAMPTZ)
+   - `atualizado_em` (TIMESTAMPTZ)
+
+3. **entradas** - Armazena entradas de motos na oficina
+   - `id` (UUID, PK)
+   - `tipo` (TEXT: 'entrada' ou 'orcamento')
+   - `cliente_id` (UUID, FK para clientes)
+   - `moto_id` (UUID, FK para motos)
+   - `endereco` (TEXT, opcional)
+   - `cep` (TEXT, opcional)
+   - `frete` (DECIMAL, padrão 0)
+   - `descricao` (TEXT, opcional)
+   - `status` (TEXT: 'pendente', 'alinhando', 'concluido')
+   - `progresso` (INTEGER, 0-100)
+   - `user_id` (UUID, FK para auth.users)
+   - `criado_em` (TIMESTAMPTZ)
+   - `atualizado_em` (TIMESTAMPTZ)
+
+4. **orcamentos** - Armazena informações detalhadas dos orçamentos
+   - `id` (UUID, PK)
+   - `entrada_id` (UUID, FK para entradas)
+   - `valor` (DECIMAL, obrigatório)
+   - `data_expiracao` (TIMESTAMPTZ, obrigatório)
+   - `status` (TEXT: 'ativo', 'expirado', 'convertido')
+   - `user_id` (UUID, FK para auth.users)
+   - `criado_em` (TIMESTAMPTZ)
+   - `atualizado_em` (TIMESTAMPTZ)
+
+5. **fotos** - Armazena referências às fotos das motos
+   - `id` (UUID, PK)
+   - `entrada_id` (UUID, FK para entradas)
+   - `url` (TEXT, obrigatório)
+   - `tipo` (TEXT: 'moto', 'status', 'documento')
+   - `user_id` (UUID, FK para auth.users)
+   - `criado_em` (TIMESTAMPTZ)
+
+### Row Level Security (RLS)
+
+Todas as tabelas possuem RLS habilitado com as seguintes políticas:
+
+- **SELECT**: Usuários autenticados podem ver apenas seus próprios registros
+- **INSERT**: Usuários autenticados podem inserir apenas seus próprios registros
+- **UPDATE**: Usuários autenticados podem atualizar apenas seus próprios registros
+- **DELETE**: Usuários autenticados podem deletar apenas seus próprios registros
+
+Todas as políticas verificam que `auth.uid() = user_id` para garantir isolamento de dados entre usuários.
+
+### Aplicar Migrations
+
+Para aplicar as migrations no banco de dados:
+
+```bash
+# Se instalou globalmente
+supabase db push
+
+# Se usando npx
+npx supabase db push
+```
+
+Para aplicar apenas localmente (desenvolvimento):
+
+```bash
+# Se instalou globalmente
+supabase migration up
+
+# Se usando npx
+npx supabase migration up
+```
+
+## Autenticação
+
+O projeto utiliza autenticação do Supabase Auth. Os usuários precisam:
+
+1. Criar uma conta através da tela de login
+2. Fazer login com email e senha
+3. Todas as operações no banco são automaticamente filtradas pelo `user_id` através do RLS
+
+A tela de login está disponível em `/login` e é protegida automaticamente - usuários não autenticados são redirecionados para ela.
 
 ## Recursos
 
