@@ -2,13 +2,37 @@
 
 Este diretório contém a configuração do Supabase para o projeto Samurai Gestão de Motos.
 
+## Comandos Principais
+
+⚠️ **IMPORTANTE**: Este projeto usa `npx` para executar comandos do Supabase CLI (não é necessário instalar globalmente).
+
+### Comandos Mais Usados
+
+```bash
+# Iniciar Supabase localmente (desenvolvimento)
+npx supabase start
+
+# Aplicar migrations no banco remoto
+npx supabase db push
+
+# Fazer deploy da Edge Function
+npx supabase functions deploy calcular-frete
+
+# Parar Supabase local
+npx supabase stop
+
+# Verificar status
+npx supabase status
+```
+
 ## Estrutura
 
 ```
 supabase/
 ├── functions/
 │   └── calcular-frete/
-│       └── index.ts          # Edge function para cálculo de frete
+│       ├── index.ts                          # Edge function para cálculo de frete
+│       └── supabase.functions.config.json    # Configuração da função (auth: false)
 ├── migrations/
 │   ├── 20240101000001_create_clientes.sql
 │   ├── 20240101000002_create_motos.sql
@@ -19,7 +43,21 @@ supabase/
 │   ├── 20240101000007_rls_motos.sql
 │   ├── 20240101000008_rls_entradas.sql
 │   ├── 20240101000009_rls_orcamentos.sql
-│   └── 20240101000010_rls_fotos.sql
+│   ├── 20240101000010_rls_fotos.sql
+│   ├── 20240101000011_set_user_id_trigger.sql
+│   ├── 20240101000012_create_storage_bucket.sql
+│   ├── 20240101000013_rls_storage_fotos.sql
+│   ├── 20240101000014_fix_storage_rls.sql
+│   ├── 20240101000015_update_entradas_campos.sql
+│   ├── 20240101000016_add_fotos_status_jsonb.sql
+│   ├── 20240101000017_add_numero_servicos_clientes.sql
+│   ├── 20240101000018_create_tipos_servico.sql
+│   ├── 20240101000019_create_entradas_tipos_servico.sql
+│   ├── 20240101000020_rls_tipos_servico.sql
+│   ├── 20240101000021_incrementar_servicos_ao_converter_orcamento.sql
+│   ├── 20240101000022_set_tipos_servico_user_id_trigger.sql
+│   ├── 20240101000023_create_configuracoes_frete.sql
+│   └── 20240101000024_add_trigger_configuracoes_frete.sql
 ├── config.toml              # Configuração do Supabase CLI
 └── README.md                # Este arquivo
 ```
@@ -114,10 +152,6 @@ npx supabase --version
 ### 5. Fazer Login no Supabase CLI
 
 ```bash
-# Se instalou globalmente
-supabase login
-
-# Se usando npx
 npx supabase login
 ```
 
@@ -126,10 +160,6 @@ Isso abrirá o navegador para autenticação.
 ### 6. Vincular Projeto Local ao Projeto Remoto
 
 ```bash
-# Se instalou globalmente
-supabase link --project-ref seu-project-id
-
-# Se usando npx
 npx supabase link --project-ref seu-project-id
 ```
 
@@ -142,20 +172,12 @@ O `project-id` é a parte do URL antes de `.supabase.co`. Por exemplo, se sua UR
 A edge function precisa da API key do OpenRouteService. Configure como secret no Supabase:
 
 ```bash
-# Se instalou globalmente
-supabase secrets set OPENROUTE_API_KEY=sua-openroute-api-key-aqui
-
-# Se usando npx
 npx supabase secrets set OPENROUTE_API_KEY=sua-openroute-api-key-aqui
 ```
 
 ### 2. Fazer Deploy da Function
 
 ```bash
-# Se instalou globalmente
-supabase functions deploy calcular-frete
-
-# Se usando npx
 npx supabase functions deploy calcular-frete
 ```
 
@@ -175,10 +197,6 @@ curl -X POST https://seu-projeto-id.supabase.co/functions/v1/calcular-frete \
 ### Iniciar Supabase Local
 
 ```bash
-# Se instalou globalmente
-supabase start
-
-# Se usando npx
 npx supabase start
 ```
 
@@ -187,10 +205,6 @@ Isso iniciará todos os serviços do Supabase localmente (banco de dados, API, E
 ### Testar Edge Function Localmente
 
 ```bash
-# Se instalou globalmente
-supabase functions serve calcular-frete
-
-# Se usando npx
 npx supabase functions serve calcular-frete
 ```
 
@@ -199,10 +213,6 @@ Isso iniciará a function localmente em `http://localhost:54321/functions/v1/cal
 ### Parar Supabase Local
 
 ```bash
-# Se instalou globalmente
-supabase stop
-
-# Se usando npx
 npx supabase stop
 ```
 
@@ -211,12 +221,14 @@ npx supabase stop
 A edge function `calcular-frete`:
 
 1. Recebe um CEP de destino no body da requisição
-2. Busca coordenadas do CEP de origem (fixo: 24755110) via ViaCEP
-3. Busca coordenadas do CEP de destino via ViaCEP
-4. Usa OpenStreetMap Nominatim para geocodificar os endereços
-5. Calcula distância usando OpenRouteService
-6. Calcula valor do frete: `distância * R$ 2,00/km`
-7. Retorna JSON com distância, valor e CEPs
+2. Tenta buscar configurações do usuário no banco (CEP origem e valor por km)
+3. Se não encontrar configurações, usa valores padrão (CEP: 06653010, Valor: R$ 2,00/km)
+4. Busca coordenadas do CEP de origem via ViaCEP
+5. Busca coordenadas do CEP de destino via ViaCEP
+6. Usa OpenStreetMap Nominatim para geocodificar os endereços
+7. Calcula distância usando OpenRouteService
+8. Calcula valor do frete: `distância * valor_por_km`
+9. Retorna JSON com distância, valor e CEPs
 
 ### Request Body
 
@@ -243,12 +255,12 @@ A edge function `calcular-frete`:
 
 Certifique-se de que o secret foi configurado:
 ```bash
-supabase secrets list
+npx supabase secrets list
 ```
 
 Se não aparecer, configure novamente:
 ```bash
-supabase secrets set OPENROUTE_API_KEY=sua-key
+npx supabase secrets set OPENROUTE_API_KEY=sua-key
 ```
 
 ### Erro de CORS
@@ -322,6 +334,22 @@ O projeto possui as seguintes tabelas:
    - `user_id` (UUID, FK para auth.users)
    - `criado_em` (TIMESTAMPTZ)
 
+6. **tipos_servico** - Armazena tipos de serviço disponíveis
+   - `id` (UUID, PK)
+   - `nome` (TEXT, obrigatório)
+   - `quantidade_servicos` (INTEGER, padrão 0)
+   - `user_id` (UUID, FK para auth.users)
+   - `criado_em` (TIMESTAMPTZ)
+   - `atualizado_em` (TIMESTAMPTZ)
+
+7. **configuracoes_frete** - Armazena configurações de frete por usuário
+   - `id` (UUID, PK)
+   - `cep_origem` (TEXT, obrigatório) - CEP de origem para cálculo de frete
+   - `valor_por_km` (NUMERIC, obrigatório, padrão 2.00) - Valor cobrado por km
+   - `user_id` (UUID, FK para auth.users, UNIQUE) - Um registro por usuário
+   - `criado_em` (TIMESTAMPTZ)
+   - `atualizado_em` (TIMESTAMPTZ)
+
 ### Row Level Security (RLS)
 
 Todas as tabelas possuem RLS habilitado com as seguintes políticas:
@@ -335,23 +363,15 @@ Todas as políticas verificam que `auth.uid() = user_id` para garantir isolament
 
 ### Aplicar Migrations
 
-Para aplicar as migrations no banco de dados:
+Para aplicar as migrations no banco de dados remoto:
 
 ```bash
-# Se instalou globalmente
-supabase db push
-
-# Se usando npx
 npx supabase db push
 ```
 
 Para aplicar apenas localmente (desenvolvimento):
 
 ```bash
-# Se instalou globalmente
-supabase migration up
-
-# Se usando npx
 npx supabase migration up
 ```
 
