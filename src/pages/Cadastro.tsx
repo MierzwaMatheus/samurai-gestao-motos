@@ -16,6 +16,14 @@ import { useBuscarCep } from "@/hooks/useBuscarCep";
 import { SupabaseFreteApi } from "@/infrastructure/api/SupabaseFreteApi";
 import { CalcularFreteUseCase } from "@/domain/usecases/CalcularFreteUseCase";
 import { useCalcularFrete } from "@/hooks/useCalcularFrete";
+import { SupabaseClienteRepository } from "@/infrastructure/repositories/SupabaseClienteRepository";
+import { SupabaseMotoRepository } from "@/infrastructure/repositories/SupabaseMotoRepository";
+import { SupabaseEntradaRepository } from "@/infrastructure/repositories/SupabaseEntradaRepository";
+import { SupabaseOrcamentoRepository } from "@/infrastructure/repositories/SupabaseOrcamentoRepository";
+import { useCriarEntrada } from "@/hooks/useCriarEntrada";
+import { SupabaseStorageApi } from "@/infrastructure/storage/SupabaseStorageApi";
+import { SupabaseFotoRepository } from "@/infrastructure/repositories/SupabaseFotoRepository";
+import { useUploadFoto } from "@/hooks/useUploadFoto";
 
 export default function Cadastro() {
   // Inicialização das dependências seguindo DIP
@@ -35,6 +43,23 @@ export default function Cadastro() {
   const { calcular: calcularFrete, loading: loadingFrete, error: errorFrete } =
     useCalcularFrete(calcularFreteUseCase);
 
+  // Repositórios para criar entrada
+  const clienteRepo = useMemo(() => new SupabaseClienteRepository(), []);
+  const motoRepo = useMemo(() => new SupabaseMotoRepository(), []);
+  const entradaRepo = useMemo(() => new SupabaseEntradaRepository(), []);
+  const orcamentoRepo = useMemo(() => new SupabaseOrcamentoRepository(), []);
+  const { criar: criarEntrada, loading: loadingCriar } = useCriarEntrada(
+    clienteRepo,
+    motoRepo,
+    entradaRepo,
+    orcamentoRepo
+  );
+
+  // Storage para upload de fotos
+  const storageApi = useMemo(() => new SupabaseStorageApi(), []);
+  const fotoRepo = useMemo(() => new SupabaseFotoRepository(), []);
+  const { upload: uploadFoto, loading: loadingUpload } = useUploadFoto(storageApi, fotoRepo);
+
   const [tipo, setTipo] = useState<EntryType>("entrada");
   const [formData, setFormData] = useState<DadosCadastro>({
     tipo: "entrada",
@@ -47,7 +72,8 @@ export default function Cadastro() {
     fotos: [],
     frete: 0,
   });
-  const [fotos, setFotos] = useState<string[]>([]);
+  const [fotos, setFotos] = useState<string[]>([]); // URLs para preview
+  const [fotosArquivos, setFotosArquivos] = useState<File[]>([]); // Arquivos reais para upload
 
   const handleTipoChange = (novoTipo: EntryType) => {
     setTipo(novoTipo);
@@ -98,7 +124,22 @@ export default function Cadastro() {
 
   const handleFotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    files.forEach((file) => {
+    
+    // Valida tamanho (5MB por arquivo)
+    const maxSize = 5 * 1024 * 1024;
+    const arquivosValidos = files.filter((file) => {
+      if (file.size > maxSize) {
+        toast.error(`Arquivo ${file.name} muito grande. Tamanho máximo: 5MB.`);
+        return false;
+      }
+      return true;
+    });
+
+    // Adiciona arquivos
+    setFotosArquivos((prev) => [...prev, ...arquivosValidos]);
+    
+    // Cria preview
+    arquivosValidos.forEach((file) => {
       const reader = new FileReader();
       reader.onload = (event) => {
         setFotos((prev) => [...prev, event.target?.result as string]);
@@ -128,25 +169,57 @@ export default function Cadastro() {
     }
   };
 
-  const handleRegistrar = () => {
+  const handleRegistrar = async () => {
     if (!formData.cliente || !formData.moto) {
       toast.error("Preencha todos os campos obrigatórios");
       return;
     }
-    toast.success(`${tipo === "entrada" ? "Entrada" : "Orçamento"} registrado com sucesso!`);
-    // Reset form
-    setFormData({
-      tipo: "entrada",
-      cliente: "",
-      endereco: "",
-      cep: "",
-      moto: "",
-      placa: "",
-      descricao: "",
-      fotos: [],
-      frete: 0,
-    });
-    setFotos([]);
+
+    if (tipo === "orcamento" && !formData.descricao) {
+      toast.error("Descrição é obrigatória para orçamentos");
+      return;
+    }
+
+    try {
+      // 1. Criar entrada
+      const { entradaId } = await criarEntrada({
+        ...formData,
+        fotos: fotos,
+      });
+
+      // 2. Fazer upload das fotos
+      if (fotosArquivos.length > 0) {
+        toast.info("Fazendo upload das fotos...");
+        await Promise.all(
+          fotosArquivos.map((file) =>
+            uploadFoto(file, entradaId, "moto").catch((err) => {
+              console.error("Erro ao fazer upload de foto:", err);
+              toast.error(`Erro ao fazer upload de ${file.name}`);
+            })
+          )
+        );
+      }
+
+      toast.success(`${tipo === "entrada" ? "Entrada" : "Orçamento"} registrado com sucesso!`);
+      
+      // Reset form
+      setFormData({
+        tipo: "entrada",
+        cliente: "",
+        endereco: "",
+        cep: "",
+        moto: "",
+        placa: "",
+        descricao: "",
+        fotos: [],
+        frete: 0,
+      });
+      setFotos([]);
+      setFotosArquivos([]);
+    } catch (err) {
+      const mensagem = err instanceof Error ? err.message : "Erro ao registrar";
+      toast.error(mensagem);
+    }
   };
 
   return (
@@ -365,8 +438,13 @@ export default function Cadastro() {
           <button
             onClick={handleRegistrar}
             className="btn-samurai mt-8"
+            disabled={loadingCriar || loadingUpload}
           >
-            Registrar na Samurai
+            {loadingCriar || loadingUpload
+              ? loadingCriar
+                ? "Registrando..."
+                : "Fazendo upload das fotos..."
+              : "Registrar na Samurai"}
           </button>
         </div>
       </main>

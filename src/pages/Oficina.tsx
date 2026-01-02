@@ -1,49 +1,21 @@
-import { useState } from "react";
+import { useMemo } from "react";
 import Header from "@/components/Header";
 import BottomNav from "@/components/BottomNav";
-import { Moto } from "@/../../shared/types";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { ImagePlus, Edit2 } from "lucide-react";
+import { ImagePlus, Edit2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-
-// Mock data
-const MOTOS_MOCK: Moto[] = [
-  {
-    id: "1",
-    modelo: "Honda CB 500X",
-    placa: "ABC-1234",
-    cliente: "João Silva",
-    status: "alinhando",
-    progresso: 65,
-    fotos: [],
-    criadoEm: new Date(),
-  },
-  {
-    id: "2",
-    modelo: "Yamaha MT-07",
-    placa: "XYZ-5678",
-    cliente: "Maria Santos",
-    status: "pendente",
-    progresso: 0,
-    fotos: [],
-    criadoEm: new Date(),
-  },
-  {
-    id: "3",
-    modelo: "Kawasaki Ninja 400",
-    placa: "DEF-9012",
-    cliente: "Pedro Costa",
-    status: "concluido",
-    progresso: 100,
-    fotos: [],
-    criadoEm: new Date(),
-  },
-];
+import { SupabaseEntradaRepository } from "@/infrastructure/repositories/SupabaseEntradaRepository";
+import { SupabaseClienteRepository } from "@/infrastructure/repositories/SupabaseClienteRepository";
+import { SupabaseMotoRepository } from "@/infrastructure/repositories/SupabaseMotoRepository";
+import { useMotosOficina } from "@/hooks/useMotosOficina";
 
 export default function Oficina() {
-  const [motos, setMotos] = useState<Moto[]>(MOTOS_MOCK);
+  const entradaRepo = useMemo(() => new SupabaseEntradaRepository(), []);
+  const clienteRepo = useMemo(() => new SupabaseClienteRepository(), []);
+  const motoRepo = useMemo(() => new SupabaseMotoRepository(), []);
+  const { motos, loading, error } = useMotosOficina(entradaRepo, clienteRepo, motoRepo);
 
   const getStatusLabel = (status: string) => {
     switch (status) {
@@ -86,7 +58,16 @@ export default function Oficina() {
 
       <main className="pt-20 pb-32 px-6">
         <div className="max-w-2xl mx-auto space-y-6">
-          {motos.length === 0 ? (
+          {loading ? (
+            <Card className="card-samurai text-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-accent mx-auto mb-4" />
+              <p className="font-sans text-foreground/60">Carregando motos...</p>
+            </Card>
+          ) : error ? (
+            <Card className="card-samurai text-center py-12">
+              <p className="font-sans text-red-500">{error}</p>
+            </Card>
+          ) : motos.length === 0 ? (
             <Card className="card-samurai text-center py-12">
               <p className="font-sans text-foreground/60">
                 Nenhuma moto em processamento
@@ -104,7 +85,7 @@ export default function Oficina() {
                       {moto.modelo}
                     </h3>
                     <p className="font-sans text-sm text-foreground/60">
-                      Placa: {moto.placa} • {moto.cliente}
+                      {moto.placa ? `Placa: ${moto.placa} • ` : ""}{moto.cliente}
                     </p>
                   </div>
                   <button

@@ -1,57 +1,27 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Header from "@/components/Header";
 import BottomNav from "@/components/BottomNav";
-import { Orcamento } from "@/../../shared/types";
+import { OrcamentoCompleto } from "@shared/types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, Clock, CheckCircle2 } from "lucide-react";
+import { FileText, Clock, CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-
-// Mock data
-const ORCAMENTOS_MOCK: Orcamento[] = [
-  {
-    id: "1",
-    cliente: "João Silva",
-    moto: "Honda CB 500X",
-    valor: 450.0,
-    descricao: "Alinhamento completo com balanceamento",
-    dataExpiracao: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), // 2 dias
-    status: "ativo",
-    criadoEm: new Date(),
-  },
-  {
-    id: "2",
-    cliente: "Maria Santos",
-    moto: "Yamaha MT-07",
-    valor: 350.0,
-    descricao: "Alinhamento dianteiro",
-    dataExpiracao: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000), // 10 dias
-    status: "ativo",
-    criadoEm: new Date(),
-  },
-  {
-    id: "3",
-    cliente: "Pedro Costa",
-    moto: "Kawasaki Ninja 400",
-    valor: 300.0,
-    descricao: "Alinhamento e balanceamento",
-    dataExpiracao: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 dias atrás
-    status: "expirado",
-    criadoEm: new Date(),
-  },
-];
+import { SupabaseOrcamentoRepository } from "@/infrastructure/repositories/SupabaseOrcamentoRepository";
+import { useOrcamentos } from "@/hooks/useOrcamentos";
+import { AtualizarOrcamentoUseCase } from "@/domain/usecases/AtualizarOrcamentoUseCase";
 
 type FilterType = "ativos" | "expirados";
 
 export default function Orcamentos() {
   const [filtro, setFiltro] = useState<FilterType>("ativos");
-  const [orcamentos, setOrcamentos] = useState<Orcamento[]>(ORCAMENTOS_MOCK);
-
-  const orcamentosFiltrados = orcamentos.filter((o) => {
-    if (filtro === "ativos") return o.status === "ativo";
-    if (filtro === "expirados") return o.status === "expirado";
-    return true;
-  });
+  
+  const orcamentoRepo = useMemo(() => new SupabaseOrcamentoRepository(), []);
+  const { orcamentos, loading, error, recarregar } = useOrcamentos(orcamentoRepo, filtro);
+  
+  const atualizarOrcamentoUseCase = useMemo(
+    () => new AtualizarOrcamentoUseCase(orcamentoRepo),
+    [orcamentoRepo]
+  );
 
   const calcularDiasRestantes = (data: Date): number => {
     const agora = new Date();
@@ -59,13 +29,15 @@ export default function Orcamentos() {
     return Math.ceil(diferenca / (1000 * 60 * 60 * 24));
   };
 
-  const handleConverterEntrada = (orcamentoId: string) => {
-    toast.success("Orçamento convertido em entrada!");
-    setOrcamentos((prev) =>
-      prev.map((o) =>
-        o.id === orcamentoId ? { ...o, status: "convertido" as const } : o
-      )
-    );
+  const handleConverterEntrada = async (orcamentoId: string) => {
+    try {
+      await atualizarOrcamentoUseCase.execute(orcamentoId, "convertido");
+      toast.success("Orçamento convertido em entrada!");
+      recarregar();
+    } catch (err) {
+      const mensagem = err instanceof Error ? err.message : "Erro ao converter orçamento";
+      toast.error(mensagem);
+    }
   };
 
   const handleGerarOS = (orcamentoId: string) => {
@@ -105,14 +77,23 @@ export default function Orcamentos() {
 
           {/* Lista de Orçamentos */}
           <div className="space-y-4">
-            {orcamentosFiltrados.length === 0 ? (
+            {loading ? (
+              <Card className="card-samurai text-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-accent mx-auto mb-4" />
+                <p className="font-sans text-foreground/60">Carregando orçamentos...</p>
+              </Card>
+            ) : error ? (
+              <Card className="card-samurai text-center py-12">
+                <p className="font-sans text-red-500">{error}</p>
+              </Card>
+            ) : orcamentos.length === 0 ? (
               <Card className="card-samurai text-center py-12">
                 <p className="font-sans text-foreground/60">
                   Nenhum orçamento {filtro === "ativos" ? "ativo" : "expirado"}
                 </p>
               </Card>
             ) : (
-              orcamentosFiltrados.map((orcamento) => {
+              orcamentos.map((orcamento) => {
                 const diasRestantes = calcularDiasRestantes(
                   orcamento.dataExpiracao
                 );
@@ -130,11 +111,13 @@ export default function Orcamentos() {
                           {orcamento.moto}
                         </h3>
                         <p className="font-sans text-sm text-foreground/60">
-                          {orcamento.cliente}
+                          {orcamento.cliente || "Cliente não informado"}
                         </p>
-                        <p className="font-sans text-xs text-foreground/40 mt-1">
-                          {orcamento.descricao}
-                        </p>
+                        {orcamento.descricao && (
+                          <p className="font-sans text-xs text-foreground/40 mt-1">
+                            {orcamento.descricao}
+                          </p>
+                        )}
                       </div>
                       <div className="text-right">
                         <p className="font-serif text-2xl text-accent">
