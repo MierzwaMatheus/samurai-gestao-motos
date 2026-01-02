@@ -38,3 +38,8 @@ CREATE TRIGGER set_fotos_user_id
   FOR EACH ROW
   EXECUTE FUNCTION set_user_id();
 
+CREATE TRIGGER set_tipos_servico_user_id
+  BEFORE INSERT ON public.tipos_servico
+  FOR EACH ROW
+  EXECUTE FUNCTION set_user_id();
+

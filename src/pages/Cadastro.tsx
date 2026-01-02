@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { ImagePlus, Truck, Search, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { ClienteSearch } from "@/components/ClienteSearch";
+import { TipoServicoSearch } from "@/components/TipoServicoSearch";
 import { ViaCepService } from "@/infrastructure/api/ViaCepService";
 import { BuscarEnderecoPorCepUseCase } from "@/domain/usecases/BuscarEnderecoPorCepUseCase";
 import { useBuscarCep } from "@/hooks/useBuscarCep";
@@ -22,6 +23,7 @@ import { SupabaseClienteRepository } from "@/infrastructure/repositories/Supabas
 import { SupabaseMotoRepository } from "@/infrastructure/repositories/SupabaseMotoRepository";
 import { SupabaseEntradaRepository } from "@/infrastructure/repositories/SupabaseEntradaRepository";
 import { SupabaseOrcamentoRepository } from "@/infrastructure/repositories/SupabaseOrcamentoRepository";
+import { SupabaseTipoServicoRepository } from "@/infrastructure/repositories/SupabaseTipoServicoRepository";
 import { useCriarEntrada } from "@/hooks/useCriarEntrada";
 import { SupabaseStorageApi } from "@/infrastructure/storage/SupabaseStorageApi";
 import { SupabaseFotoRepository } from "@/infrastructure/repositories/SupabaseFotoRepository";
@@ -50,11 +52,13 @@ export default function Cadastro() {
   const motoRepo = useMemo(() => new SupabaseMotoRepository(), []);
   const entradaRepo = useMemo(() => new SupabaseEntradaRepository(), []);
   const orcamentoRepo = useMemo(() => new SupabaseOrcamentoRepository(), []);
+  const tipoServicoRepo = useMemo(() => new SupabaseTipoServicoRepository(), []);
   const { criar: criarEntrada, loading: loadingCriar } = useCriarEntrada(
     clienteRepo,
     motoRepo,
     entradaRepo,
-    orcamentoRepo
+    orcamentoRepo,
+    tipoServicoRepo
   );
 
   // Storage para upload de fotos
@@ -65,6 +69,7 @@ export default function Cadastro() {
   const [tipo, setTipo] = useState<EntryType>("entrada");
   const [usarClienteExistente, setUsarClienteExistente] = useState(false);
   const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(null);
+  const [tiposServicoSelecionados, setTiposServicoSelecionados] = useState<string[]>([]);
   const [formData, setFormData] = useState<DadosCadastro>({
     tipo: "entrada",
     cliente: "",
@@ -82,6 +87,7 @@ export default function Cadastro() {
     dataOrcamento: undefined,
     dataEntrada: undefined,
     dataEntrega: undefined,
+    tiposServico: [],
   });
   const [fotos, setFotos] = useState<string[]>([]); // URLs para preview
   const [fotosArquivos, setFotosArquivos] = useState<File[]>([]); // Arquivos reais para upload
@@ -254,6 +260,7 @@ export default function Cadastro() {
       const { entradaId } = await criarEntrada({
         ...formData,
         fotos: fotos,
+        tiposServico: tiposServicoSelecionados,
       });
 
       // 2. Fazer upload das fotos
@@ -297,11 +304,13 @@ export default function Cadastro() {
         dataOrcamento: undefined,
         dataEntrada: undefined,
         dataEntrega: undefined,
+        tiposServico: [],
       });
       setFotos([]);
       setFotosArquivos([]);
       setClienteSelecionado(null);
       setUsarClienteExistente(false);
+      setTiposServicoSelecionados([]);
     } catch (err) {
       const mensagem = err instanceof Error ? err.message : "Erro ao registrar";
       toast.error(mensagem);
@@ -433,6 +442,21 @@ export default function Cadastro() {
                 />
               </div>
             </div>
+          </div>
+
+          {/* Seção Tipos de Serviço */}
+          <div className="space-y-4">
+            <Label className="text-xs uppercase tracking-widest">
+              Tipos de Serviço
+            </Label>
+            <TipoServicoSearch
+              tipoServicoRepo={tipoServicoRepo}
+              value={tiposServicoSelecionados}
+              onSelect={(ids) => {
+                setTiposServicoSelecionados(ids);
+                setFormData({ ...formData, tiposServico: ids });
+              }}
+            />
           </div>
 
           {/* Seção Endereço (obrigatório para Orçamento, opcional para Entrada) */}

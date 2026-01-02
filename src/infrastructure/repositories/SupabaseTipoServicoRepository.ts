@@ -1,0 +1,139 @@
+import { TipoServicoRepository } from "@/domain/interfaces/TipoServicoRepository";
+import { TipoServico } from "@shared/types";
+import { supabase } from "@/infrastructure/supabase/client";
+
+/**
+ * Implementação do repositório de tipos de serviço usando Supabase
+ * Esta é uma implementação de infraestrutura que conhece detalhes do Supabase
+ */
+export class SupabaseTipoServicoRepository implements TipoServicoRepository {
+  async criar(tipoServico: Omit<TipoServico, "id" | "criadoEm" | "atualizadoEm" | "quantidadeServicos">): Promise<TipoServico> {
+    const { data, error } = await supabase
+      .from("tipos_servico")
+      .insert({
+        nome: tipoServico.nome,
+        quantidade_servicos: 0,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(`Erro ao criar tipo de serviço: ${error.message}`);
+    }
+
+    return this.mapToTipoServico(data);
+  }
+
+  async buscarPorId(id: string): Promise<TipoServico | null> {
+    const { data, error } = await supabase
+      .from("tipos_servico")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (error) {
+      if (error.code === "PGRST116") {
+        return null;
+      }
+      throw new Error(`Erro ao buscar tipo de serviço: ${error.message}`);
+    }
+
+    return data ? this.mapToTipoServico(data) : null;
+  }
+
+  async buscarPorNome(nome: string): Promise<TipoServico[]> {
+    const { data, error } = await supabase
+      .from("tipos_servico")
+      .select("*")
+      .ilike("nome", `%${nome}%`)
+      .order("nome", { ascending: true });
+
+    if (error) {
+      throw new Error(`Erro ao buscar tipos de serviço: ${error.message}`);
+    }
+
+    return (data || []).map(this.mapToTipoServico);
+  }
+
+  async listar(): Promise<TipoServico[]> {
+    const { data, error } = await supabase
+      .from("tipos_servico")
+      .select("*")
+      .order("nome", { ascending: true });
+
+    if (error) {
+      throw new Error(`Erro ao listar tipos de serviço: ${error.message}`);
+    }
+
+    return (data || []).map(this.mapToTipoServico);
+  }
+
+  async atualizar(id: string, dados: Partial<Omit<TipoServico, "id" | "criadoEm" | "atualizadoEm" | "quantidadeServicos">>): Promise<TipoServico> {
+    const { data, error } = await supabase
+      .from("tipos_servico")
+      .update({
+        nome: dados.nome,
+      })
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(`Erro ao atualizar tipo de serviço: ${error.message}`);
+    }
+
+    return this.mapToTipoServico(data);
+  }
+
+  async deletar(id: string): Promise<void> {
+    const { error } = await supabase
+      .from("tipos_servico")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      throw new Error(`Erro ao deletar tipo de serviço: ${error.message}`);
+    }
+  }
+
+  async vincularTiposServicoAEntrada(entradaId: string, tiposServicoIds: string[]): Promise<void> {
+    if (tiposServicoIds.length === 0) {
+      return;
+    }
+
+    // Primeiro, remove todos os vínculos existentes para esta entrada
+    const { error: deleteError } = await supabase
+      .from("entradas_tipos_servico")
+      .delete()
+      .eq("entrada_id", entradaId);
+
+    if (deleteError) {
+      throw new Error(`Erro ao remover vínculos de tipos de serviço: ${deleteError.message}`);
+    }
+
+    // Depois, cria os novos vínculos
+    const vinculos = tiposServicoIds.map((tipoServicoId) => ({
+      entrada_id: entradaId,
+      tipo_servico_id: tipoServicoId,
+    }));
+
+    const { error: insertError } = await supabase
+      .from("entradas_tipos_servico")
+      .insert(vinculos);
+
+    if (insertError) {
+      throw new Error(`Erro ao vincular tipos de serviço à entrada: ${insertError.message}`);
+    }
+  }
+
+  private mapToTipoServico(data: any): TipoServico {
+    return {
+      id: data.id,
+      nome: data.nome,
+      quantidadeServicos: data.quantidade_servicos || 0,
+      criadoEm: new Date(data.criado_em),
+      atualizadoEm: new Date(data.atualizado_em),
+    };
+  }
+}
+

@@ -33,6 +33,7 @@ export interface DadosCadastro {
   dataEntrada?: Date;
   dataEntrega?: Date;
   enderecoCompleto?: Endereco;
+  tiposServico?: string[]; // IDs dos tipos de serviço selecionados
 }
 
 export interface Cliente {
@@ -130,5 +131,13 @@ export interface MotoCompleta extends Moto {
   progresso: number;
   fotosStatus?: FotoStatus[];
   fotos: string[]; // Legado - fotos do tipo "moto"
+}
+
+export interface TipoServico {
+  id: string;
+  nome: string;
+  quantidadeServicos: number;
+  criadoEm: Date;
+  atualizadoEm: Date;
 }
 

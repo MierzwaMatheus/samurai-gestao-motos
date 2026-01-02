@@ -2,6 +2,7 @@ import { ClienteRepository } from "@/domain/interfaces/ClienteRepository";
 import { MotoRepository } from "@/domain/interfaces/MotoRepository";
 import { EntradaRepository } from "@/domain/interfaces/EntradaRepository";
 import { OrcamentoRepository } from "@/domain/interfaces/OrcamentoRepository";
+import { TipoServicoRepository } from "@/domain/interfaces/TipoServicoRepository";
 import { DadosCadastro } from "@shared/types";
 
 /**
@@ -13,7 +14,8 @@ export class CriarEntradaUseCase {
     private clienteRepo: ClienteRepository,
     private motoRepo: MotoRepository,
     private entradaRepo: EntradaRepository,
-    private orcamentoRepo: OrcamentoRepository
+    private orcamentoRepo: OrcamentoRepository,
+    private tipoServicoRepo: TipoServicoRepository
   ) {}
 
   async execute(dados: DadosCadastro): Promise<{ entradaId: string; orcamentoId?: string }> {
@@ -101,6 +103,18 @@ export class CriarEntradaUseCase {
         status: "ativo",
       });
       orcamentoId = orcamento.id;
+    }
+
+    // 5. Vincular tipos de serviço à entrada (se houver)
+    // Só vincula se for entrada (não orçamento), pois o contador só incrementa para entradas
+    // Para orçamentos, os tipos de serviço serão vinculados mas o contador só incrementa quando converter para entrada
+    if (dados.tiposServico && dados.tiposServico.length > 0) {
+      await this.tipoServicoRepo.vincularTiposServicoAEntrada(
+        entrada.id,
+        dados.tiposServico
+      );
+      // O contador quantidade_servicos será incrementado automaticamente pelo trigger do banco
+      // apenas se o tipo da entrada for "entrada" (não "orcamento")
     }
 
     return { entradaId: entrada.id, orcamentoId };
