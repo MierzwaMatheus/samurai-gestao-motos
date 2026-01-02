@@ -1,0 +1,45 @@
+# Nome do workflow
+name: Vercel Staging Deployment
+
+# Variáveis de ambiente para a Vercel
+env:
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+# Gatilho: aciona em push para a branch 'homolog'
+on:
+  push:
+    branches:
+      - stg
+
+jobs:
+  Deploy-Staging:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Clona o repositório
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      # 2. Instala a Vercel CLI
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      # 3. Puxa as configurações do projeto Vercel
+      - name: Pull Vercel Environment Information
+        run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+
+      # 4. Constrói o projeto para o ambiente de preview
+      - name: Build Project Artifacts
+        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
+
+      # 5. Faz o deploy para a Vercel e captura a URL de preview
+      #    - O comando 'vercel deploy --prebuilt' retorna a URL do deploy.
+      #    - 'xargs' é usado para passar essa URL para o próximo passo.
+      - name: Deploy to Vercel and get Preview URL
+        id: deploy_step
+        run: echo "deploy_url=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})" >> $GITHUB_OUTPUT
+
+      # 6. Atribui a URL do deploy ao domínio de staging
+      #    - Usa a URL capturada no passo anterior.
+      - name: Alias the deployment to Staging Domain
+        run: vercel alias set ${{ steps.deploy_step.outputs.deploy_url }} stg-samurai-motos.vercel.app --token=${{ secrets.VERCEL_TOKEN }}
