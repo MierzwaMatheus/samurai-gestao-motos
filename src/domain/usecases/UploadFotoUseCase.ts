@@ -29,13 +29,11 @@ export class UploadFotoUseCase {
     // Faz upload do arquivo
     const filePath = await this.storageApi.uploadFoto(file, entradaId, tipo);
 
-    // Obtém URL pública
-    const url = this.storageApi.obterUrlPublica(filePath);
-
-    // Salva referência no banco
+    // Salva o filePath no banco (não a URL assinada, pois ela expira)
+    // A URL será gerada quando necessário ao buscar as fotos
     const foto = await this.fotoRepo.criar({
       entradaId,
-      url,
+      url: filePath, // Salva o caminho do arquivo
       tipo,
     });
 

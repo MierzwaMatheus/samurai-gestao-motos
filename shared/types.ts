@@ -100,8 +100,17 @@ export interface Foto {
 // Tipos para visualização (com joins)
 export interface OrcamentoCompleto extends Orcamento {
   cliente: string;
+  telefone?: string;
   moto: string;
+  placa?: string;
+  finalNumeroQuadro?: string;
   descricao?: string;
+  frete: number;
+  fotoMoto?: string; // URL da primeira foto do tipo "moto"
+  endereco?: string;
+  cep?: string;
+  valorCobrado?: number;
+  dataOrcamento?: Date;
 }
 
 export interface MotoCompleta extends Moto {

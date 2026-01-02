@@ -39,7 +39,22 @@ export class SupabaseFotoRepository implements FotoRepository {
       throw new Error(`Erro ao buscar foto: ${error.message}`);
     }
 
-    return data ? this.mapToFoto(data) : null;
+    if (!data) return null;
+
+    const foto = this.mapToFoto(data);
+    
+    // Se a URL parece ser um filePath (não começa com http), gera URL assinada
+    if (!foto.url.startsWith("http")) {
+      const { data: signedUrlData } = await supabase.storage
+        .from("fotos")
+        .createSignedUrl(foto.url, 3600); // 1 hora
+      
+      if (signedUrlData) {
+        foto.url = signedUrlData.signedUrl;
+      }
+    }
+
+    return foto;
   }
 
   async buscarPorEntradaId(entradaId: string): Promise<Foto[]> {
@@ -53,7 +68,25 @@ export class SupabaseFotoRepository implements FotoRepository {
       throw new Error(`Erro ao buscar fotos: ${error.message}`);
     }
 
-    return (data || []).map(this.mapToFoto);
+    // Converte filePath para URL assinada se necessário
+    const fotos = await Promise.all(
+      (data || []).map(async (item) => {
+        const foto = this.mapToFoto(item);
+        // Se a URL parece ser um filePath (não começa com http), gera URL assinada
+        if (!foto.url.startsWith("http")) {
+          const { data: signedUrlData } = await supabase.storage
+            .from("fotos")
+            .createSignedUrl(foto.url, 3600); // 1 hora
+          
+          if (signedUrlData) {
+            foto.url = signedUrlData.signedUrl;
+          }
+        }
+        return foto;
+      })
+    );
+
+    return fotos;
   }
 
   async deletar(id: string): Promise<void> {

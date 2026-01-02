@@ -206,14 +206,21 @@ export default function Cadastro() {
       // 2. Fazer upload das fotos
       if (fotosArquivos.length > 0) {
         toast.info("Fazendo upload das fotos...");
-        await Promise.all(
-          fotosArquivos.map((file) =>
-            uploadFoto(file, entradaId, "moto").catch((err) => {
-              console.error("Erro ao fazer upload de foto:", err);
-              toast.error(`Erro ao fazer upload de ${file.name}`);
-            })
-          )
+        const resultados = await Promise.allSettled(
+          fotosArquivos.map((file) => uploadFoto(file, entradaId, "moto"))
         );
+        
+        // Verifica se houve erros
+        const erros = resultados.filter((r) => r.status === "rejected");
+        if (erros.length > 0) {
+          console.error("Erros no upload de fotos:", erros);
+          toast.error(`${erros.length} foto(s) falharam no upload`);
+        }
+        
+        const sucessos = resultados.filter((r) => r.status === "fulfilled");
+        if (sucessos.length > 0) {
+          console.log(`${sucessos.length} foto(s) salvas com sucesso na tabela`);
+        }
       }
 
       toast.success(`${tipo === "entrada" ? "Entrada" : "Orçamento"} registrado com sucesso!`);

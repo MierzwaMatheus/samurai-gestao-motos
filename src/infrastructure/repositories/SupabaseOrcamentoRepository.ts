@@ -65,7 +65,7 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
       // Primeiro, atualiza orçamentos expirados
       await this.atualizarOrcamentosExpirados();
 
-      // Busca orçamentos com joins para obter dados completos
+      // Busca orçamentos
       const { data: orcamentos, error: orcamentosError } = await supabase
         .from("orcamentos")
         .select("*")
@@ -80,62 +80,118 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
         return [];
       }
 
-      // Busca entradas relacionadas
+      // Busca entradas relacionadas em uma única query
       const entradaIds = orcamentos.map((o: any) => o.entrada_id);
-
       const { data: entradas, error: entradasError } = await supabase
         .from("entradas")
-        .select("id, descricao, cliente_id, moto_id")
+        .select("id, descricao, frete, valor_cobrado, endereco, cep, data_orcamento, cliente_id, moto_id")
         .in("id", entradaIds);
 
       if (entradasError) {
         throw new Error(`Erro ao buscar entradas: ${entradasError.message}`);
       }
 
-      // Busca clientes e motos
+      // Busca clientes e motos em paralelo
       const clienteIds = [...new Set(entradas?.map((e: any) => e.cliente_id).filter(Boolean) || [])];
       const motoIds = [...new Set(entradas?.map((e: any) => e.moto_id).filter(Boolean) || [])];
 
-      let clientes: any[] = [];
-      let motos: any[] = [];
+      // Valida que os IDs são UUIDs válidos
+      const clienteIdsValidos = clienteIds.filter((id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
+      const motoIdsValidos = motoIds.filter((id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
 
-      if (clienteIds.length > 0) {
-        const { data: clientesData, error: clientesError } = await supabase
-          .from("clientes")
-          .select("id, nome")
-          .in("id", clienteIds);
+      const [clientesResult, motosResult] = await Promise.all([
+        clienteIdsValidos.length > 0
+          ? supabase
+              .from("clientes")
+              .select("id, nome, telefone")
+              .in("id", clienteIdsValidos)
+          : Promise.resolve({ data: [], error: null }),
+        motoIdsValidos.length > 0
+          ? supabase
+              .from("motos")
+              .select("id, modelo, placa")
+              .in("id", motoIdsValidos)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
 
-        if (clientesError) {
-          throw new Error(`Erro ao buscar clientes: ${clientesError.message}`);
-        } else {
-          clientes = clientesData || [];
+      if (clientesResult.error) {
+        console.error("Erro ao buscar clientes:", clientesResult.error);
+        throw new Error(`Erro ao buscar clientes: ${clientesResult.error.message}`);
+      }
+      if (motosResult.error) {
+        console.error("Erro ao buscar motos:", motosResult.error);
+        console.error("Moto IDs:", motoIdsValidos);
+        throw new Error(`Erro ao buscar motos: ${motosResult.error.message}`);
+      }
+
+      const clientes = clientesResult.data || [];
+      const motos = motosResult.data || [];
+
+      // Busca fotos para todas as entradas de uma vez
+      let fotosMap: Record<string, string> = {};
+
+      if (entradaIds.length > 0) {
+        const { data: fotos, error: fotosError } = await supabase
+          .from("fotos")
+          .select("entrada_id, url")
+          .in("entrada_id", entradaIds)
+          .eq("tipo", "moto")
+          .order("criado_em", { ascending: false });
+
+        if (!fotosError && fotos) {
+          // Cria mapa de entrada_id -> primeira foto
+          fotos.forEach((foto: any) => {
+            if (!fotosMap[foto.entrada_id]) {
+              fotosMap[foto.entrada_id] = foto.url;
+            }
+          });
         }
       }
 
-      if (motoIds.length > 0) {
-        const { data: motosData, error: motosError } = await supabase
-          .from("motos")
-          .select("id, modelo")
-          .in("id", motoIds);
+      // Gera URLs assinadas para as fotos (se necessário) em paralelo
+      const fotosComUrls = await Promise.all(
+        Object.entries(fotosMap).map(async ([entradaId, url]) => {
+          // Se não é URL completa, gera URL assinada
+          if (!url.startsWith("http")) {
+            const { data: signedUrlData } = await supabase.storage
+              .from("fotos")
+              .createSignedUrl(url, 3600);
+            
+            if (signedUrlData) {
+              return [entradaId, signedUrlData.signedUrl];
+            }
+          }
+          return [entradaId, url];
+        })
+      );
 
-        if (motosError) {
-          throw new Error(`Erro ao buscar motos: ${motosError.message}`);
-        } else {
-          motos = motosData || [];
-        }
-      }
+      const fotosMapFinal = Object.fromEntries(fotosComUrls);
+
+      // Cria mapas para acesso rápido
+      const entradasMap = new Map(entradas?.map((e: any) => [e.id, e]) || []);
+      const clientesMap = new Map(clientes.map((c: any) => [c.id, c]));
+      const motosMap = new Map(motos.map((m: any) => [m.id, m]));
 
       // Mapeia os dados completos
       return orcamentos.map((orcamento: any) => {
-        const entrada = entradas?.find((e: any) => e.id === orcamento.entrada_id);
-        const cliente = clientes.find((c: any) => c.id === entrada?.cliente_id);
-        const moto = motos.find((m: any) => m.id === entrada?.moto_id);
+        const entrada = entradasMap.get(orcamento.entrada_id);
+        const cliente = entrada ? clientesMap.get(entrada.cliente_id) : null;
+        const moto = entrada ? motosMap.get(entrada.moto_id) : null;
 
         return {
           ...this.mapToOrcamento(orcamento),
           cliente: cliente?.nome || "Cliente não encontrado",
+          telefone: cliente?.telefone,
           moto: moto?.modelo || "Moto não encontrada",
+          placa: moto?.placa,
+          finalNumeroQuadro: (moto as any)?.final_numero_quadro,
           descricao: entrada?.descricao,
+          frete: entrada?.frete ? parseFloat(entrada.frete) : 0,
+          valorCobrado: entrada?.valor_cobrado ? parseFloat(entrada.valor_cobrado) : undefined,
+          endereco: entrada?.endereco,
+          cep: entrada?.cep,
+          fotoMoto: entrada?.id ? fotosMapFinal[entrada.id] : undefined,
+          dataOrcamento: entrada?.data_orcamento ? new Date(entrada.data_orcamento) : undefined,
         };
       });
     } catch (error) {

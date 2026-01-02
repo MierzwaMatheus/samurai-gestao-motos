@@ -4,7 +4,7 @@ import BottomNav from "@/components/BottomNav";
 import { OrcamentoCompleto } from "@shared/types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, Clock, CheckCircle2, Loader2 } from "lucide-react";
+import { FileText, Clock, CheckCircle2, Loader2, Phone, MapPin, Truck, Image as ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { SupabaseOrcamentoRepository } from "@/infrastructure/repositories/SupabaseOrcamentoRepository";
 import { SupabaseEntradaRepository } from "@/infrastructure/repositories/SupabaseEntradaRepository";
@@ -134,26 +134,103 @@ export default function Orcamentos() {
                 return (
                   <Card
                     key={orcamento.id}
-                    className="card-samurai hover:shadow-lg transition-shadow"
+                    className="card-samurai hover:shadow-lg transition-shadow overflow-hidden"
                   >
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="flex-1">
-                        <h3 className="font-serif text-lg text-foreground">
-                          {orcamento.moto}
-                        </h3>
-                        <p className="font-sans text-sm text-foreground/60">
-                          {orcamento.cliente || "Cliente não informado"}
-                        </p>
-                        {orcamento.descricao && (
-                          <p className="font-sans text-xs text-foreground/40 mt-1">
-                            {orcamento.descricao}
-                          </p>
-                        )}
-                      </div>
-                      <div className="text-right">
-                        <p className="font-serif text-2xl text-accent">
-                          R$ {orcamento.valor.toFixed(2)}
-                        </p>
+                    <div className="flex gap-4">
+                      {/* Foto da Moto */}
+                      {orcamento.fotoMoto ? (
+                        <div className="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden border border-foreground/10 bg-foreground/5">
+                          <img
+                            src={orcamento.fotoMoto}
+                            alt={orcamento.moto}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              // Se a imagem falhar, esconde o container
+                              (e.target as HTMLImageElement).style.display = "none";
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex-shrink-0 w-24 h-24 rounded-lg border border-foreground/10 bg-foreground/5 flex items-center justify-center">
+                          <ImageIcon size={32} className="text-foreground/20" />
+                        </div>
+                      )}
+
+                      {/* Informações Principais */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-serif text-lg text-foreground truncate">
+                              {orcamento.moto}
+                            </h3>
+                            <p className="font-sans text-sm text-foreground/60 truncate">
+                              {orcamento.cliente || "Cliente não informado"}
+                            </p>
+                          </div>
+                          <div className="text-right ml-2 flex-shrink-0">
+                            <p className="font-serif text-2xl text-accent">
+                              R$ {orcamento.valor.toFixed(2)}
+                            </p>
+                            {orcamento.valorCobrado && orcamento.valorCobrado !== orcamento.valor && (
+                              <p className="font-sans text-xs text-foreground/40 line-through">
+                                R$ {orcamento.valorCobrado.toFixed(2)}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Informações Adicionais */}
+                        <div className="space-y-1.5 mb-3">
+                          {/* Placa / Final do Quadro */}
+                          {(orcamento.placa || orcamento.finalNumeroQuadro) && (
+                            <div className="flex items-center gap-2 text-xs text-foreground/60">
+                              {orcamento.placa && (
+                                <span className="font-mono bg-foreground/5 px-2 py-0.5 rounded">
+                                  {orcamento.placa}
+                                </span>
+                              )}
+                              {orcamento.finalNumeroQuadro && (
+                                <span className="text-foreground/40">
+                                  Final: {orcamento.finalNumeroQuadro}
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Telefone */}
+                          {orcamento.telefone && (
+                            <div className="flex items-center gap-1.5 text-xs text-foreground/60">
+                              <Phone size={12} />
+                              <span>{orcamento.telefone}</span>
+                            </div>
+                          )}
+
+                          {/* Endereço */}
+                          {orcamento.endereco && (
+                            <div className="flex items-center gap-1.5 text-xs text-foreground/60">
+                              <MapPin size={12} />
+                              <span className="truncate">{orcamento.endereco}</span>
+                              {orcamento.cep && (
+                                <span className="text-foreground/40">({orcamento.cep})</span>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Frete */}
+                          {orcamento.frete > 0 && (
+                            <div className="flex items-center gap-1.5 text-xs text-foreground/60">
+                              <Truck size={12} />
+                              <span>Frete: R$ {orcamento.frete.toFixed(2)}</span>
+                            </div>
+                          )}
+
+                          {/* Descrição */}
+                          {orcamento.descricao && (
+                            <p className="font-sans text-xs text-foreground/40 line-clamp-2">
+                              {orcamento.descricao}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </div>
 
