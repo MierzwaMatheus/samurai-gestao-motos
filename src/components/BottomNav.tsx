@@ -13,16 +13,16 @@ export default function BottomNav({ active }: BottomNavProps) {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-background/80 backdrop-blur-md border-t border-foreground/10 px-4 py-3 flex justify-around items-center">
+    <nav className="fixed bottom-0 left-0 right-0 bg-background/80 backdrop-blur-md border-t border-foreground/10 px-4 py-2 flex justify-around items-center">
       {navItems.map((item) => {
         const Icon = item.icon;
         const isActive = active === item.id;
 
         return (
           <Link key={item.id} href={item.href}>
-            <a className="flex flex-col items-center gap-1 p-2 transition-colors">
+            <a className="flex flex-col items-center gap-0.5 px-3 py-1 transition-colors">
               <Icon
-                size={24}
+                size={20}
                 className={isActive ? "text-accent" : "text-foreground/40"}
               />
               <span
