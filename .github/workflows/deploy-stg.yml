@@ -35,9 +35,10 @@ jobs:
       # 5. Faz o deploy para a Vercel e captura a URL de preview
       #    - O comando 'vercel deploy --prebuilt' retorna a URL do deploy.
       #    - 'xargs' é usado para passar essa URL para o próximo passo.
-      - name: Deploy to Vercel and get Preview URL
-        id: deploy_step
-        run: echo "deploy_url=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})" >> $GITHUB_OUTPUT
+      - name: Deploy to Vercel (Preview)
+        run: vercel deploy \
+          --project=${{ secrets.VERCEL_PROJECT_ID }} \
+          --token=${{ secrets.VERCEL_TOKEN }}
 
       # 6. Atribui a URL do deploy ao domínio de staging
       #    - Usa a URL capturada no passo anterior.
