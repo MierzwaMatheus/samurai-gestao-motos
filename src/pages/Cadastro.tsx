@@ -92,6 +92,34 @@ export default function Cadastro() {
   const [fotos, setFotos] = useState<string[]>([]); // URLs para preview
   const [fotosArquivos, setFotosArquivos] = useState<File[]>([]); // Arquivos reais para upload
 
+  // Efeito para calcular data de entrega automaticamente quando data de entrada é alterada
+  useEffect(() => {
+    if (formData.dataEntrada) {
+      // Calcula data de entrega: 2 semanas (14 dias) após a data de entrada
+      const dataEntregaCalculada = new Date(formData.dataEntrada);
+      dataEntregaCalculada.setDate(dataEntregaCalculada.getDate() + 14);
+      
+      // Só atualiza se a data de entrega atual for diferente da calculada
+      // Isso evita loops infinitos e atualizações desnecessárias
+      const dataEntregaAtual = formData.dataEntrega;
+      if (!dataEntregaAtual || 
+          dataEntregaAtual.getTime() !== dataEntregaCalculada.getTime()) {
+        setFormData((prev) => ({
+          ...prev,
+          dataEntrega: dataEntregaCalculada,
+        }));
+      }
+    } else {
+      // Se não há data de entrada, limpa a data de entrega apenas se ela existir
+      if (formData.dataEntrega) {
+        setFormData((prev) => ({
+          ...prev,
+          dataEntrega: undefined,
+        }));
+      }
+    }
+  }, [formData.dataEntrada]);
+
   // Efeito para preencher formulário com dados do orçamento quando disponível
   useEffect(() => {
     const dadosSalvos = sessionStorage.getItem("dadosOrcamentoParaOS");
@@ -740,18 +768,17 @@ export default function Cadastro() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="dataEntrega" className="text-xs uppercase tracking-widest">
-                Data Entrega
+                Previsão Entrega
               </Label>
               <Input
                 id="dataEntrega"
                 name="dataEntrega"
                 type="date"
                 value={formData.dataEntrega ? new Date(formData.dataEntrega).toISOString().split('T')[0] : ""}
-                onChange={(e) => {
-                  const date = e.target.value ? new Date(e.target.value) : undefined;
-                  setFormData({ ...formData, dataEntrega: date });
-                }}
-                className="bg-card border-foreground/10"
+                readOnly
+                disabled
+                className="bg-card border-foreground/10 opacity-60 cursor-not-allowed"
+                title="Data de entrega calculada automaticamente (2 semanas após a data de entrada)"
               />
             </div>
           </div>

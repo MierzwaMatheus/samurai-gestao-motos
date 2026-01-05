@@ -68,7 +68,17 @@ export class CriarEntradaUseCase {
       finalNumeroQuadro: dados.finalNumeroQuadro || undefined,
     });
 
-    // 3. Criar entrada
+    // 3. Calcular data de entrega se data de entrada foi fornecida
+    // Data de entrega = 2 semanas (14 dias) após a data de entrada
+    let dataEntrega = dados.dataEntrega;
+    const dataEntrada = dados.dataEntrada || (dados.tipo === "entrada" ? new Date() : undefined);
+    
+    if (dataEntrada && !dataEntrega) {
+      dataEntrega = new Date(dataEntrada);
+      dataEntrega.setDate(dataEntrega.getDate() + 14); // 2 semanas = 14 dias
+    }
+
+    // 4. Criar entrada
     const entrada = await this.entradaRepo.criar({
       tipo: dados.tipo,
       clienteId,
@@ -81,14 +91,14 @@ export class CriarEntradaUseCase {
       descricao: dados.descricao,
       observacoes: dados.observacoes,
       dataOrcamento: dados.dataOrcamento,
-      dataEntrada: dados.dataEntrada || (dados.tipo === "entrada" ? new Date() : undefined),
-      dataEntrega: dados.dataEntrega,
+      dataEntrada,
+      dataEntrega,
       status: dados.tipo === "entrada" ? "pendente" : "pendente",
       statusEntrega: "pendente",
       progresso: 0,
     });
 
-    // 4. Se for orçamento, criar orçamento
+    // 5. Se for orçamento, criar orçamento
     let orcamentoId: string | undefined;
     if (dados.tipo === "orcamento" && dados.descricao && dados.valorCobrado) {
       // Usa o valor cobrado informado
@@ -105,7 +115,7 @@ export class CriarEntradaUseCase {
       orcamentoId = orcamento.id;
     }
 
-    // 5. Vincular tipos de serviço à entrada (se houver)
+    // 6. Vincular tipos de serviço à entrada (se houver)
     // Só vincula se for entrada (não orçamento), pois o contador só incrementa para entradas
     // Para orçamentos, os tipos de serviço serão vinculados mas o contador só incrementa quando converter para entrada
     if (dados.tiposServico && dados.tiposServico.length > 0) {
