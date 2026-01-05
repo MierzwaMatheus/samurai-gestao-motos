@@ -114,7 +114,7 @@ export default function Orcamentos() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background admin-background">
       <Header title="Orçamentos" />
 
       <main className="pt-20 pb-32 px-6">

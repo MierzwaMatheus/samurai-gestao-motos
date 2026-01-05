@@ -104,7 +104,7 @@ export default function Configuracoes() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background admin-background">
       <Header title="Configurações" />
 
       <main className="pt-20 pb-32 px-6">

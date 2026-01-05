@@ -152,7 +152,7 @@ export default function Clientes() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background admin-background">
         <Header title="Clientes" />
         <main className="pt-20 pb-32 px-6">
           <div className="flex items-center justify-center py-20">
@@ -166,7 +166,7 @@ export default function Clientes() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background admin-background">
         <Header title="Clientes" />
         <main className="pt-20 pb-32 px-6">
           <Card className="p-6 text-center">
@@ -182,7 +182,7 @@ export default function Clientes() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background admin-background">
       <Header title="Clientes" />
 
       <main className="pt-20 pb-32 px-6">

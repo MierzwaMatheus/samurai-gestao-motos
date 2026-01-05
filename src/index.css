@@ -201,6 +201,32 @@
 }
 
 @layer components {
+  /* Fundo com logo Samurai - Interface Administrativa */
+  .admin-background {
+    position: relative;
+  }
+  
+  .admin-background::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url('/assets/img/logo-samurai.png');
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0.05;
+    z-index: 0;
+    pointer-events: none;
+  }
+  
+  .admin-background > * {
+    position: relative;
+    z-index: 1;
+  }
+  
   /* Padrão Shibui - Textura sutil de fundo */
   .shibui-texture {
     position: relative;

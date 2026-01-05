@@ -288,7 +288,7 @@ export default function Oficina() {
   );
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background admin-background">
       <Header title="Oficina" />
 
       <main className="pt-20 pb-32 px-6">
