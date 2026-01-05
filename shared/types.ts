@@ -25,6 +25,8 @@ export interface ServicoPersonalizadoInput {
   quantidade: number;
 }
 
+export type TipoPreco = "oficina" | "particular";
+
 export interface DadosCadastro {
   tipo: EntryType;
   cliente: string;
@@ -44,6 +46,7 @@ export interface DadosCadastro {
   dataEntrada?: Date;
   dataEntrega?: Date;
   enderecoCompleto?: Endereco;
+  tipoPreco?: TipoPreco; // "oficina" (padrão) ou "particular"
   servicos?: ServicoSelecionado[]; // Tipos de serviço com quantidade
   servicosPersonalizados?: ServicoPersonalizadoInput[]; // Serviços personalizados (não salvos na tabela)
 }
@@ -152,7 +155,18 @@ export interface MotoCompleta extends Moto {
 export interface TipoServico {
   id: string;
   nome: string;
-  valor: number;
+  precoOficina: number;
+  precoParticular: number;
+  quantidadeServicos: number;
+  criadoEm: Date;
+  atualizadoEm: Date;
+}
+
+// Tipo legado para compatibilidade (será removido gradualmente)
+export interface TipoServicoLegado {
+  id: string;
+  nome: string;
+  valor: number; // Mapeia para precoOficina
   quantidadeServicos: number;
   criadoEm: Date;
   atualizadoEm: Date;

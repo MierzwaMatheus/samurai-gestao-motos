@@ -12,7 +12,8 @@ export class SupabaseTipoServicoRepository implements TipoServicoRepository {
       .from("tipos_servico")
       .insert({
         nome: tipoServico.nome,
-        valor: tipoServico.valor || 0,
+        preco_oficina: tipoServico.precoOficina || 0,
+        preco_particular: tipoServico.precoParticular || 0,
         quantidade_servicos: 0,
       })
       .select()
@@ -72,7 +73,8 @@ export class SupabaseTipoServicoRepository implements TipoServicoRepository {
   async atualizar(id: string, dados: Partial<Omit<TipoServico, "id" | "criadoEm" | "atualizadoEm" | "quantidadeServicos">>): Promise<TipoServico> {
     const updateData: any = {};
     if (dados.nome !== undefined) updateData.nome = dados.nome;
-    if (dados.valor !== undefined) updateData.valor = dados.valor;
+    if (dados.precoOficina !== undefined) updateData.preco_oficina = dados.precoOficina;
+    if (dados.precoParticular !== undefined) updateData.preco_particular = dados.precoParticular;
 
     const { data, error } = await supabase
       .from("tipos_servico")
@@ -174,7 +176,8 @@ export class SupabaseTipoServicoRepository implements TipoServicoRepository {
     return {
       id: data.id,
       nome: data.nome,
-      valor: parseFloat(data.valor) || 0,
+      precoOficina: parseFloat(data.preco_oficina ?? data.valor ?? 0) || 0, // Suporte a migração: usa valor se preco_oficina não existir
+      precoParticular: parseFloat(data.preco_particular ?? data.valor ?? 0) || 0, // Suporte a migração: usa valor se preco_particular não existir
       quantidadeServicos: data.quantidade_servicos || 0,
       criadoEm: new Date(data.criado_em),
       atualizadoEm: new Date(data.atualizado_em),

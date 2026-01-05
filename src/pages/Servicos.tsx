@@ -61,9 +61,11 @@ export default function Servicos() {
   const [tipoEditando, setTipoEditando] = useState<TipoServico | null>(null);
   const [tipoDeletando, setTipoDeletando] = useState<TipoServico | null>(null);
   const [novoTipoNome, setNovoTipoNome] = useState("");
-  const [novoTipoValor, setNovoTipoValor] = useState("");
+  const [novoTipoPrecoOficina, setNovoTipoPrecoOficina] = useState("");
+  const [novoTipoPrecoParticular, setNovoTipoPrecoParticular] = useState("");
   const [editandoNome, setEditandoNome] = useState("");
-  const [editandoValor, setEditandoValor] = useState("");
+  const [editandoPrecoOficina, setEditandoPrecoOficina] = useState("");
+  const [editandoPrecoParticular, setEditandoPrecoParticular] = useState("");
   const [criando, setCriando] = useState(false);
   const [editando, setEditando] = useState(false);
   const [deletando, setDeletando] = useState(false);
@@ -95,18 +97,24 @@ export default function Servicos() {
       return;
     }
 
-    const valor = parseFloat(novoTipoValor) || 0;
-    if (valor < 0) {
-      toast.error("Valor não pode ser negativo");
+    const precoOficina = parseFloat(novoTipoPrecoOficina) || 0;
+    const precoParticular = parseFloat(novoTipoPrecoParticular) || 0;
+    if (precoOficina < 0) {
+      toast.error("Preço oficina não pode ser negativo");
+      return;
+    }
+    if (precoParticular < 0) {
+      toast.error("Preço particular não pode ser negativo");
       return;
     }
 
     setCriando(true);
     try {
-      await criarTipoServicoUseCase.execute(novoTipoNome.trim(), valor);
+      await criarTipoServicoUseCase.execute(novoTipoNome.trim(), precoOficina, precoParticular);
       toast.success("Tipo de serviço criado com sucesso!");
       setNovoTipoNome("");
-      setNovoTipoValor("");
+      setNovoTipoPrecoOficina("");
+      setNovoTipoPrecoParticular("");
       setDialogCriarOpen(false);
       buscarTiposServico();
     } catch (error) {
@@ -124,9 +132,14 @@ export default function Servicos() {
       return;
     }
 
-    const valor = parseFloat(editandoValor) || 0;
-    if (valor < 0) {
-      toast.error("Valor não pode ser negativo");
+    const precoOficina = parseFloat(editandoPrecoOficina) || 0;
+    const precoParticular = parseFloat(editandoPrecoParticular) || 0;
+    if (precoOficina < 0) {
+      toast.error("Preço oficina não pode ser negativo");
+      return;
+    }
+    if (precoParticular < 0) {
+      toast.error("Preço particular não pode ser negativo");
       return;
     }
 
@@ -134,7 +147,8 @@ export default function Servicos() {
     try {
       await atualizarTipoServicoUseCase.execute(tipoEditando.id, {
         nome: editandoNome.trim(),
-        valor: valor,
+        precoOficina: precoOficina,
+        precoParticular: precoParticular,
       });
       toast.success("Tipo de serviço atualizado com sucesso!");
       setDialogEditarOpen(false);
@@ -151,7 +165,8 @@ export default function Servicos() {
   const handleAbrirDialogEditar = (tipo: TipoServico) => {
     setTipoEditando(tipo);
     setEditandoNome(tipo.nome);
-    setEditandoValor(tipo.valor.toString());
+    setEditandoPrecoOficina(tipo.precoOficina.toString());
+    setEditandoPrecoParticular(tipo.precoParticular.toString());
     setDialogEditarOpen(true);
   };
 
@@ -219,14 +234,26 @@ export default function Servicos() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="valor">Valor (R$) *</Label>
+                    <Label htmlFor="preco-oficina">Preço Oficina (R$) *</Label>
                     <Input
-                      id="valor"
+                      id="preco-oficina"
                       type="number"
                       step="0.01"
                       min="0"
-                      value={novoTipoValor}
-                      onChange={(e) => setNovoTipoValor(e.target.value)}
+                      value={novoTipoPrecoOficina}
+                      onChange={(e) => setNovoTipoPrecoOficina(e.target.value)}
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="preco-particular">Preço Particular (R$) *</Label>
+                    <Input
+                      id="preco-particular"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={novoTipoPrecoParticular}
+                      onChange={(e) => setNovoTipoPrecoParticular(e.target.value)}
                       placeholder="0.00"
                     />
                   </div>
@@ -266,9 +293,14 @@ export default function Servicos() {
                         <Wrench size={16} className="text-accent" />
                         <h3 className="font-semibold text-foreground">{tipo.nome}</h3>
                       </div>
-                      <p className="text-sm text-foreground/60 mb-1">
-                        Valor: <span className="font-semibold text-accent">R$ {tipo.valor.toFixed(2)}</span>
-                      </p>
+                      <div className="text-sm text-foreground/60 mb-1 space-y-0.5">
+                        <p>
+                          Oficina: <span className="font-semibold text-accent">R$ {tipo.precoOficina.toFixed(2)}</span>
+                        </p>
+                        <p>
+                          Particular: <span className="font-semibold text-accent">R$ {tipo.precoParticular.toFixed(2)}</span>
+                        </p>
+                      </div>
                       {tipo.quantidadeServicos !== undefined && (
                         <p className="text-xs text-foreground/40">
                           {tipo.quantidadeServicos} serviço(s) realizado(s)
@@ -315,14 +347,26 @@ export default function Servicos() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="edit-valor">Valor (R$) *</Label>
+                  <Label htmlFor="edit-preco-oficina">Preço Oficina (R$) *</Label>
                   <Input
-                    id="edit-valor"
+                    id="edit-preco-oficina"
                     type="number"
                     step="0.01"
                     min="0"
-                    value={editandoValor}
-                    onChange={(e) => setEditandoValor(e.target.value)}
+                    value={editandoPrecoOficina}
+                    onChange={(e) => setEditandoPrecoOficina(e.target.value)}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-preco-particular">Preço Particular (R$) *</Label>
+                  <Input
+                    id="edit-preco-particular"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={editandoPrecoParticular}
+                    onChange={(e) => setEditandoPrecoParticular(e.target.value)}
                     placeholder="0.00"
                   />
                 </div>

@@ -9,8 +9,8 @@ export class AtualizarTipoServicoUseCase {
 
   async execute(
     id: string,
-    dados: Partial<{ nome: string; valor: number }>
-  ): Promise<{ id: string; nome: string; valor: number }> {
+    dados: Partial<{ nome: string; precoOficina: number; precoParticular: number }>
+  ): Promise<{ id: string; nome: string; precoOficina: number; precoParticular: number }> {
     // Validações de negócio
     if (dados.nome !== undefined) {
       if (!dados.nome || dados.nome.trim().length === 0) {
@@ -22,8 +22,12 @@ export class AtualizarTipoServicoUseCase {
       }
     }
 
-    if (dados.valor !== undefined && dados.valor < 0) {
-      throw new Error("Valor não pode ser negativo");
+    if (dados.precoOficina !== undefined && dados.precoOficina < 0) {
+      throw new Error("Preço oficina não pode ser negativo");
+    }
+
+    if (dados.precoParticular !== undefined && dados.precoParticular < 0) {
+      throw new Error("Preço particular não pode ser negativo");
     }
 
     // Verificar se o tipo de serviço existe
@@ -47,13 +51,15 @@ export class AtualizarTipoServicoUseCase {
     // Atualizar tipo de serviço
     const tipoServico = await this.tipoServicoRepo.atualizar(id, {
       nome: dados.nome?.trim(),
-      valor: dados.valor,
+      precoOficina: dados.precoOficina,
+      precoParticular: dados.precoParticular,
     });
 
     return {
       id: tipoServico.id,
       nome: tipoServico.nome,
-      valor: tipoServico.valor,
+      precoOficina: tipoServico.precoOficina,
+      precoParticular: tipoServico.precoParticular,
     };
   }
 }

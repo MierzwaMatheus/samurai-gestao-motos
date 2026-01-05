@@ -39,6 +39,7 @@ interface GerenciarServicosProps {
   servicosPersonalizados: ServicoPersonalizadoInput[];
   onServicosChange: (servicos: ServicoSelecionado[]) => void;
   onServicosPersonalizadosChange: (servicos: ServicoPersonalizadoInput[]) => void;
+  tipoPreco?: "oficina" | "particular"; // Tipo de preço a usar (oficina ou particular)
   disabled?: boolean;
 }
 
@@ -48,6 +49,7 @@ export function GerenciarServicos({
   servicosPersonalizados,
   onServicosChange,
   onServicosPersonalizadosChange,
+  tipoPreco = "oficina",
   disabled = false,
 }: GerenciarServicosProps) {
   const [open, setOpen] = useState(false);
@@ -154,10 +156,17 @@ export function GerenciarServicos({
 
     setEditando(true);
     try {
-      await atualizarTipoServicoUseCase.execute(tipoEditando.id, {
+      // Atualiza apenas o preço do tipo selecionado (oficina ou particular)
+      const updateData: any = {
         nome: editandoNome.trim(),
-        valor: valor,
-      });
+      };
+      if (tipoPreco === "particular") {
+        updateData.precoParticular = valor;
+      } else {
+        updateData.precoOficina = valor;
+      }
+      
+      await atualizarTipoServicoUseCase.execute(tipoEditando.id, updateData);
       toast.success("Tipo de serviço atualizado com sucesso!");
       setDialogEditarOpen(false);
       setTipoEditando(null);
@@ -214,7 +223,7 @@ export function GerenciarServicos({
   const handleAbrirDialogEditar = (tipo: TipoServico) => {
     setTipoEditando(tipo);
     setEditandoNome(tipo.nome);
-    setEditandoValor(tipo.valor.toString());
+    setEditandoValor(tipoPreco === "particular" ? tipo.precoParticular.toString() : tipo.precoOficina.toString());
     setDialogEditarOpen(true);
   };
 
@@ -283,7 +292,7 @@ export function GerenciarServicos({
   // Calcular valor total
   const valorTotal = useMemo(() => {
     const valorTipos = tiposSelecionadosCompletos.reduce(
-      (acc, tipo) => acc + tipo.valor * tipo.quantidade,
+      (acc, tipo) => acc + (tipoPreco === "particular" ? tipo.precoParticular : tipo.precoOficina) * tipo.quantidade,
       0
     );
     const valorPersonalizados = servicosPersonalizados.reduce(
@@ -291,7 +300,7 @@ export function GerenciarServicos({
       0
     );
     return valorTipos + valorPersonalizados;
-  }, [tiposSelecionadosCompletos, servicosPersonalizados]);
+  }, [tiposSelecionadosCompletos, servicosPersonalizados, tipoPreco]);
 
   // Expor valor total para o componente pai via callback (opcional)
   useEffect(() => {
@@ -418,7 +427,7 @@ export function GerenciarServicos({
                           "text-xs",
                           isSelected ? "text-accent-foreground/80" : "text-foreground/60"
                         )}>
-                          R$ {tipo.valor.toFixed(2)}
+                          R$ {(tipoPreco === "particular" ? tipo.precoParticular : tipo.precoOficina).toFixed(2)}
                         </div>
                       </div>
                       <Button
@@ -505,9 +514,11 @@ export function GerenciarServicos({
             </div>
             {tipoParaQuantidade && (
               <div className="p-3 bg-foreground/5 rounded-lg">
-                <p className="text-sm text-foreground/60">Valor unitário: R$ {tipoParaQuantidade.valor.toFixed(2)}</p>
+                <p className="text-sm text-foreground/60">
+                  Valor unitário: R$ {(tipoPreco === "particular" ? tipoParaQuantidade.precoParticular : tipoParaQuantidade.precoOficina).toFixed(2)}
+                </p>
                 <p className="text-sm font-semibold">
-                  Total: R$ {(tipoParaQuantidade.valor * (parseInt(quantidadeInput) || 1)).toFixed(2)}
+                  Total: R$ {((tipoPreco === "particular" ? tipoParaQuantidade.precoParticular : tipoParaQuantidade.precoOficina) * (parseInt(quantidadeInput) || 1)).toFixed(2)}
                 </p>
               </div>
             )}
@@ -535,7 +546,7 @@ export function GerenciarServicos({
                       <span className="font-medium text-sm">{tipo.nome}</span>
                     </div>
                     <div className="text-xs text-foreground/60 mt-1">
-                      {tipo.quantidade}x R$ {tipo.valor.toFixed(2)} = R$ {(tipo.valor * tipo.quantidade).toFixed(2)}
+                      {tipo.quantidade}x R$ {(tipoPreco === "particular" ? tipo.precoParticular : tipo.precoOficina).toFixed(2)} = R$ {((tipoPreco === "particular" ? tipo.precoParticular : tipo.precoOficina) * tipo.quantidade).toFixed(2)}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
