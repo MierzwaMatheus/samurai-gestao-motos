@@ -74,3 +74,4 @@ CREATE POLICY "Usuários podem deletar entradas_tipos_servico de suas entradas"
   );
 
 
+

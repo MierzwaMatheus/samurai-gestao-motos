@@ -23,3 +23,4 @@ CREATE TRIGGER update_tipos_servico_atualizado_em
   EXECUTE FUNCTION update_atualizado_em();
 
 
+

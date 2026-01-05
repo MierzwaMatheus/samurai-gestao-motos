@@ -12,3 +12,4 @@ CREATE INDEX IF NOT EXISTS idx_entradas_fotos_status ON public.entradas USING GI
 COMMENT ON COLUMN public.entradas.fotos_status IS 'Array JSONB com fotos de status. Formato: [{"url": "path/to/file", "data": "2024-01-01T00:00:00Z", "observacao": "texto", "progresso": 50}]';
 
 
+

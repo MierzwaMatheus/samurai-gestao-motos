@@ -71,3 +71,4 @@ CREATE TRIGGER atualizar_numero_servicos_ao_deletar_entrada
   EXECUTE FUNCTION atualizar_numero_servicos_cliente();
 
 
+

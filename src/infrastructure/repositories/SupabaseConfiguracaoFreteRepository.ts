@@ -77,3 +77,4 @@ export class SupabaseConfiguracaoFreteRepository implements ConfiguracaoFreteRep
 }
 
 
+

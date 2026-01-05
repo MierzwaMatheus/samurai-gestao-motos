@@ -8,3 +8,4 @@ CREATE TRIGGER set_tipos_servico_user_id
   EXECUTE FUNCTION set_user_id();
 
 
+
