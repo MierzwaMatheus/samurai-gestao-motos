@@ -19,8 +19,7 @@ import {
   Clock,
   PlayCircle,
   Wrench,
-  CheckCircle,
-  Search
+  CheckCircle
 } from "lucide-react";
 import { toast } from "sonner";
 import { SupabaseEntradaRepository } from "@/infrastructure/repositories/SupabaseEntradaRepository";
@@ -50,7 +49,6 @@ export default function Oficina() {
   const [arquivoFoto, setArquivoFoto] = useState<File | null>(null);
   const [observacaoFoto, setObservacaoFoto] = useState("");
   const [progressoFoto, setProgressoFoto] = useState<number | undefined>(undefined);
-  const [buscaConcluidos, setBuscaConcluidos] = useState("");
 
   const adicionarFotoStatusUseCase = useMemo(
     () => new AdicionarFotoStatusUseCase(entradaRepo, storageApi),
@@ -162,19 +160,6 @@ export default function Oficina() {
     (moto) => moto.status === "pendente" || moto.status === "alinhando"
   );
   const motosConcluidas = motos.filter((moto) => moto.status === "concluido");
-
-  // Filtrar motos concluídas pela busca
-  const motosConcluidasFiltradas = useMemo(() => {
-    if (!buscaConcluidos.trim()) return motosConcluidas;
-    const buscaLower = buscaConcluidos.toLowerCase();
-    return motosConcluidas.filter(
-      (moto) =>
-        moto.modelo.toLowerCase().includes(buscaLower) ||
-        moto.placa?.toLowerCase().includes(buscaLower) ||
-        moto.cliente.toLowerCase().includes(buscaLower) ||
-        moto.tiposServico?.some((tipo) => tipo.nome.toLowerCase().includes(buscaLower))
-    );
-  }, [motosConcluidas, buscaConcluidos]);
 
   const renderMotoCard = (moto: typeof motos[0]) => (
               <Card
@@ -353,26 +338,14 @@ export default function Oficina() {
               </TabsContent>
 
               <TabsContent value="concluidos" className="space-y-6 mt-6">
-                {/* Barra de busca */}
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-foreground/40" size={18} />
-                  <Input
-                    placeholder="Buscar por modelo, placa, cliente ou serviço..."
-                    value={buscaConcluidos}
-                    onChange={(e) => setBuscaConcluidos(e.target.value)}
-                    className="pl-10 bg-card border-foreground/10"
-                  />
-                </div>
-
-                {/* Lista de motos concluídas */}
-                {motosConcluidasFiltradas.length === 0 ? (
+                {motosConcluidas.length === 0 ? (
                   <Card className="card-samurai text-center py-12">
                     <p className="font-sans text-foreground/60">
-                      {buscaConcluidos ? "Nenhum serviço encontrado" : "Nenhum serviço concluído"}
+                      Nenhum serviço concluído
                     </p>
                   </Card>
                 ) : (
-                  motosConcluidasFiltradas.map((moto) => renderMotoCard(moto))
+                  motosConcluidas.map((moto) => renderMotoCard(moto))
                 )}
               </TabsContent>
             </Tabs>
