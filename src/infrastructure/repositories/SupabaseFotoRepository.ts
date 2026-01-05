@@ -89,6 +89,39 @@ export class SupabaseFotoRepository implements FotoRepository {
     return fotos;
   }
 
+  async buscarPorEntradaIdETipo(entradaId: string, tipo: Foto["tipo"]): Promise<Foto[]> {
+    const { data, error } = await supabase
+      .from("fotos")
+      .select("*")
+      .eq("entrada_id", entradaId)
+      .eq("tipo", tipo)
+      .order("criado_em", { ascending: false });
+
+    if (error) {
+      throw new Error(`Erro ao buscar fotos: ${error.message}`);
+    }
+
+    // Converte filePath para URL assinada se necessário
+    const fotos = await Promise.all(
+      (data || []).map(async (item) => {
+        const foto = this.mapToFoto(item);
+        // Se a URL parece ser um filePath (não começa com http), gera URL assinada
+        if (!foto.url.startsWith("http")) {
+          const { data: signedUrlData } = await supabase.storage
+            .from("fotos")
+            .createSignedUrl(foto.url, 3600); // 1 hora
+          
+          if (signedUrlData) {
+            foto.url = signedUrlData.signedUrl;
+          }
+        }
+        return foto;
+      })
+    );
+
+    return fotos;
+  }
+
   async deletar(id: string): Promise<void> {
     const { error } = await supabase
       .from("fotos")
