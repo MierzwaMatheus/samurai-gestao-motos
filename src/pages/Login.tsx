@@ -8,8 +8,7 @@ import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 
 export default function Login() {
-  const { signIn, signUp } = useAuth();
-  const [isSignUp, setIsSignUp] = useState(false);
+  const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -22,28 +21,14 @@ export default function Login() {
       return;
     }
 
-    if (password.length < 6) {
-      toast.error('A senha deve ter pelo menos 6 caracteres');
-      return;
-    }
-
     setLoading(true);
 
     try {
-      if (isSignUp) {
-        const { error } = await signUp(email, password);
-        if (error) {
-          toast.error(error.message || 'Erro ao criar conta');
-        } else {
-          toast.success('Conta criada com sucesso! Verifique seu email.');
-        }
+      const { error } = await signIn(email, password);
+      if (error) {
+        toast.error(error.message || 'Erro ao fazer login');
       } else {
-        const { error } = await signIn(email, password);
-        if (error) {
-          toast.error(error.message || 'Erro ao fazer login');
-        } else {
-          toast.success('Login realizado com sucesso!');
-        }
+        toast.success('Login realizado com sucesso!');
       }
     } catch (err) {
       toast.error('Erro inesperado. Tente novamente.');
@@ -60,7 +45,7 @@ export default function Login() {
             Samurai Gestão
           </h1>
           <p className="font-sans text-sm text-foreground/60">
-            {isSignUp ? 'Crie sua conta' : 'Faça login para continuar'}
+            Faça login para continuar
           </p>
         </div>
 
@@ -94,7 +79,6 @@ export default function Login() {
               className="bg-card border-foreground/10"
               disabled={loading}
               required
-              minLength={6}
             />
           </div>
 
@@ -106,32 +90,13 @@ export default function Login() {
             {loading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {isSignUp ? 'Criando conta...' : 'Entrando...'}
+                Entrando...
               </>
             ) : (
-              isSignUp ? 'Criar Conta' : 'Entrar'
+              'Entrar'
             )}
           </Button>
         </form>
-
-        <div className="mt-6 text-center">
-          <button
-            type="button"
-            onClick={() => setIsSignUp(!isSignUp)}
-            className="font-sans text-sm text-foreground/60 hover:text-foreground transition-colors"
-            disabled={loading}
-          >
-            {isSignUp ? (
-              <>
-                Já tem uma conta? <span className="text-accent font-semibold">Faça login</span>
-              </>
-            ) : (
-              <>
-                Não tem uma conta? <span className="text-accent font-semibold">Cadastre-se</span>
-              </>
-            )}
-          </button>
-        </div>
       </Card>
     </div>
   );
