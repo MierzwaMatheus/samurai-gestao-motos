@@ -169,7 +169,7 @@ export async function gerarOSPDF(dados: DadosOS): Promise<Blob> {
         ` : ''}
         ${dados.entrada.dataEntrega ? `
         <div class="row">
-          <span class="label">Data Entrega:</span>
+          <span class="label">Previsão Entrega:</span>
           <span>${new Date(dados.entrada.dataEntrega).toLocaleDateString('pt-BR')}</span>
         </div>
         ` : ''}

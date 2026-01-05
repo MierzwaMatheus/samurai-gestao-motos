@@ -37,11 +37,22 @@ export class ConverterOrcamentoEntradaUseCase {
       throw new Error("Entrada relacionada não encontrada");
     }
 
-    // 4. Atualiza o tipo da entrada de "orcamento" para "entrada"
-    // e define a dataEntrada se não estiver definida
+    // 4. Calcula data de entrega se data de entrada foi definida
+    // Data de entrega = 2 semanas (14 dias) após a data de entrada
+    const dataEntrada = entrada.dataEntrada || new Date();
+    let dataEntrega = entrada.dataEntrega;
+    
+    if (!dataEntrega) {
+      dataEntrega = new Date(dataEntrada);
+      dataEntrega.setDate(dataEntrega.getDate() + 14); // 2 semanas = 14 dias
+    }
+
+    // 5. Atualiza o tipo da entrada de "orcamento" para "entrada"
+    // e define a dataEntrada e dataEntrega se necessário
     await this.entradaRepo.atualizar(orcamento.entradaId, {
       tipo: "entrada",
-      dataEntrada: entrada.dataEntrada || new Date(),
+      dataEntrada,
+      dataEntrega,
     });
   }
 }
