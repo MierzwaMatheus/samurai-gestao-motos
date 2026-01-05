@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useLocation } from "wouter";
 import Header from "@/components/Header";
 import BottomNav from "@/components/BottomNav";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,7 @@ import { useClientes } from "@/hooks/useClientes";
 import { Cliente } from "@shared/types";
 
 export default function Clientes() {
+  const [, setLocation] = useLocation();
   const clienteRepo = useMemo(() => new SupabaseClienteRepository(), []);
   const { clientes, loading, error, recarregar, atualizarCliente, removerCliente } =
     useClientes(clienteRepo);
@@ -150,6 +152,11 @@ export default function Clientes() {
     }
   };
 
+  const handleNavegarParaOficina = (cliente: Cliente) => {
+    const nomeCliente = encodeURIComponent(cliente.nome);
+    setLocation(`/oficina?cliente=${nomeCliente}`);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background admin-background">
@@ -230,6 +237,15 @@ export default function Clientes() {
                       </div>
                     </div>
                     <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleNavegarParaOficina(cliente)}
+                        className="h-8 w-8 p-0 text-accent hover:text-accent/80"
+                        title="Ver serviços na oficina"
+                      >
+                        <Search size={14} />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"

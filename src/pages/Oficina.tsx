@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import Header from "@/components/Header";
 import BottomNav from "@/components/BottomNav";
 import { Button } from "@/components/ui/button";
@@ -61,6 +61,20 @@ export default function Oficina() {
   const [progressoFoto, setProgressoFoto] = useState<number | undefined>(undefined);
   const [buscaEmAndamento, setBuscaEmAndamento] = useState("");
   const [buscaConcluidos, setBuscaConcluidos] = useState("");
+
+  // Ler parâmetro 'cliente' da URL e preencher a busca
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const clienteParam = params.get("cliente");
+    if (clienteParam) {
+      const nomeCliente = decodeURIComponent(clienteParam);
+      setBuscaEmAndamento(nomeCliente);
+      setBuscaConcluidos(nomeCliente);
+      // Limpar o parâmetro da URL após ler
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, "", newUrl);
+    }
+  }, []);
 
   const adicionarFotoStatusUseCase = useMemo(
     () => new AdicionarFotoStatusUseCase(entradaRepo, storageApi),
