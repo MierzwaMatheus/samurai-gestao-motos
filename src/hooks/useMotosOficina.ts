@@ -5,6 +5,7 @@ import { ClienteRepository } from "@/domain/interfaces/ClienteRepository";
 import { MotoRepository } from "@/domain/interfaces/MotoRepository";
 import { TipoServicoRepository } from "@/domain/interfaces/TipoServicoRepository";
 import { FotoRepository } from "@/domain/interfaces/FotoRepository";
+import { ServicoPersonalizadoRepository } from "@/domain/interfaces/ServicoPersonalizadoRepository";
 import { MotoCompleta } from "@shared/types";
 
 export function useMotosOficina(
@@ -12,7 +13,8 @@ export function useMotosOficina(
   clienteRepo: ClienteRepository,
   motoRepo: MotoRepository,
   tipoServicoRepo?: TipoServicoRepository,
-  fotoRepo?: FotoRepository
+  fotoRepo?: FotoRepository,
+  servicoPersonalizadoRepo?: ServicoPersonalizadoRepository
 ) {
   const [motos, setMotos] = useState<MotoCompleta[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,11 +38,12 @@ export function useMotosOficina(
       // Busca dados completos (cliente e moto) para cada entrada
       const motosCompletas: MotoCompleta[] = await Promise.all(
         entradasFiltradas.map(async (entrada) => {
-          const [cliente, moto, tiposServico, fotosMoto] = await Promise.all([
+          const [cliente, moto, tiposServico, fotosMoto, servicosPersonalizados] = await Promise.all([
             clienteRepo.buscarPorId(entrada.clienteId),
             motoRepo.buscarPorId(entrada.motoId),
             tipoServicoRepo?.buscarPorEntradaId(entrada.id).catch(() => []) || Promise.resolve([]),
             fotoRepo?.buscarPorEntradaIdETipo(entrada.id, "moto").catch(() => []) || Promise.resolve([]),
+            servicoPersonalizadoRepo?.buscarPorEntradaId(entrada.id).catch(() => []) || Promise.resolve([]),
           ]);
 
           return {
@@ -58,6 +61,7 @@ export function useMotosOficina(
             fotosStatus: entrada.fotosStatus || [],
             fotos: fotosMoto.map((foto) => foto.url), // URLs das fotos do tipo "moto"
             tiposServico: tiposServico || [],
+            servicosPersonalizados: servicosPersonalizados || [],
           };
         })
       );
@@ -73,7 +77,7 @@ export function useMotosOficina(
 
   useEffect(() => {
     carregar();
-  }, [useCase, clienteRepo, motoRepo, fotoRepo]);
+  }, [useCase, clienteRepo, motoRepo, fotoRepo, tipoServicoRepo, servicoPersonalizadoRepo]);
 
   const atualizarMoto = (entradaId: string, atualizacoes: Partial<MotoCompleta>) => {
     setMotos((prevMotos) =>
