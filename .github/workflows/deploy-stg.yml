@@ -43,7 +43,7 @@ jobs:
       #    - 'xargs' é usado para passar essa URL para o próximo passo.
       - name: Deploy to Vercel and get Preview URL
         id: deploy_step
-        run: echo "deploy_url=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})" >> $GITHUB_OUTPUT
+        run: echo "deploy_url=$(vercel deploy --prebuilt --no-git --token=${{ secrets.VERCEL_TOKEN }})" >> $GITHUB_OUTPUT
 
       # 6. Atribui a URL do deploy ao domínio de staging
       #    - Usa a URL capturada no passo anterior.
