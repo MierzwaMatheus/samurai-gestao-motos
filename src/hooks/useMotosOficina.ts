@@ -4,13 +4,15 @@ import { EntradaRepository } from "@/domain/interfaces/EntradaRepository";
 import { ClienteRepository } from "@/domain/interfaces/ClienteRepository";
 import { MotoRepository } from "@/domain/interfaces/MotoRepository";
 import { TipoServicoRepository } from "@/domain/interfaces/TipoServicoRepository";
+import { FotoRepository } from "@/domain/interfaces/FotoRepository";
 import { MotoCompleta } from "@shared/types";
 
 export function useMotosOficina(
   entradaRepo: EntradaRepository,
   clienteRepo: ClienteRepository,
   motoRepo: MotoRepository,
-  tipoServicoRepo?: TipoServicoRepository
+  tipoServicoRepo?: TipoServicoRepository,
+  fotoRepo?: FotoRepository
 ) {
   const [motos, setMotos] = useState<MotoCompleta[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,10 +36,11 @@ export function useMotosOficina(
       // Busca dados completos (cliente e moto) para cada entrada
       const motosCompletas: MotoCompleta[] = await Promise.all(
         entradasFiltradas.map(async (entrada) => {
-          const [cliente, moto, tiposServico] = await Promise.all([
+          const [cliente, moto, tiposServico, fotosMoto] = await Promise.all([
             clienteRepo.buscarPorId(entrada.clienteId),
             motoRepo.buscarPorId(entrada.motoId),
             tipoServicoRepo?.buscarPorEntradaId(entrada.id).catch(() => []) || Promise.resolve([]),
+            fotoRepo?.buscarPorEntradaIdETipo(entrada.id, "moto").catch(() => []) || Promise.resolve([]),
           ]);
 
           return {
@@ -53,7 +56,7 @@ export function useMotosOficina(
             status: entrada.status,
             progresso: entrada.progresso,
             fotosStatus: entrada.fotosStatus || [],
-            fotos: [], // Fotos do tipo "moto" (legado)
+            fotos: fotosMoto.map((foto) => foto.url), // URLs das fotos do tipo "moto"
             tiposServico: tiposServico || [],
           };
         })
@@ -70,7 +73,7 @@ export function useMotosOficina(
 
   useEffect(() => {
     carregar();
-  }, [useCase, clienteRepo, motoRepo]);
+  }, [useCase, clienteRepo, motoRepo, fotoRepo]);
 
   const atualizarMoto = (entradaId: string, atualizacoes: Partial<MotoCompleta>) => {
     setMotos((prevMotos) =>

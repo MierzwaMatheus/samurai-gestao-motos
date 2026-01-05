@@ -26,6 +26,7 @@ import { SupabaseEntradaRepository } from "@/infrastructure/repositories/Supabas
 import { SupabaseClienteRepository } from "@/infrastructure/repositories/SupabaseClienteRepository";
 import { SupabaseMotoRepository } from "@/infrastructure/repositories/SupabaseMotoRepository";
 import { SupabaseTipoServicoRepository } from "@/infrastructure/repositories/SupabaseTipoServicoRepository";
+import { SupabaseFotoRepository } from "@/infrastructure/repositories/SupabaseFotoRepository";
 import { SupabaseStorageApi } from "@/infrastructure/storage/SupabaseStorageApi";
 import { Badge } from "@/components/ui/badge";
 import { useMotosOficina } from "@/hooks/useMotosOficina";
@@ -34,18 +35,21 @@ import { AtualizarProgressoStatusUseCase } from "@/domain/usecases/AtualizarProg
 import { useAdicionarFotoStatus } from "@/hooks/useAdicionarFotoStatus";
 import { useAtualizarProgressoStatus } from "@/hooks/useAtualizarProgressoStatus";
 import GaleriaFotos from "@/components/GaleriaFotos";
+import GaleriaFotosMoto from "@/components/GaleriaFotosMoto";
 
 export default function Oficina() {
   const entradaRepo = useMemo(() => new SupabaseEntradaRepository(), []);
   const clienteRepo = useMemo(() => new SupabaseClienteRepository(), []);
   const motoRepo = useMemo(() => new SupabaseMotoRepository(), []);
   const tipoServicoRepo = useMemo(() => new SupabaseTipoServicoRepository(), []);
+  const fotoRepo = useMemo(() => new SupabaseFotoRepository(), []);
   const storageApi = useMemo(() => new SupabaseStorageApi(), []);
-  const { motos, loading, error, recarregar, atualizarMoto } = useMotosOficina(entradaRepo, clienteRepo, motoRepo, tipoServicoRepo);
+  const { motos, loading, error, recarregar, atualizarMoto } = useMotosOficina(entradaRepo, clienteRepo, motoRepo, tipoServicoRepo, fotoRepo);
 
   const [entradaSelecionada, setEntradaSelecionada] = useState<string | null>(null);
   const [mostrarModalFoto, setMostrarModalFoto] = useState(false);
   const [mostrarGaleria, setMostrarGaleria] = useState<Record<string, boolean>>({});
+  const [mostrarGaleriaMoto, setMostrarGaleriaMoto] = useState<Record<string, boolean>>({});
   const [arquivoFoto, setArquivoFoto] = useState<File | null>(null);
   const [observacaoFoto, setObservacaoFoto] = useState("");
   const [progressoFoto, setProgressoFoto] = useState<number | undefined>(undefined);
@@ -155,6 +159,13 @@ export default function Oficina() {
     }));
   };
 
+  const toggleGaleriaMoto = (entradaId: string) => {
+    setMostrarGaleriaMoto((prev) => ({
+      ...prev,
+      [entradaId]: !prev[entradaId],
+    }));
+  };
+
   // Separar motos por status
   const motosEmAndamento = motos.filter(
     (moto) => moto.status === "pendente" || moto.status === "alinhando"
@@ -227,6 +238,28 @@ export default function Oficina() {
                     className="h-2 bg-foreground/10"
                   />
                 </div>
+
+                {/* Galeria de Fotos da Moto (do orçamento) */}
+                {moto.fotos && moto.fotos.length > 0 && (
+                  <div className="mb-4">
+                    <button
+                      onClick={() => toggleGaleriaMoto(moto.entradaId)}
+                      className="w-full flex items-center justify-between p-2 bg-foreground/5 rounded-sm hover:bg-foreground/10 transition-colors"
+                    >
+                      <span className="font-sans text-sm text-foreground/80">
+                        {moto.fotos.length} foto(s) do orçamento
+                      </span>
+                      {mostrarGaleriaMoto[moto.entradaId] ? (
+                        <ChevronUp size={16} className="text-foreground/40" />
+                      ) : (
+                        <ChevronDown size={16} className="text-foreground/40" />
+                      )}
+                    </button>
+                    {mostrarGaleriaMoto[moto.entradaId] && (
+                      <GaleriaFotosMoto fotos={moto.fotos} />
+                    )}
+                  </div>
+                )}
 
                 {/* Galeria de Fotos de Status */}
                 {moto.fotosStatus && moto.fotosStatus.length > 0 && (
