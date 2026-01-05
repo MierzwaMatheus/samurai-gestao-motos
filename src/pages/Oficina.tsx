@@ -19,7 +19,9 @@ import {
   Clock,
   PlayCircle,
   Wrench,
-  CheckCircle
+  CheckCircle,
+  Trash2,
+  Settings
 } from "lucide-react";
 import { toast } from "sonner";
 import { SupabaseEntradaRepository } from "@/infrastructure/repositories/SupabaseEntradaRepository";
@@ -28,12 +30,14 @@ import { SupabaseMotoRepository } from "@/infrastructure/repositories/SupabaseMo
 import { SupabaseTipoServicoRepository } from "@/infrastructure/repositories/SupabaseTipoServicoRepository";
 import { SupabaseFotoRepository } from "@/infrastructure/repositories/SupabaseFotoRepository";
 import { SupabaseStorageApi } from "@/infrastructure/storage/SupabaseStorageApi";
+import { SupabaseServicoPersonalizadoRepository } from "@/infrastructure/repositories/SupabaseServicoPersonalizadoRepository";
 import { Badge } from "@/components/ui/badge";
 import { useMotosOficina } from "@/hooks/useMotosOficina";
 import { AdicionarFotoStatusUseCase } from "@/domain/usecases/AdicionarFotoStatusUseCase";
 import { AtualizarProgressoStatusUseCase } from "@/domain/usecases/AtualizarProgressoStatusUseCase";
 import { useAdicionarFotoStatus } from "@/hooks/useAdicionarFotoStatus";
 import { useAtualizarProgressoStatus } from "@/hooks/useAtualizarProgressoStatus";
+import { useDeletarEntrada } from "@/hooks/useDeletarEntrada";
 import GaleriaFotos from "@/components/GaleriaFotos";
 import GaleriaFotosMoto from "@/components/GaleriaFotosMoto";
 
@@ -44,7 +48,8 @@ export default function Oficina() {
   const tipoServicoRepo = useMemo(() => new SupabaseTipoServicoRepository(), []);
   const fotoRepo = useMemo(() => new SupabaseFotoRepository(), []);
   const storageApi = useMemo(() => new SupabaseStorageApi(), []);
-  const { motos, loading, error, recarregar, atualizarMoto } = useMotosOficina(entradaRepo, clienteRepo, motoRepo, tipoServicoRepo, fotoRepo);
+  const servicoPersonalizadoRepo = useMemo(() => new SupabaseServicoPersonalizadoRepository(), []);
+  const { motos, loading, error, recarregar, atualizarMoto } = useMotosOficina(entradaRepo, clienteRepo, motoRepo, tipoServicoRepo, fotoRepo, servicoPersonalizadoRepo);
 
   const [entradaSelecionada, setEntradaSelecionada] = useState<string | null>(null);
   const [mostrarModalFoto, setMostrarModalFoto] = useState(false);
@@ -65,6 +70,7 @@ export default function Oficina() {
 
   const { adicionar: adicionarFoto, loading: loadingFoto } = useAdicionarFotoStatus(adicionarFotoStatusUseCase);
   const { atualizar: atualizarProgresso, loading: loadingProgresso } = useAtualizarProgressoStatus(atualizarProgressoStatusUseCase);
+  const { deletar: deletarEntrada, loading: loadingDeletar } = useDeletarEntrada(entradaRepo);
 
   const getStatusLabel = (status: string) => {
     switch (status) {
@@ -151,6 +157,20 @@ export default function Oficina() {
     }
   };
 
+  const handleDeletarEntrada = async (entradaId: string) => {
+    if (!confirm("Tem certeza que deseja excluir esta entrada? Esta ação não pode ser desfeita.")) {
+      return;
+    }
+
+    const sucesso = await deletarEntrada(entradaId);
+    if (sucesso) {
+      toast.success("Entrada excluída com sucesso!");
+      recarregar();
+    } else {
+      toast.error("Erro ao excluir entrada");
+    }
+  };
+
 
   const toggleGaleria = (entradaId: string) => {
     setMostrarGaleria((prev) => ({
@@ -179,9 +199,19 @@ export default function Oficina() {
               >
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex-1">
-                    <h3 className="font-serif text-xl text-foreground">
-                      {moto.modelo}
-                    </h3>
+                    <div className="flex justify-between items-start">
+                      <h3 className="font-serif text-xl text-foreground">
+                        {moto.modelo}
+                      </h3>
+                      <button
+                        onClick={() => handleDeletarEntrada(moto.entradaId)}
+                        disabled={loadingDeletar}
+                        className="text-foreground/40 hover:text-red-600 transition-colors p-1"
+                        title="Excluir entrada"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
                     <p className="font-sans text-sm text-foreground/60">
                       {moto.placa ? `Placa: ${moto.placa} • ` : ""}{moto.cliente}
                     </p>
@@ -196,6 +226,23 @@ export default function Oficina() {
                           >
                             <Wrench size={10} />
                             {tipo.nome}
+                            {tipo.quantidade > 1 && ` (${tipo.quantidade}x)`}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                    {/* Serviços Personalizados */}
+                    {moto.servicosPersonalizados && moto.servicosPersonalizados.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {moto.servicosPersonalizados.map((servico) => (
+                          <Badge
+                            key={servico.id}
+                            variant="outline"
+                            className="flex items-center gap-1 text-xs border-accent/30"
+                          >
+                            <Settings size={10} />
+                            {servico.nome}
+                            {servico.quantidade > 1 && ` (${servico.quantidade}x)`}
                           </Badge>
                         ))}
                       </div>

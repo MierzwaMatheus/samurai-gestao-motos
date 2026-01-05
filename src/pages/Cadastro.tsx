@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import Header from "@/components/Header";
 import BottomNav from "@/components/BottomNav";
 import EntryTypeToggle from "@/components/EntryTypeToggle";
-import { EntryType, DadosCadastro, Cliente } from "@shared/types";
+import { EntryType, DadosCadastro, Cliente, ServicoSelecionado, ServicoPersonalizadoInput } from "@shared/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { ImagePlus, Truck, Search, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { ClienteSearch } from "@/components/ClienteSearch";
-import { TipoServicoSearch } from "@/components/TipoServicoSearch";
+import { GerenciarServicos } from "@/components/GerenciarServicos";
 import { ViaCepService } from "@/infrastructure/api/ViaCepService";
 import { BuscarEnderecoPorCepUseCase } from "@/domain/usecases/BuscarEnderecoPorCepUseCase";
 import { useBuscarCep } from "@/hooks/useBuscarCep";
@@ -24,6 +24,7 @@ import { SupabaseMotoRepository } from "@/infrastructure/repositories/SupabaseMo
 import { SupabaseEntradaRepository } from "@/infrastructure/repositories/SupabaseEntradaRepository";
 import { SupabaseOrcamentoRepository } from "@/infrastructure/repositories/SupabaseOrcamentoRepository";
 import { SupabaseTipoServicoRepository } from "@/infrastructure/repositories/SupabaseTipoServicoRepository";
+import { SupabaseServicoPersonalizadoRepository } from "@/infrastructure/repositories/SupabaseServicoPersonalizadoRepository";
 import { useCriarEntrada } from "@/hooks/useCriarEntrada";
 import { SupabaseStorageApi } from "@/infrastructure/storage/SupabaseStorageApi";
 import { SupabaseFotoRepository } from "@/infrastructure/repositories/SupabaseFotoRepository";
@@ -53,12 +54,14 @@ export default function Cadastro() {
   const entradaRepo = useMemo(() => new SupabaseEntradaRepository(), []);
   const orcamentoRepo = useMemo(() => new SupabaseOrcamentoRepository(), []);
   const tipoServicoRepo = useMemo(() => new SupabaseTipoServicoRepository(), []);
+  const servicoPersonalizadoRepo = useMemo(() => new SupabaseServicoPersonalizadoRepository(), []);
   const { criar: criarEntrada, loading: loadingCriar } = useCriarEntrada(
     clienteRepo,
     motoRepo,
     entradaRepo,
     orcamentoRepo,
-    tipoServicoRepo
+    tipoServicoRepo,
+    servicoPersonalizadoRepo
   );
 
   // Storage para upload de fotos
@@ -69,7 +72,9 @@ export default function Cadastro() {
   const [tipo, setTipo] = useState<EntryType>("entrada");
   const [usarClienteExistente, setUsarClienteExistente] = useState(false);
   const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(null);
-  const [tiposServicoSelecionados, setTiposServicoSelecionados] = useState<string[]>([]);
+  const [servicos, setServicos] = useState<ServicoSelecionado[]>([]);
+  const [servicosPersonalizados, setServicosPersonalizados] = useState<ServicoPersonalizadoInput[]>([]);
+  const [valorTotalCalculado, setValorTotalCalculado] = useState<number>(0);
   const [formData, setFormData] = useState<DadosCadastro>({
     tipo: "entrada",
     cliente: "",
@@ -87,7 +92,8 @@ export default function Cadastro() {
     dataOrcamento: undefined,
     dataEntrada: undefined,
     dataEntrega: undefined,
-    tiposServico: [],
+    servicos: [],
+    servicosPersonalizados: [],
   });
   const [fotos, setFotos] = useState<string[]>([]); // URLs para preview
   const [fotosArquivos, setFotosArquivos] = useState<File[]>([]); // Arquivos reais para upload
@@ -119,6 +125,37 @@ export default function Cadastro() {
       }
     }
   }, [formData.dataEntrada]);
+
+  // Efeito para calcular valor total baseado nos serviços
+  useEffect(() => {
+    const calcularValorTotal = async () => {
+      let total = 0;
+
+      // Calcular valor dos tipos de serviço
+      if (servicos.length > 0) {
+        const tiposIds = servicos.map((s) => s.tipoServicoId);
+        const tipos = await Promise.all(
+          tiposIds.map((id) => tipoServicoRepo.buscarPorId(id))
+        );
+        
+        tipos.forEach((tipo, index) => {
+          if (tipo) {
+            total += tipo.valor * servicos[index].quantidade;
+          }
+        });
+      }
+
+      // Calcular valor dos serviços personalizados
+      servicosPersonalizados.forEach((servico) => {
+        total += servico.valor * servico.quantidade;
+      });
+
+      setValorTotalCalculado(total);
+      setFormData((prev) => ({ ...prev, valorCobrado: total }));
+    };
+
+    calcularValorTotal();
+  }, [servicos, servicosPersonalizados, tipoServicoRepo]);
 
   // Efeito para preencher formulário com dados do orçamento quando disponível
   useEffect(() => {
@@ -161,7 +198,14 @@ export default function Cadastro() {
                 ? dadosParsed.dataEntrega 
                 : new Date(dadosParsed.dataEntrega))
             : undefined,
-          tiposServico: dadosParsed.tiposServico && Array.isArray(dadosParsed.tiposServico) && dadosParsed.tiposServico.length > 0 ? dadosParsed.tiposServico : [],
+          servicos: dadosParsed.servicos && Array.isArray(dadosParsed.servicos) && dadosParsed.servicos.length > 0 
+            ? dadosParsed.servicos 
+            : (dadosParsed.tiposServico && Array.isArray(dadosParsed.tiposServico) && dadosParsed.tiposServico.length > 0
+              ? dadosParsed.tiposServico.map((id: string) => ({ tipoServicoId: id, quantidade: 1 }))
+              : []),
+          servicosPersonalizados: dadosParsed.servicosPersonalizados && Array.isArray(dadosParsed.servicosPersonalizados) && dadosParsed.servicosPersonalizados.length > 0 
+            ? dadosParsed.servicosPersonalizados 
+            : [],
         };
 
         // Preenche o formulário com os dados
@@ -181,9 +225,13 @@ export default function Cadastro() {
           });
         }
 
-        // Preenche tipos de serviço selecionados
-        if (dadosCadastro.tiposServico && dadosCadastro.tiposServico.length > 0) {
-          setTiposServicoSelecionados(dadosCadastro.tiposServico);
+        // Preenche serviços selecionados
+        if (dadosCadastro.servicos && dadosCadastro.servicos.length > 0) {
+          setServicos(dadosCadastro.servicos);
+        }
+        
+        if (dadosCadastro.servicosPersonalizados && dadosCadastro.servicosPersonalizados.length > 0) {
+          setServicosPersonalizados(dadosCadastro.servicosPersonalizados);
         }
 
         // Preenche fotos (URLs para preview)
@@ -350,8 +398,14 @@ export default function Cadastro() {
       return;
     }
 
-    if (!formData.moto || !formData.valorCobrado) {
+    if (!formData.moto) {
       toast.error("Preencha todos os campos obrigatórios (*)");
+      return;
+    }
+
+    // Validar que há pelo menos um serviço ou serviço personalizado
+    if (servicos.length === 0 && servicosPersonalizados.length === 0) {
+      toast.error("Adicione pelo menos um serviço");
       return;
     }
 
@@ -371,7 +425,8 @@ export default function Cadastro() {
       const { entradaId } = await criarEntrada({
         ...formData,
         fotos: fotos,
-        tiposServico: tiposServicoSelecionados,
+        servicos: servicos,
+        servicosPersonalizados: servicosPersonalizados,
       });
 
       // 2. Fazer upload das fotos
@@ -415,13 +470,16 @@ export default function Cadastro() {
         dataOrcamento: undefined,
         dataEntrada: undefined,
         dataEntrega: undefined,
-        tiposServico: [],
+        servicos: [],
+        servicosPersonalizados: [],
       });
       setFotos([]);
       setFotosArquivos([]);
       setClienteSelecionado(null);
       setUsarClienteExistente(false);
-      setTiposServicoSelecionados([]);
+      setServicos([]);
+      setServicosPersonalizados([]);
+      setValorTotalCalculado(0);
     } catch (err) {
       const mensagem = err instanceof Error ? err.message : "Erro ao registrar";
       toast.error(mensagem);
@@ -555,17 +613,22 @@ export default function Cadastro() {
             </div>
           </div>
 
-          {/* Seção Tipos de Serviço */}
+          {/* Seção Serviços */}
           <div className="space-y-4">
             <Label className="text-xs uppercase tracking-widest">
-              Tipos de Serviço
+              Serviços *
             </Label>
-            <TipoServicoSearch
+            <GerenciarServicos
               tipoServicoRepo={tipoServicoRepo}
-              value={tiposServicoSelecionados}
-              onSelect={(ids) => {
-                setTiposServicoSelecionados(ids);
-                setFormData({ ...formData, tiposServico: ids });
+              servicos={servicos}
+              servicosPersonalizados={servicosPersonalizados}
+              onServicosChange={(novosServicos) => {
+                setServicos(novosServicos);
+                setFormData({ ...formData, servicos: novosServicos });
+              }}
+              onServicosPersonalizadosChange={(novosPersonalizados) => {
+                setServicosPersonalizados(novosPersonalizados);
+                setFormData({ ...formData, servicosPersonalizados: novosPersonalizados });
               }}
             />
           </div>
@@ -675,26 +738,24 @@ export default function Cadastro() {
             </div>
           )}
 
-          {/* Seção Valor Cobrado */}
+          {/* Seção Valor Cobrado (Calculado) */}
           <div className="space-y-2">
-            <Label htmlFor="valorCobrado" className="text-xs uppercase tracking-widest">
-              Valor Cobrado *
+            <Label className="text-xs uppercase tracking-widest">
+              Valor Cobrado (Calculado)
             </Label>
-            <Input
-              id="valorCobrado"
-              name="valorCobrado"
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder="0.00"
-              value={formData.valorCobrado || ""}
-              onChange={(e) => {
-                const value = parseFloat(e.target.value) || undefined;
-                setFormData({ ...formData, valorCobrado: value });
-              }}
-              className="bg-card border-foreground/10"
-              required
-            />
+            <Card className="p-4 bg-accent/10 border-accent/20">
+              <div className="flex items-center justify-between">
+                <span className="font-sans text-sm text-foreground/60">
+                  Total dos serviços
+                </span>
+                <span className="font-serif text-2xl text-accent">
+                  R$ {valorTotalCalculado.toFixed(2)}
+                </span>
+              </div>
+            </Card>
+            <p className="text-xs text-foreground/40">
+              O valor é calculado automaticamente com base nos serviços selecionados
+            </p>
           </div>
 
           {/* Seção Descrição/Observações */}

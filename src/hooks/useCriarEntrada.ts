@@ -5,6 +5,7 @@ import { MotoRepository } from "@/domain/interfaces/MotoRepository";
 import { EntradaRepository } from "@/domain/interfaces/EntradaRepository";
 import { OrcamentoRepository } from "@/domain/interfaces/OrcamentoRepository";
 import { TipoServicoRepository } from "@/domain/interfaces/TipoServicoRepository";
+import { ServicoPersonalizadoRepository } from "@/domain/interfaces/ServicoPersonalizadoRepository";
 import { DadosCadastro } from "@shared/types";
 
 export function useCriarEntrada(
@@ -12,14 +13,15 @@ export function useCriarEntrada(
   motoRepo: MotoRepository,
   entradaRepo: EntradaRepository,
   orcamentoRepo: OrcamentoRepository,
-  tipoServicoRepo: TipoServicoRepository
+  tipoServicoRepo: TipoServicoRepository,
+  servicoPersonalizadoRepo: ServicoPersonalizadoRepository
 ) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const useCase = useMemo(
-    () => new CriarEntradaUseCase(clienteRepo, motoRepo, entradaRepo, orcamentoRepo, tipoServicoRepo),
-    [clienteRepo, motoRepo, entradaRepo, orcamentoRepo, tipoServicoRepo]
+    () => new CriarEntradaUseCase(clienteRepo, motoRepo, entradaRepo, orcamentoRepo, tipoServicoRepo, servicoPersonalizadoRepo),
+    [clienteRepo, motoRepo, entradaRepo, orcamentoRepo, tipoServicoRepo, servicoPersonalizadoRepo]
   );
 
   const criar = async (dados: DadosCadastro) => {

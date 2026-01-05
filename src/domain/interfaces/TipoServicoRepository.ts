@@ -1,4 +1,4 @@
-import { TipoServico } from "@shared/types";
+import { TipoServico, TipoServicoComQuantidade } from "@shared/types";
 
 /**
  * Interface para repositório de tipos de serviço
@@ -11,7 +11,7 @@ export interface TipoServicoRepository {
   listar(): Promise<TipoServico[]>;
   atualizar(id: string, dados: Partial<Omit<TipoServico, "id" | "criadoEm" | "atualizadoEm" | "quantidadeServicos">>): Promise<TipoServico>;
   deletar(id: string): Promise<void>;
-  vincularTiposServicoAEntrada(entradaId: string, tiposServicoIds: string[]): Promise<void>;
-  buscarPorEntradaId(entradaId: string): Promise<TipoServico[]>;
+  vincularTiposServicoAEntrada(entradaId: string, servicos: Array<{ tipoServicoId: string; quantidade: number }>): Promise<void>;
+  buscarPorEntradaId(entradaId: string): Promise<TipoServicoComQuantidade[]>;
 }
 

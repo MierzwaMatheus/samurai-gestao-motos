@@ -1,5 +1,5 @@
 import { TipoServicoRepository } from "@/domain/interfaces/TipoServicoRepository";
-import { TipoServico } from "@shared/types";
+import { TipoServico, TipoServicoComQuantidade } from "@shared/types";
 import { supabase } from "@/infrastructure/supabase/client";
 
 /**
@@ -12,6 +12,7 @@ export class SupabaseTipoServicoRepository implements TipoServicoRepository {
       .from("tipos_servico")
       .insert({
         nome: tipoServico.nome,
+        valor: tipoServico.valor || 0,
         quantidade_servicos: 0,
       })
       .select()
@@ -69,11 +70,13 @@ export class SupabaseTipoServicoRepository implements TipoServicoRepository {
   }
 
   async atualizar(id: string, dados: Partial<Omit<TipoServico, "id" | "criadoEm" | "atualizadoEm" | "quantidadeServicos">>): Promise<TipoServico> {
+    const updateData: any = {};
+    if (dados.nome !== undefined) updateData.nome = dados.nome;
+    if (dados.valor !== undefined) updateData.valor = dados.valor;
+
     const { data, error } = await supabase
       .from("tipos_servico")
-      .update({
-        nome: dados.nome,
-      })
+      .update(updateData)
       .eq("id", id)
       .select()
       .single();
@@ -96,8 +99,8 @@ export class SupabaseTipoServicoRepository implements TipoServicoRepository {
     }
   }
 
-  async vincularTiposServicoAEntrada(entradaId: string, tiposServicoIds: string[]): Promise<void> {
-    if (tiposServicoIds.length === 0) {
+  async vincularTiposServicoAEntrada(entradaId: string, servicos: Array<{ tipoServicoId: string; quantidade: number }>): Promise<void> {
+    if (servicos.length === 0) {
       return;
     }
 
@@ -111,10 +114,11 @@ export class SupabaseTipoServicoRepository implements TipoServicoRepository {
       throw new Error(`Erro ao remover vínculos de tipos de serviço: ${deleteError.message}`);
     }
 
-    // Depois, cria os novos vínculos
-    const vinculos = tiposServicoIds.map((tipoServicoId) => ({
+    // Depois, cria os novos vínculos com quantidade
+    const vinculos = servicos.map((servico) => ({
       entrada_id: entradaId,
-      tipo_servico_id: tipoServicoId,
+      tipo_servico_id: servico.tipoServicoId,
+      quantidade: servico.quantidade || 1,
     }));
 
     const { error: insertError } = await supabase
@@ -126,11 +130,11 @@ export class SupabaseTipoServicoRepository implements TipoServicoRepository {
     }
   }
 
-  async buscarPorEntradaId(entradaId: string): Promise<TipoServico[]> {
-    // Primeiro busca os IDs dos tipos de serviço vinculados
+  async buscarPorEntradaId(entradaId: string): Promise<TipoServicoComQuantidade[]> {
+    // Busca os vínculos com quantidade
     const { data: vinculos, error: vinculosError } = await supabase
       .from("entradas_tipos_servico")
-      .select("tipo_servico_id")
+      .select("tipo_servico_id, quantidade")
       .eq("entrada_id", entradaId);
 
     if (vinculosError) {
@@ -156,13 +160,21 @@ export class SupabaseTipoServicoRepository implements TipoServicoRepository {
       return [];
     }
 
-    return tiposServico.map((tipo: any) => this.mapToTipoServico(tipo));
+    // Combina os dados do tipo de serviço com a quantidade
+    return tiposServico.map((tipo: any) => {
+      const vinculo = vinculos.find((v: any) => v.tipo_servico_id === tipo.id);
+      return {
+        ...this.mapToTipoServico(tipo),
+        quantidade: vinculo?.quantidade || 1,
+      };
+    });
   }
 
   private mapToTipoServico(data: any): TipoServico {
     return {
       id: data.id,
       nome: data.nome,
+      valor: parseFloat(data.valor) || 0,
       quantidadeServicos: data.quantidade_servicos || 0,
       criadoEm: new Date(data.criado_em),
       atualizadoEm: new Date(data.atualizado_em),

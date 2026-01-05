@@ -7,7 +7,7 @@ import { TipoServicoRepository } from "@/domain/interfaces/TipoServicoRepository
 export class CriarTipoServicoUseCase {
   constructor(private tipoServicoRepo: TipoServicoRepository) {}
 
-  async execute(nome: string): Promise<{ id: string; nome: string }> {
+  async execute(nome: string, valor: number = 0): Promise<{ id: string; nome: string; valor: number }> {
     // Validações de negócio
     if (!nome || nome.trim().length === 0) {
       throw new Error("Nome do tipo de serviço é obrigatório");
@@ -15,6 +15,10 @@ export class CriarTipoServicoUseCase {
 
     if (nome.trim().length < 2) {
       throw new Error("Nome do tipo de serviço deve ter pelo menos 2 caracteres");
+    }
+
+    if (valor < 0) {
+      throw new Error("Valor não pode ser negativo");
     }
 
     // Verificar se já existe um tipo de serviço com o mesmo nome
@@ -30,11 +34,13 @@ export class CriarTipoServicoUseCase {
     // Criar tipo de serviço
     const tipoServico = await this.tipoServicoRepo.criar({
       nome: nome.trim(),
+      valor: valor,
     });
 
     return {
       id: tipoServico.id,
       nome: tipoServico.nome,
+      valor: tipoServico.valor,
     };
   }
 }
