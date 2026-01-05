@@ -4,7 +4,7 @@ import BottomNav from "@/components/BottomNav";
 import { OrcamentoCompleto } from "@shared/types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, Clock, CheckCircle2, Loader2, Phone, MapPin, Truck, Image as ImageIcon, Wrench, ClipboardList } from "lucide-react";
+import { FileText, Clock, CheckCircle2, Loader2, Phone, MapPin, Truck, Image as ImageIcon, Wrench, ClipboardList, Trash2, Settings } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { SupabaseOrcamentoRepository } from "@/infrastructure/repositories/SupabaseOrcamentoRepository";
@@ -13,10 +13,12 @@ import { SupabaseClienteRepository } from "@/infrastructure/repositories/Supabas
 import { SupabaseMotoRepository } from "@/infrastructure/repositories/SupabaseMotoRepository";
 import { SupabaseFotoRepository } from "@/infrastructure/repositories/SupabaseFotoRepository";
 import { SupabaseTipoServicoRepository } from "@/infrastructure/repositories/SupabaseTipoServicoRepository";
+import { SupabaseServicoPersonalizadoRepository } from "@/infrastructure/repositories/SupabaseServicoPersonalizadoRepository";
 import { useOrcamentos } from "@/hooks/useOrcamentos";
 import { ConverterOrcamentoEntradaUseCase } from "@/domain/usecases/ConverterOrcamentoEntradaUseCase";
 import { useGerarOS } from "@/hooks/useGerarOS";
 import { PrepararDadosOrcamentoParaOSUseCase } from "@/domain/usecases/PrepararDadosOrcamentoParaOSUseCase";
+import { useDeletarOrcamento } from "@/hooks/useDeletarOrcamento";
 import { useLocation } from "wouter";
 
 type FilterType = "ativos" | "expirados";
@@ -31,10 +33,11 @@ export default function Orcamentos() {
   const motoRepo = useMemo(() => new SupabaseMotoRepository(), []);
   const fotoRepo = useMemo(() => new SupabaseFotoRepository(), []);
   const tipoServicoRepo = useMemo(() => new SupabaseTipoServicoRepository(), []);
+  const servicoPersonalizadoRepo = useMemo(() => new SupabaseServicoPersonalizadoRepository(), []);
   
   // Converte filtro UI para status do banco
   const statusBanco = filtro === "ativos" ? "ativo" : "expirado";
-  const { orcamentos, loading, error, recarregar, removerOrcamento } = useOrcamentos(orcamentoRepo, statusBanco, tipoServicoRepo);
+  const { orcamentos, loading, error, recarregar, removerOrcamento } = useOrcamentos(orcamentoRepo, statusBanco, tipoServicoRepo, servicoPersonalizadoRepo);
   
   const converterOrcamentoEntradaUseCase = useMemo(
     () => new ConverterOrcamentoEntradaUseCase(orcamentoRepo, entradaRepo),
@@ -60,6 +63,8 @@ export default function Orcamentos() {
     fotoRepo,
     tipoServicoRepo
   );
+
+  const { deletar: deletarOrcamento, loading: loadingDeletar } = useDeletarOrcamento(orcamentoRepo);
 
   const calcularDiasRestantes = (data: Date): number => {
     const agora = new Date();
@@ -110,6 +115,21 @@ export default function Orcamentos() {
     } catch (err) {
       const mensagem = err instanceof Error ? err.message : "Erro ao preparar dados do orçamento";
       toast.error(mensagem);
+    }
+  };
+
+  const handleDeletarOrcamento = async (orcamentoId: string) => {
+    if (!confirm("Tem certeza que deseja excluir este orçamento? Esta ação não pode ser desfeita.")) {
+      return;
+    }
+
+    const sucesso = await deletarOrcamento(orcamentoId);
+    if (sucesso) {
+      toast.success("Orçamento excluído com sucesso!");
+      removerOrcamento(orcamentoId);
+      recarregar();
+    } else {
+      toast.error("Erro ao excluir orçamento");
     }
   };
 
@@ -195,11 +215,21 @@ export default function Orcamentos() {
 
                       {/* Informações Principais */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-start mb-2">
+                        <div className="flex justify-between items-start mb-2 gap-2">
                           <div className="flex-1 min-w-0">
-                            <h3 className="font-serif text-lg text-foreground truncate">
-                              {orcamento.moto}
-                            </h3>
+                            <div className="flex justify-between items-start gap-2 mb-1">
+                              <h3 className="font-serif text-lg text-foreground truncate">
+                                {orcamento.moto}
+                              </h3>
+                              <button
+                                onClick={() => handleDeletarOrcamento(orcamento.id)}
+                                disabled={loadingDeletar}
+                                className="text-foreground/40 hover:text-red-600 transition-colors p-1 flex-shrink-0"
+                                title="Excluir orçamento"
+                              >
+                                <Trash2 size={18} />
+                              </button>
+                            </div>
                             <p className="font-sans text-sm text-foreground/60 truncate">
                               {orcamento.cliente || "Cliente não informado"}
                             </p>
@@ -279,6 +309,23 @@ export default function Orcamentos() {
                                 >
                                   <Wrench size={10} />
                                   {tipo.nome}
+                                  {tipo.quantidade > 1 && ` (${tipo.quantidade}x)`}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                          {/* Serviços Personalizados */}
+                          {orcamento.servicosPersonalizados && orcamento.servicosPersonalizados.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mt-2">
+                              {orcamento.servicosPersonalizados.map((servico) => (
+                                <Badge
+                                  key={servico.id}
+                                  variant="outline"
+                                  className="flex items-center gap-1 text-xs border-accent/30"
+                                >
+                                  <Settings size={10} />
+                                  {servico.nome}
+                                  {servico.quantidade > 1 && ` (${servico.quantidade}x)`}
                                 </Badge>
                               ))}
                             </div>
