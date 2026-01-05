@@ -655,18 +655,6 @@ export function GerenciarServicos({
           </div>
         </div>
       )}
-
-      {/* Valor total */}
-      {valorTotal > 0 && (
-        <Card className="p-4 bg-accent/10 border-accent/20">
-          <div className="flex items-center justify-between">
-            <span className="font-semibold text-sm">Valor Total dos Serviços</span>
-            <span className="font-serif text-xl text-accent">
-              R$ {valorTotal.toFixed(2)}
-            </span>
-          </div>
-        </Card>
-      )}
     </div>
   );
 }
