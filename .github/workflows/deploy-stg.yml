@@ -20,23 +20,9 @@ jobs:
       - name: Checkout do código
         uses: actions/checkout@v4
 
-      - name: Force CI git author
-        run: |
-          git config --global user.email "ci@vercel.com"
-          git config --global user.name "Vercel CI"
-      
-
       # 2. Instala a Vercel CLI
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
-
-      # 3. Puxa as configurações do projeto Vercel
-      - name: Pull Vercel Environment Information
-        run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
-
-      # 4. Constrói o projeto para o ambiente de preview
-      - name: Build Project Artifacts
-        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
 
       # 5. Faz o deploy para a Vercel e captura a URL de preview
       #    - O comando 'vercel deploy --prebuilt' retorna a URL do deploy.
@@ -44,8 +30,3 @@ jobs:
       - name: Deploy to Vercel
         run: vercel deploy --token=${{ secrets.VERCEL_TOKEN }}
     
-
-      # 6. Atribui a URL do deploy ao domínio de staging
-      #    - Usa a URL capturada no passo anterior.
-      - name: Alias the deployment to Staging Domain
-        run: vercel alias set ${{ steps.deploy_step.outputs.deploy_url }} stg-samurai-motos.vercel.app --token=${{ secrets.VERCEL_TOKEN }}
