@@ -14,6 +14,17 @@ export interface Endereco {
   };
 }
 
+export interface ServicoSelecionado {
+  tipoServicoId: string;
+  quantidade: number;
+}
+
+export interface ServicoPersonalizadoInput {
+  nome: string;
+  valor: number;
+  quantidade: number;
+}
+
 export interface DadosCadastro {
   tipo: EntryType;
   cliente: string;
@@ -24,7 +35,7 @@ export interface DadosCadastro {
   moto: string;
   placa?: string;
   finalNumeroQuadro?: string;
-  valorCobrado?: number;
+  valorCobrado?: number; // Calculado automaticamente, não editável
   descricao?: string;
   observacoes?: string;
   fotos: string[];
@@ -33,7 +44,8 @@ export interface DadosCadastro {
   dataEntrada?: Date;
   dataEntrega?: Date;
   enderecoCompleto?: Endereco;
-  tiposServico?: string[]; // IDs dos tipos de serviço selecionados
+  servicos?: ServicoSelecionado[]; // Tipos de serviço com quantidade
+  servicosPersonalizados?: ServicoPersonalizadoInput[]; // Serviços personalizados (não salvos na tabela)
 }
 
 export interface Cliente {
@@ -122,7 +134,8 @@ export interface OrcamentoCompleto extends Orcamento {
   cep?: string;
   valorCobrado?: number;
   dataOrcamento?: Date;
-  tiposServico?: TipoServico[];
+  tiposServico?: TipoServicoComQuantidade[];
+  servicosPersonalizados?: ServicoPersonalizado[];
 }
 
 export interface MotoCompleta extends Moto {
@@ -132,15 +145,30 @@ export interface MotoCompleta extends Moto {
   progresso: number;
   fotosStatus?: FotoStatus[];
   fotos: string[]; // Legado - fotos do tipo "moto"
-  tiposServico?: TipoServico[];
+  tiposServico?: TipoServicoComQuantidade[];
+  servicosPersonalizados?: ServicoPersonalizado[];
 }
 
 export interface TipoServico {
   id: string;
   nome: string;
+  valor: number;
   quantidadeServicos: number;
   criadoEm: Date;
   atualizadoEm: Date;
+}
+
+export interface TipoServicoComQuantidade extends TipoServico {
+  quantidade: number; // Quantidade usada nesta entrada/orçamento
+}
+
+export interface ServicoPersonalizado {
+  id: string;
+  entradaId: string;
+  nome: string;
+  valor: number;
+  quantidade: number;
+  criadoEm: Date;
 }
 
 export interface ConfiguracaoFrete {

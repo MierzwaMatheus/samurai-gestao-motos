@@ -3,6 +3,7 @@ import { MotoRepository } from "@/domain/interfaces/MotoRepository";
 import { EntradaRepository } from "@/domain/interfaces/EntradaRepository";
 import { OrcamentoRepository } from "@/domain/interfaces/OrcamentoRepository";
 import { TipoServicoRepository } from "@/domain/interfaces/TipoServicoRepository";
+import { ServicoPersonalizadoRepository } from "@/domain/interfaces/ServicoPersonalizadoRepository";
 import { DadosCadastro } from "@shared/types";
 
 /**
@@ -15,7 +16,8 @@ export class CriarEntradaUseCase {
     private motoRepo: MotoRepository,
     private entradaRepo: EntradaRepository,
     private orcamentoRepo: OrcamentoRepository,
-    private tipoServicoRepo: TipoServicoRepository
+    private tipoServicoRepo: TipoServicoRepository,
+    private servicoPersonalizadoRepo: ServicoPersonalizadoRepository
   ) {}
 
   async execute(dados: DadosCadastro): Promise<{ entradaId: string; orcamentoId?: string }> {
@@ -78,7 +80,7 @@ export class CriarEntradaUseCase {
       dataEntrega.setDate(dataEntrega.getDate() + 14); // 2 semanas = 14 dias
     }
 
-    // 4. Criar entrada
+    // 4. Criar entrada (valorCobrado será calculado automaticamente pelos triggers do banco)
     const entrada = await this.entradaRepo.criar({
       tipo: dados.tipo,
       clienteId,
@@ -87,7 +89,7 @@ export class CriarEntradaUseCase {
       cep: dados.cep?.replace(/\D/g, ""),
       telefone: dados.telefone,
       frete: dados.frete || 0,
-      valorCobrado: dados.valorCobrado,
+      valorCobrado: 0, // Será calculado automaticamente pelos triggers
       descricao: dados.descricao,
       observacoes: dados.observacoes,
       dataOrcamento: dados.dataOrcamento,
@@ -98,33 +100,43 @@ export class CriarEntradaUseCase {
       progresso: 0,
     });
 
-    // 5. Se for orçamento, criar orçamento
+    // 5. Vincular tipos de serviço à entrada (se houver)
+    if (dados.servicos && dados.servicos.length > 0) {
+      await this.tipoServicoRepo.vincularTiposServicoAEntrada(
+        entrada.id,
+        dados.servicos
+      );
+      // O contador quantidade_servicos será incrementado automaticamente pelo trigger do banco
+      // apenas se o tipo da entrada for "entrada" (não "orcamento")
+    }
+
+    // 6. Criar serviços personalizados (se houver)
+    if (dados.servicosPersonalizados && dados.servicosPersonalizados.length > 0) {
+      await Promise.all(
+        dados.servicosPersonalizados.map((servico) =>
+          this.servicoPersonalizadoRepo.criar(entrada.id, servico)
+        )
+      );
+    }
+
+    // 7. Buscar valor cobrado atualizado (calculado pelos triggers)
+    const entradaAtualizada = await this.entradaRepo.buscarPorId(entrada.id);
+    const valorCobrado = entradaAtualizada?.valorCobrado || 0;
+
+    // 8. Se for orçamento, criar orçamento
     let orcamentoId: string | undefined;
-    if (dados.tipo === "orcamento" && dados.descricao && dados.valorCobrado) {
-      // Usa o valor cobrado informado
+    if (dados.tipo === "orcamento" && dados.descricao && valorCobrado > 0) {
       const dataExpiracao = dados.dataOrcamento 
         ? new Date(dados.dataOrcamento.getTime() + 7 * 24 * 60 * 60 * 1000) // 7 dias após data do orçamento
         : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 dias a partir de agora
 
       const orcamento = await this.orcamentoRepo.criar({
         entradaId: entrada.id,
-        valor: dados.valorCobrado,
+        valor: valorCobrado,
         dataExpiracao,
         status: "ativo",
       });
       orcamentoId = orcamento.id;
-    }
-
-    // 6. Vincular tipos de serviço à entrada (se houver)
-    // Só vincula se for entrada (não orçamento), pois o contador só incrementa para entradas
-    // Para orçamentos, os tipos de serviço serão vinculados mas o contador só incrementa quando converter para entrada
-    if (dados.tiposServico && dados.tiposServico.length > 0) {
-      await this.tipoServicoRepo.vincularTiposServicoAEntrada(
-        entrada.id,
-        dados.tiposServico
-      );
-      // O contador quantidade_servicos será incrementado automaticamente pelo trigger do banco
-      // apenas se o tipo da entrada for "entrada" (não "orcamento")
     }
 
     return { entradaId: entrada.id, orcamentoId };
