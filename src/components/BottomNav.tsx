@@ -1,17 +1,45 @@
-import { Plus, Wrench, FileText, Users, Cog } from "lucide-react";
+import { Plus, Wrench, FileText, Users, Cog, UserCog } from "lucide-react";
 import { Link } from "wouter";
+import { useAuth } from "@/contexts/AuthContext";
+import { useMemo, useEffect, useState } from "react";
+import { SupabaseUsuarioRepository } from "@/infrastructure/repositories/SupabaseUsuarioRepository";
 
 interface BottomNavProps {
-  active: "cadastro" | "oficina" | "orcamentos" | "clientes" | "servicos";
+  active: "cadastro" | "oficina" | "orcamentos" | "clientes" | "servicos" | "usuarios" | "configuracoes";
 }
 
 export default function BottomNav({ active }: BottomNavProps) {
+  const { user } = useAuth();
+  const [isAdmin, setIsAdmin] = useState(false);
+  const usuarioRepo = useMemo(() => new SupabaseUsuarioRepository(), []);
+
+  useEffect(() => {
+    const verificarAdmin = async () => {
+      if (!user?.id) {
+        setIsAdmin(false);
+        return;
+      }
+
+      try {
+        const usuario = await usuarioRepo.buscarPorId(user.id);
+        setIsAdmin(usuario?.permissao === "admin" && usuario?.ativo === true);
+      } catch {
+        setIsAdmin(false);
+      }
+    };
+
+    verificarAdmin();
+  }, [user?.id, usuarioRepo]);
+
   const navItems = [
     { id: "cadastro", label: "Cadastro", icon: Plus, href: "/" },
     { id: "oficina", label: "Oficina", icon: Wrench, href: "/oficina" },
     { id: "orcamentos", label: "Orçamentos", icon: FileText, href: "/orcamentos" },
     { id: "clientes", label: "Clientes", icon: Users, href: "/clientes" },
     { id: "servicos", label: "Serviços", icon: Cog, href: "/servicos" },
+    ...(isAdmin
+      ? [{ id: "usuarios", label: "Usuários", icon: UserCog, href: "/usuarios" }]
+      : []),
   ];
 
   return (

@@ -192,3 +192,29 @@ export interface ConfiguracaoFrete {
   criadoEm: Date;
   atualizadoEm: Date;
 }
+
+export type PermissaoUsuario = "admin" | "usuario";
+
+export interface Usuario {
+  id: string;
+  nome: string;
+  email: string;
+  permissao: PermissaoUsuario;
+  ativo: boolean;
+  criadoEm: Date;
+  atualizadoEm: Date;
+  criadoPor?: string;
+}
+
+export interface CriarUsuarioInput {
+  email: string;
+  senha: string;
+  nome: string;
+  permissao?: PermissaoUsuario;
+}
+
+export interface AtualizarUsuarioInput {
+  nome?: string;
+  permissao?: PermissaoUsuario;
+  ativo?: boolean;
+}

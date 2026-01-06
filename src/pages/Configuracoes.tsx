@@ -1,11 +1,12 @@
 import { useState, useMemo, useEffect } from "react";
+import { useLocation } from "wouter";
 import Header from "@/components/Header";
 import BottomNav from "@/components/BottomNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
-import { Search, MapPin, Save, Settings } from "lucide-react";
+import { Search, MapPin, Save, Settings, Users } from "lucide-react";
 import { toast } from "sonner";
 import { ViaCepService } from "@/infrastructure/api/ViaCepService";
 import { BuscarEnderecoPorCepUseCase } from "@/domain/usecases/BuscarEnderecoPorCepUseCase";
@@ -16,6 +17,8 @@ import { AtualizarConfiguracaoFreteUseCase } from "@/domain/usecases/AtualizarCo
 import { useConfiguracaoFrete } from "@/hooks/useConfiguracaoFrete";
 
 export default function Configuracoes() {
+  const [, setLocation] = useLocation();
+  
   // Inicialização das dependências seguindo DIP
   const cepService = useMemo(() => new ViaCepService(), []);
   const buscarCepUseCase = useMemo(
@@ -110,9 +113,25 @@ export default function Configuracoes() {
       <main className="pt-20 pb-32 px-6">
         <div className="max-w-2xl mx-auto space-y-8">
           {/* Título da Seção */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Settings size={24} className="text-accent" />
+              <h2 className="font-serif text-xl text-foreground">Configurações</h2>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => setLocation("/usuarios")}
+              className="bg-card border-foreground/10"
+            >
+              <Users size={18} className="mr-2" />
+              Gerenciar Usuários
+            </Button>
+          </div>
+          
+          {/* Seção Configurações de Frete */}
           <div className="flex items-center gap-3">
-            <Settings size={24} className="text-accent" />
-            <h2 className="font-serif text-xl text-foreground">Configurações de Frete</h2>
+            <Settings size={20} className="text-accent" />
+            <h3 className="font-serif text-lg text-foreground">Configurações de Frete</h3>
           </div>
 
           {/* Seção CEP de Origem */}
