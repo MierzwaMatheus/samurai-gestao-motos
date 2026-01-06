@@ -152,8 +152,8 @@ export default function Orcamentos() {
             <button
               onClick={() => setFiltro("ativos")}
               className={`px-6 py-2 rounded-full font-sans font-semibold text-sm transition-all ${filtro === "ativos"
-                  ? "bg-accent text-white shadow-lg shadow-accent/20"
-                  : "bg-card border border-foreground/10 text-foreground/60 hover:text-foreground"
+                ? "bg-accent text-white shadow-lg shadow-accent/20"
+                : "bg-card border border-foreground/10 text-foreground/60 hover:text-foreground"
                 }`}
             >
               Ativos
@@ -161,8 +161,8 @@ export default function Orcamentos() {
             <button
               onClick={() => setFiltro("expirados")}
               className={`px-6 py-2 rounded-full font-sans font-semibold text-sm transition-all ${filtro === "expirados"
-                  ? "bg-accent text-white shadow-lg shadow-accent/20"
-                  : "bg-card border border-foreground/10 text-foreground/60 hover:text-foreground"
+                ? "bg-accent text-white shadow-lg shadow-accent/20"
+                : "bg-card border border-foreground/10 text-foreground/60 hover:text-foreground"
                 }`}
             >
               Expirados
@@ -324,6 +324,11 @@ export default function Orcamentos() {
                                 >
                                   <Wrench size={10} />
                                   {tipo.nome}
+                                  {tipo.categoria === "alinhamento" && (
+                                    <span className="ml-1 text-[10px] opacity-70">
+                                      {tipo.comOleo ? "(Com Óleo)" : "(Sem Óleo)"}
+                                    </span>
+                                  )}
                                   {tipo.quantidade > 1 && ` (${tipo.quantidade}x)`}
                                 </Badge>
                               ))}
@@ -352,8 +357,8 @@ export default function Orcamentos() {
                     {/* Contagem Regressiva */}
                     <div
                       className={`flex items-center gap-2 mb-4 p-3 rounded-sm ${estaProximoDeExpirar || estaExpirado
-                          ? "bg-accent/10"
-                          : "bg-foreground/5"
+                        ? "bg-accent/10"
+                        : "bg-foreground/5"
                         }`}
                     >
                       <Clock
@@ -366,8 +371,8 @@ export default function Orcamentos() {
                       />
                       <span
                         className={`font-sans text-sm ${estaProximoDeExpirar || estaExpirado
-                            ? "text-accent font-semibold"
-                            : "text-foreground/60"
+                          ? "text-accent font-semibold"
+                          : "text-foreground/60"
                           }`}
                       >
                         {estaExpirado

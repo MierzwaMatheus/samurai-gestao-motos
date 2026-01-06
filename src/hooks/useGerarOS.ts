@@ -5,6 +5,8 @@ import { ClienteRepository } from "@/domain/interfaces/ClienteRepository";
 import { MotoRepository } from "@/domain/interfaces/MotoRepository";
 import { FotoRepository } from "@/domain/interfaces/FotoRepository";
 import { TipoServicoRepository } from "@/domain/interfaces/TipoServicoRepository";
+import { ServicoPersonalizadoRepository } from "@/domain/interfaces/ServicoPersonalizadoRepository";
+import { StorageApi } from "@/domain/interfaces/StorageApi";
 import { gerarOSPDF, imprimirOS } from "@/utils/gerarOSPDF";
 
 export function useGerarOS(
@@ -12,14 +14,16 @@ export function useGerarOS(
   clienteRepo: ClienteRepository,
   motoRepo: MotoRepository,
   fotoRepo: FotoRepository,
-  tipoServicoRepo: TipoServicoRepository
+  tipoServicoRepo: TipoServicoRepository,
+  servicoPersonalizadoRepo: ServicoPersonalizadoRepository,
+  storageApi: StorageApi
 ) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const useCase = useMemo(
-    () => new GerarOSUseCase(entradaRepo, clienteRepo, motoRepo, fotoRepo, tipoServicoRepo),
-    [entradaRepo, clienteRepo, motoRepo, fotoRepo, tipoServicoRepo]
+    () => new GerarOSUseCase(entradaRepo, clienteRepo, motoRepo, fotoRepo, tipoServicoRepo, servicoPersonalizadoRepo, storageApi),
+    [entradaRepo, clienteRepo, motoRepo, fotoRepo, tipoServicoRepo, servicoPersonalizadoRepo, storageApi]
   );
 
   const gerar = async (entradaId: string) => {

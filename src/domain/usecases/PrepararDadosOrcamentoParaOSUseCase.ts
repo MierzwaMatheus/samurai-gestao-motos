@@ -21,7 +21,7 @@ export class PrepararDadosOrcamentoParaOSUseCase {
     private motoRepo: MotoRepository,
     private fotoRepo: FotoRepository,
     private tipoServicoRepo: TipoServicoRepository
-  ) {}
+  ) { }
 
   async execute(orcamentoId: string): Promise<DadosCadastro> {
     // Busca orçamento
@@ -59,6 +59,12 @@ export class PrepararDadosOrcamentoParaOSUseCase {
     // - Campos obrigatórios são sempre preenchidos
     // - Campos opcionais só são preenchidos se existirem e não forem vazios
     // - observacoes NÃO é preenchido automaticamente
+
+    const servicosSelecionados = tiposServico.map(t => ({
+      tipoServicoId: t.id,
+      quantidade: t.quantidade,
+      comOleo: t.comOleo
+    }));
     const dadosCadastro: DadosCadastro = {
       tipo: "entrada",
       // Campos obrigatórios
@@ -68,15 +74,15 @@ export class PrepararDadosOrcamentoParaOSUseCase {
       valorCobrado: entrada.valorCobrado,
       // Campos opcionais - só preenche se existirem e não forem vazios
       telefone: (cliente.telefone && cliente.telefone.trim() !== "") ? cliente.telefone : "",
-      endereco: (entrada.endereco && entrada.endereco.trim() !== "") 
-        ? entrada.endereco 
+      endereco: (entrada.endereco && entrada.endereco.trim() !== "")
+        ? entrada.endereco
         : (cliente.endereco && cliente.endereco.trim() !== "") ? cliente.endereco : "",
-      cep: (entrada.cep && entrada.cep.trim() !== "") 
-        ? entrada.cep 
+      cep: (entrada.cep && entrada.cep.trim() !== "")
+        ? entrada.cep
         : (cliente.cep && cliente.cep.trim() !== "") ? cliente.cep : "",
       placa: (moto.placa && moto.placa.trim() !== "") ? moto.placa : "",
-      finalNumeroQuadro: (entrada.finalNumeroQuadro && entrada.finalNumeroQuadro.trim() !== "") 
-        ? entrada.finalNumeroQuadro 
+      finalNumeroQuadro: (entrada.finalNumeroQuadro && entrada.finalNumeroQuadro.trim() !== "")
+        ? entrada.finalNumeroQuadro
         : (moto.finalNumeroQuadro && moto.finalNumeroQuadro.trim() !== "") ? moto.finalNumeroQuadro : "",
       descricao: (entrada.descricao && entrada.descricao.trim() !== "") ? entrada.descricao : "",
       observacoes: "", // NÃO preenche observações/detalhes
@@ -85,7 +91,8 @@ export class PrepararDadosOrcamentoParaOSUseCase {
       dataOrcamento: entrada.dataOrcamento || undefined,
       dataEntrada: entrada.dataEntrada || undefined,
       dataEntrega: entrada.dataEntrega || undefined,
-      tiposServico: tiposServicoIds, // Array vazio se não houver tipos
+
+      servicos: servicosSelecionados,
     };
 
     return dadosCadastro;
