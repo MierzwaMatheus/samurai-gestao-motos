@@ -16,14 +16,19 @@ export class GerarOSUseCase {
     private motoRepo: MotoRepository,
     private fotoRepo: FotoRepository,
     private tipoServicoRepo: TipoServicoRepository
-  ) {}
+  ) { }
 
   async execute(entradaId: string): Promise<{
     entrada: Entrada;
     cliente: { nome: string; telefone?: string; endereco?: string };
     moto: { modelo: string; placa?: string; finalNumeroQuadro?: string };
     fotos: Array<{ url: string; tipo: string }>;
-    tiposServico: Array<{ nome: string }>;
+    tiposServico: Array<{
+      nome: string;
+      categoria?: "padrao" | "alinhamento";
+      comOleo?: boolean;
+      quantidade?: number
+    }>;
   }> {
     // Busca entrada
     const entrada = await this.entradaRepo.buscarPorId(entradaId);
@@ -56,7 +61,12 @@ export class GerarOSUseCase {
         finalNumeroQuadro: moto.finalNumeroQuadro,
       },
       fotos: fotos.map((f) => ({ url: f.url, tipo: f.tipo })),
-      tiposServico: tiposServico.map((t) => ({ nome: t.nome })),
+      tiposServico: tiposServico.map((t) => ({
+        nome: t.nome,
+        categoria: t.categoria,
+        comOleo: t.comOleo,
+        quantidade: t.quantidade
+      })),
     };
   }
 }

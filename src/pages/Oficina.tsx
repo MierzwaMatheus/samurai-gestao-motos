@@ -285,6 +285,11 @@ export default function Oficina() {
                 >
                   <Wrench size={10} />
                   {tipo.nome}
+                  {tipo.categoria === "alinhamento" && (
+                    <span className="ml-1 text-[10px] opacity-70">
+                      {tipo.comOleo ? "(Com Óleo)" : "(Sem Óleo)"}
+                    </span>
+                  )}
                   {tipo.quantidade > 1 && ` (${tipo.quantidade}x)`}
                 </Badge>
               ))}

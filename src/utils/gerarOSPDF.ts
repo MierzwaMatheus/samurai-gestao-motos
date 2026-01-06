@@ -25,13 +25,18 @@ interface DadosOS {
     finalNumeroQuadro?: string;
   };
   fotos: Array<{ url: string; tipo: string }>;
-  tiposServico?: Array<{ nome: string }>;
+  tiposServico?: Array<{
+    nome: string;
+    categoria?: "padrao" | "alinhamento";
+    comOleo?: boolean;
+    quantidade?: number;
+  }>;
 }
 
 export async function gerarOSPDF(dados: DadosOS): Promise<Blob> {
   // Por enquanto, vamos gerar um HTML que pode ser impresso
   // Futuramente pode ser integrado com uma biblioteca de PDF como jsPDF ou pdfkit
-  
+
   const html = `
     <!DOCTYPE html>
     <html>
@@ -150,9 +155,23 @@ export async function gerarOSPDF(dados: DadosOS): Promise<Blob> {
       <div class="section">
         <h2>SERVIÇO</h2>
         ${dados.tiposServico && dados.tiposServico.length > 0 ? `
-        <div class="row">
-          <span class="label">Tipos de Serviço:</span>
-          <span>${dados.tiposServico.map(t => t.nome).join(', ')}</span>
+        <div class="row" style="flex-direction: column; align-items: flex-start;">
+          <span class="label" style="align-self: flex-start; margin-bottom: 5px;">Tipos de Serviço:</span>
+          <ul style="margin: 0; padding-left: 20px; list-style-type: disc; width: 100%;">
+            ${dados.tiposServico.map(t => {
+    let nomeExibicao = t.nome;
+
+    if (t.categoria === "alinhamento") {
+      nomeExibicao += t.comOleo ? " (Com Óleo)" : " (Sem Óleo)";
+    }
+
+    if (t.quantidade && t.quantidade > 1) {
+      nomeExibicao += ` (${t.quantidade}x)`;
+    }
+
+    return `<li style="text-align: left;">${nomeExibicao}</li>`;
+  }).join('')}
+          </ul>
         </div>
         ` : ''}
         ${dados.entrada.descricao ? `
@@ -230,12 +249,12 @@ export function imprimirOS(html: string) {
   if (printWindow) {
     printWindow.document.write(html);
     printWindow.document.close();
-    
+
     // Função para aguardar imagens e imprimir
     const aguardarImagensEImprimir = () => {
       const images = printWindow.document.querySelectorAll('img');
       const totalImages = images.length;
-      
+
       if (totalImages === 0) {
         // Se não há imagens, imprime imediatamente
         setTimeout(() => {
@@ -243,10 +262,10 @@ export function imprimirOS(html: string) {
         }, 100);
         return;
       }
-      
+
       let loadedImages = 0;
       let hasError = false;
-      
+
       // Aguarda todas as imagens carregarem
       images.forEach((img: HTMLImageElement) => {
         // Mostra a imagem imediatamente se já estiver carregada
@@ -276,14 +295,14 @@ export function imprimirOS(html: string) {
           };
         }
       });
-      
+
       // Se todas as imagens já estavam carregadas
       if (loadedImages === totalImages) {
         setTimeout(() => {
           printWindow.print();
         }, 200);
       }
-      
+
       // Timeout de segurança: imprime após 2 segundos mesmo se algumas imagens não carregarem
       setTimeout(() => {
         images.forEach((img: HTMLImageElement) => {
@@ -294,7 +313,7 @@ export function imprimirOS(html: string) {
         printWindow.print();
       }, 2000);
     };
-    
+
     // Aguarda o documento estar pronto
     if (printWindow.document.readyState === 'complete') {
       aguardarImagensEImprimir();
