@@ -4,7 +4,7 @@ import BottomNav from "@/components/BottomNav";
 import { OrcamentoCompleto } from "@shared/types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, Clock, CheckCircle2, Loader2, Phone, MapPin, Truck, Image as ImageIcon, Wrench, ClipboardList, Trash2, Settings } from "lucide-react";
+import { FileText, Clock, CheckCircle2, Loader2, Phone, MapPin, Truck, Image as ImageIcon, Wrench, ClipboardList, Trash2, Settings, History } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { SupabaseOrcamentoRepository } from "@/infrastructure/repositories/SupabaseOrcamentoRepository";
@@ -20,13 +20,16 @@ import { useGerarOS } from "@/hooks/useGerarOS";
 import { PrepararDadosOrcamentoParaOSUseCase } from "@/domain/usecases/PrepararDadosOrcamentoParaOSUseCase";
 import { useDeletarOrcamento } from "@/hooks/useDeletarOrcamento";
 import { useLocation } from "wouter";
+import { HistoryModal } from "@/components/HistoryModal";
 
 type FilterType = "ativos" | "expirados";
 
 export default function Orcamentos() {
   const [filtro, setFiltro] = useState<FilterType>("ativos");
   const [, setLocation] = useLocation();
-  
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [selectedOrcamentoId, setSelectedOrcamentoId] = useState<string | null>(null);
+
   const orcamentoRepo = useMemo(() => new SupabaseOrcamentoRepository(), []);
   const entradaRepo = useMemo(() => new SupabaseEntradaRepository(), []);
   const clienteRepo = useMemo(() => new SupabaseClienteRepository(), []);
@@ -34,11 +37,11 @@ export default function Orcamentos() {
   const fotoRepo = useMemo(() => new SupabaseFotoRepository(), []);
   const tipoServicoRepo = useMemo(() => new SupabaseTipoServicoRepository(), []);
   const servicoPersonalizadoRepo = useMemo(() => new SupabaseServicoPersonalizadoRepository(), []);
-  
+
   // Converte filtro UI para status do banco
   const statusBanco = filtro === "ativos" ? "ativo" : "expirado";
   const { orcamentos, loading, error, recarregar, removerOrcamento } = useOrcamentos(orcamentoRepo, statusBanco, tipoServicoRepo, servicoPersonalizadoRepo);
-  
+
   const converterOrcamentoEntradaUseCase = useMemo(
     () => new ConverterOrcamentoEntradaUseCase(orcamentoRepo, entradaRepo),
     [orcamentoRepo, entradaRepo]
@@ -105,10 +108,10 @@ export default function Orcamentos() {
     try {
       // Prepara dados do orçamento para preencher o formulário
       const dadosCadastro = await prepararDadosOSUseCase.execute(orcamentoId);
-      
+
       // Salva os dados no sessionStorage para a página de Cadastro acessar
       sessionStorage.setItem("dadosOrcamentoParaOS", JSON.stringify(dadosCadastro));
-      
+
       // Navega para a página de Cadastro
       setLocation("/");
       toast.success("Dados do orçamento carregados! Preencha os campos restantes.");
@@ -133,6 +136,11 @@ export default function Orcamentos() {
     }
   };
 
+  const handleOpenHistory = (orcamentoId: string) => {
+    setSelectedOrcamentoId(orcamentoId);
+    setHistoryModalOpen(true);
+  };
+
   return (
     <div className="min-h-screen bg-background admin-background">
       <Header title="Orçamentos" />
@@ -143,21 +151,19 @@ export default function Orcamentos() {
           <div className="flex gap-2 mb-8">
             <button
               onClick={() => setFiltro("ativos")}
-              className={`px-6 py-2 rounded-full font-sans font-semibold text-sm transition-all ${
-                filtro === "ativos"
+              className={`px-6 py-2 rounded-full font-sans font-semibold text-sm transition-all ${filtro === "ativos"
                   ? "bg-accent text-white shadow-lg shadow-accent/20"
                   : "bg-card border border-foreground/10 text-foreground/60 hover:text-foreground"
-              }`}
+                }`}
             >
               Ativos
             </button>
             <button
               onClick={() => setFiltro("expirados")}
-              className={`px-6 py-2 rounded-full font-sans font-semibold text-sm transition-all ${
-                filtro === "expirados"
+              className={`px-6 py-2 rounded-full font-sans font-semibold text-sm transition-all ${filtro === "expirados"
                   ? "bg-accent text-white shadow-lg shadow-accent/20"
                   : "bg-card border border-foreground/10 text-foreground/60 hover:text-foreground"
-              }`}
+                }`}
             >
               Expirados
             </button>
@@ -230,9 +236,18 @@ export default function Orcamentos() {
                                 <Trash2 size={18} />
                               </button>
                             </div>
-                            <p className="font-sans text-sm text-foreground/60 truncate">
-                              {orcamento.cliente || "Cliente não informado"}
-                            </p>
+                            <div className="flex justify-between items-center">
+                              <p className="font-sans text-sm text-foreground/60 truncate">
+                                {orcamento.cliente || "Cliente não informado"}
+                              </p>
+                              <button
+                                onClick={() => handleOpenHistory(orcamento.id)}
+                                className="text-foreground/40 hover:text-accent transition-colors p-1"
+                                title="Ver histórico"
+                              >
+                                <History size={16} />
+                              </button>
+                            </div>
                           </div>
                           <div className="text-right ml-2 flex-shrink-0">
                             <p className="font-serif text-2xl text-accent">
@@ -336,11 +351,10 @@ export default function Orcamentos() {
 
                     {/* Contagem Regressiva */}
                     <div
-                      className={`flex items-center gap-2 mb-4 p-3 rounded-sm ${
-                        estaProximoDeExpirar || estaExpirado
+                      className={`flex items-center gap-2 mb-4 p-3 rounded-sm ${estaProximoDeExpirar || estaExpirado
                           ? "bg-accent/10"
                           : "bg-foreground/5"
-                      }`}
+                        }`}
                     >
                       <Clock
                         size={18}
@@ -351,21 +365,20 @@ export default function Orcamentos() {
                         }
                       />
                       <span
-                        className={`font-sans text-sm ${
-                          estaProximoDeExpirar || estaExpirado
+                        className={`font-sans text-sm ${estaProximoDeExpirar || estaExpirado
                             ? "text-accent font-semibold"
                             : "text-foreground/60"
-                        }`}
+                          }`}
                       >
                         {estaExpirado
                           ? "Expirado há " +
-                            Math.abs(diasRestantes) +
-                            " dia" +
-                            (Math.abs(diasRestantes) !== 1 ? "s" : "")
+                          Math.abs(diasRestantes) +
+                          " dia" +
+                          (Math.abs(diasRestantes) !== 1 ? "s" : "")
                           : "Expira em " +
-                            diasRestantes +
-                            " dia" +
-                            (diasRestantes !== 1 ? "s" : "")}
+                          diasRestantes +
+                          " dia" +
+                          (diasRestantes !== 1 ? "s" : "")}
                       </span>
                     </div>
 
@@ -421,6 +434,18 @@ export default function Orcamentos() {
       </main>
 
       <BottomNav active="orcamentos" />
+
+      {selectedOrcamentoId && (
+        <HistoryModal
+          isOpen={historyModalOpen}
+          onClose={() => {
+            setHistoryModalOpen(false);
+            setSelectedOrcamentoId(null);
+          }}
+          entidadeId={selectedOrcamentoId}
+          entidadeTipo="orcamento"
+        />
+      )}
     </div>
   );
 }
