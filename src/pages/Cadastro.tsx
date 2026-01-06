@@ -72,6 +72,7 @@ export default function Cadastro() {
   const [tipo, setTipo] = useState<EntryType>("entrada");
   const [usarClienteExistente, setUsarClienteExistente] = useState(false);
   const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(null);
+  const [tipoPreco, setTipoPreco] = useState<"oficina" | "particular">("oficina");
   const [servicos, setServicos] = useState<ServicoSelecionado[]>([]);
   const [servicosPersonalizados, setServicosPersonalizados] = useState<ServicoPersonalizadoInput[]>([]);
   const [valorTotalCalculado, setValorTotalCalculado] = useState<number>(0);
@@ -140,7 +141,8 @@ export default function Cadastro() {
         
         tipos.forEach((tipo, index) => {
           if (tipo) {
-            total += tipo.valor * servicos[index].quantidade;
+            const preco = tipoPreco === "particular" ? tipo.precoParticular : tipo.precoOficina;
+            total += preco * servicos[index].quantidade;
           }
         });
       }
@@ -155,7 +157,7 @@ export default function Cadastro() {
     };
 
     calcularValorTotal();
-  }, [servicos, servicosPersonalizados, tipoServicoRepo]);
+  }, [servicos, servicosPersonalizados, tipoServicoRepo, tipoPreco]);
 
   // Efeito para preencher formulário com dados do orçamento quando disponível
   useEffect(() => {
@@ -613,6 +615,40 @@ export default function Cadastro() {
             </div>
           </div>
 
+          {/* Toggle Tipo de Preço */}
+          <div className="flex items-center justify-between p-4 bg-card border border-foreground/10 rounded-lg">
+            <div className="space-y-0.5">
+              <Label htmlFor="tipo-preco" className="text-sm font-medium">
+                Tipo de Preço
+              </Label>
+              <p className="text-xs text-foreground/60">
+                Selecione se é serviço de oficina ou particular
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant={tipoPreco === "oficina" ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  setTipoPreco("oficina");
+                  setFormData({ ...formData, tipoPreco: "oficina" });
+                }}
+              >
+                Oficina
+              </Button>
+              <Button
+                variant={tipoPreco === "particular" ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  setTipoPreco("particular");
+                  setFormData({ ...formData, tipoPreco: "particular" });
+                }}
+              >
+                Particular
+              </Button>
+            </div>
+          </div>
+
           {/* Seção Serviços */}
           <div className="space-y-4">
             <Label className="text-xs uppercase tracking-widest">
@@ -622,6 +658,7 @@ export default function Cadastro() {
               tipoServicoRepo={tipoServicoRepo}
               servicos={servicos}
               servicosPersonalizados={servicosPersonalizados}
+              tipoPreco={tipoPreco}
               onServicosChange={(novosServicos) => {
                 setServicos(novosServicos);
                 setFormData({ ...formData, servicos: novosServicos });

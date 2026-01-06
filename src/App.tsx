@@ -7,6 +7,8 @@ import Oficina from "@/pages/Oficina";
 import Orcamentos from "@/pages/Orcamentos";
 import Clientes from "@/pages/Clientes";
 import Configuracoes from "@/pages/Configuracoes";
+import Servicos from "@/pages/Servicos";
+import Usuarios from "@/pages/Usuarios";
 import { Route, Switch, useLocation } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -81,6 +83,16 @@ function Router() {
       <Route path={"/configuracoes"}>
         <ProtectedRoute>
           <Configuracoes />
+        </ProtectedRoute>
+      </Route>
+      <Route path={"/servicos"}>
+        <ProtectedRoute>
+          <Servicos />
+        </ProtectedRoute>
+      </Route>
+      <Route path={"/usuarios"}>
+        <ProtectedRoute>
+          <Usuarios />
         </ProtectedRoute>
       </Route>
       <Route path={"/404"} component={NotFound} />

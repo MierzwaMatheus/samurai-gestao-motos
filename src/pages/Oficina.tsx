@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import Header from "@/components/Header";
 import BottomNav from "@/components/BottomNav";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,8 @@ import {
   Wrench,
   CheckCircle,
   Trash2,
-  Settings
+  Settings,
+  Search
 } from "lucide-react";
 import { toast } from "sonner";
 import { SupabaseEntradaRepository } from "@/infrastructure/repositories/SupabaseEntradaRepository";
@@ -58,6 +59,22 @@ export default function Oficina() {
   const [arquivoFoto, setArquivoFoto] = useState<File | null>(null);
   const [observacaoFoto, setObservacaoFoto] = useState("");
   const [progressoFoto, setProgressoFoto] = useState<number | undefined>(undefined);
+  const [buscaEmAndamento, setBuscaEmAndamento] = useState("");
+  const [buscaConcluidos, setBuscaConcluidos] = useState("");
+
+  // Ler parâmetro 'cliente' da URL e preencher a busca
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const clienteParam = params.get("cliente");
+    if (clienteParam) {
+      const nomeCliente = decodeURIComponent(clienteParam);
+      setBuscaEmAndamento(nomeCliente);
+      setBuscaConcluidos(nomeCliente);
+      // Limpar o parâmetro da URL após ler
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, "", newUrl);
+    }
+  }, []);
 
   const adicionarFotoStatusUseCase = useMemo(
     () => new AdicionarFotoStatusUseCase(entradaRepo, storageApi),
@@ -191,6 +208,29 @@ export default function Oficina() {
     (moto) => moto.status === "pendente" || moto.status === "alinhando"
   );
   const motosConcluidas = motos.filter((moto) => moto.status === "concluido");
+
+  // Filtrar motos por busca
+  const filtrarMotos = (motos: typeof motos, busca: string) => {
+    if (!busca.trim()) return motos;
+    
+    const buscaLower = busca.toLowerCase();
+    return motos.filter((moto) => {
+      const modeloMatch = moto.modelo?.toLowerCase().includes(buscaLower);
+      const placaMatch = moto.placa?.toLowerCase().includes(buscaLower);
+      const clienteMatch = moto.cliente?.toLowerCase().includes(buscaLower);
+      const tiposServicoMatch = moto.tiposServico?.some(
+        (tipo) => tipo.nome.toLowerCase().includes(buscaLower)
+      );
+      const servicosPersonalizadosMatch = moto.servicosPersonalizados?.some(
+        (servico) => servico.nome.toLowerCase().includes(buscaLower)
+      );
+      
+      return modeloMatch || placaMatch || clienteMatch || tiposServicoMatch || servicosPersonalizadosMatch;
+    });
+  };
+
+  const motosEmAndamentoFiltradas = filtrarMotos(motosEmAndamento, buscaEmAndamento);
+  const motosConcluidasFiltradas = filtrarMotos(motosConcluidas, buscaConcluidos);
 
   const renderMotoCard = (moto: typeof motos[0]) => (
               <Card
@@ -406,26 +446,48 @@ export default function Oficina() {
               </TabsList>
 
               <TabsContent value="em-andamento" className="space-y-6 mt-6">
-                {motosEmAndamento.length === 0 ? (
+                {/* Barra de busca */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-foreground/40" size={18} />
+                  <Input
+                    placeholder="Buscar por modelo, placa, cliente ou serviço..."
+                    value={buscaEmAndamento}
+                    onChange={(e) => setBuscaEmAndamento(e.target.value)}
+                    className="pl-10 bg-card border-foreground/10"
+                  />
+                </div>
+                
+                {motosEmAndamentoFiltradas.length === 0 ? (
                   <Card className="card-samurai text-center py-12">
                     <p className="font-sans text-foreground/60">
-                      Nenhuma moto em processamento
+                      {buscaEmAndamento ? "Nenhuma moto encontrada" : "Nenhuma moto em processamento"}
                     </p>
                   </Card>
                 ) : (
-                  motosEmAndamento.map((moto) => renderMotoCard(moto))
+                  motosEmAndamentoFiltradas.map((moto) => renderMotoCard(moto))
                 )}
               </TabsContent>
 
               <TabsContent value="concluidos" className="space-y-6 mt-6">
-                {motosConcluidas.length === 0 ? (
+                {/* Barra de busca */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-foreground/40" size={18} />
+                  <Input
+                    placeholder="Buscar por modelo, placa, cliente ou serviço..."
+                    value={buscaConcluidos}
+                    onChange={(e) => setBuscaConcluidos(e.target.value)}
+                    className="pl-10 bg-card border-foreground/10"
+                  />
+                </div>
+                
+                {motosConcluidasFiltradas.length === 0 ? (
                   <Card className="card-samurai text-center py-12">
                     <p className="font-sans text-foreground/60">
-                      Nenhum serviço concluído
+                      {buscaConcluidos ? "Nenhuma moto encontrada" : "Nenhum serviço concluído"}
                     </p>
                   </Card>
                 ) : (
-                  motosConcluidas.map((moto) => renderMotoCard(moto))
+                  motosConcluidasFiltradas.map((moto) => renderMotoCard(moto))
                 )}
               </TabsContent>
             </Tabs>
