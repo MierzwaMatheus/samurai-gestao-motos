@@ -44,6 +44,8 @@ import { MotoCompleta } from "@shared/types";
 import GaleriaFotos from "@/components/GaleriaFotos";
 import GaleriaFotosMoto from "@/components/GaleriaFotosMoto";
 import { HistoryModal } from "@/components/HistoryModal";
+import { useGerarOS } from "@/hooks/useGerarOS";
+import { FileText } from "lucide-react";
 
 export default function Oficina() {
   const entradaRepo = useMemo(() => new SupabaseEntradaRepository(), []);
@@ -93,6 +95,16 @@ export default function Oficina() {
   const { adicionar: adicionarFoto, loading: loadingFoto } = useAdicionarFotoStatus(adicionarFotoStatusUseCase);
   const { atualizar: atualizarProgresso, loading: loadingProgresso } = useAtualizarProgressoStatus(atualizarProgressoStatusUseCase);
   const { deletar: deletarEntrada, loading: loadingDeletar } = useDeletarEntrada(entradaRepo);
+
+  const { gerar: gerarOS, loading: loadingOS } = useGerarOS(
+    entradaRepo,
+    clienteRepo,
+    motoRepo,
+    fotoRepo,
+    tipoServicoRepo,
+    servicoPersonalizadoRepo,
+    storageApi
+  );
 
   const getStatusLabel = (status: string) => {
     switch (status) {
@@ -190,6 +202,16 @@ export default function Oficina() {
       recarregar();
     } else {
       toast.error("Erro ao excluir entrada");
+    }
+  };
+
+  const handleGerarOS = async (entradaId: string) => {
+    try {
+      await gerarOS(entradaId);
+      toast.success("Ordem de Serviço gerada com sucesso!");
+    } catch (err) {
+      const mensagem = err instanceof Error ? err.message : "Erro ao gerar OS";
+      toast.error(mensagem);
     }
   };
 
@@ -428,6 +450,19 @@ export default function Oficina() {
           )}
         </Button>
       </div>
+
+      {/* Botão Gerar OS (Apenas Concluídos) */}
+      {moto.status === "concluido" && (
+        <Button
+          onClick={() => handleGerarOS(moto.entradaId)}
+          variant="outline"
+          className="w-full mt-2 text-sm"
+          disabled={loadingOS}
+        >
+          <FileText size={16} className="mr-2" />
+          {loadingOS ? "Gerando..." : "Gerar OS"}
+        </Button>
+      )}
     </Card>
   );
 
