@@ -5,11 +5,20 @@ import { TipoServicoRepository } from "@/domain/interfaces/TipoServicoRepository
  * Segue o princípio de Responsabilidade Única (SRP)
  */
 export class AtualizarTipoServicoUseCase {
-  constructor(private tipoServicoRepo: TipoServicoRepository) {}
+  constructor(private tipoServicoRepo: TipoServicoRepository) { }
 
   async execute(
     id: string,
-    dados: Partial<{ nome: string; precoOficina: number; precoParticular: number }>
+    dados: Partial<{
+      nome: string;
+      precoOficina: number;
+      precoParticular: number;
+      categoria: "padrao" | "alinhamento";
+      precoOficinaComOleo: number;
+      precoOficinaSemOleo: number;
+      precoParticularComOleo: number;
+      precoParticularSemOleo: number;
+    }>
   ): Promise<{ id: string; nome: string; precoOficina: number; precoParticular: number }> {
     // Validações de negócio
     if (dados.nome !== undefined) {
@@ -53,6 +62,11 @@ export class AtualizarTipoServicoUseCase {
       nome: dados.nome?.trim(),
       precoOficina: dados.precoOficina,
       precoParticular: dados.precoParticular,
+      categoria: dados.categoria,
+      precoOficinaComOleo: dados.precoOficinaComOleo,
+      precoOficinaSemOleo: dados.precoOficinaSemOleo,
+      precoParticularComOleo: dados.precoParticularComOleo,
+      precoParticularSemOleo: dados.precoParticularSemOleo,
     });
 
     return {
