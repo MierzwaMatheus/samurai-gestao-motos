@@ -29,24 +29,44 @@ interface RequestBody {
 }
 
 Deno.serve(async (req: Request) => {
+  // Log imediato para verificar se o código está sendo executado
+  console.log("=== EDGE FUNCTION EXECUTANDO ===");
+  console.log("Method:", req.method);
+  console.log("URL:", req.url);
+  
   // CORS headers
   const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers":
       "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
   };
 
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    console.log("OPTIONS request - retornando 204");
+    return new Response(null, { 
+      status: 204,
+      headers: corsHeaders 
+    });
   }
 
+  console.log("=== Request recebida (não OPTIONS) ===");
+
   try {
+    console.log("=== Iniciando criação de usuário ===");
+    
     // Obter credenciais do Supabase
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    if (!supabaseUrl || !supabaseServiceKey) {
+    console.log("Supabase URL presente:", !!supabaseUrl);
+    console.log("Supabase Anon Key presente:", !!supabaseAnonKey);
+    console.log("Supabase Service Key presente:", !!supabaseServiceKey);
+
+    if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
+      console.error("Configuração do Supabase incompleta");
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -61,7 +81,11 @@ Deno.serve(async (req: Request) => {
 
     // Obter token de autenticação do usuário que está fazendo a requisição
     const authHeader = req.headers.get("authorization");
+    console.log("Auth header presente:", !!authHeader);
+    console.log("Auth header length:", authHeader?.length || 0);
+    
     if (!authHeader) {
+      console.error("Token de autenticação não fornecido");
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -74,23 +98,31 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Criar cliente Supabase com token do usuário para verificar permissões
-    const supabaseClient = createClient(supabaseUrl, supabaseServiceKey, {
+    // Criar cliente Supabase com anon key e o token do usuário no header
+    // A anon key pode validar JWTs quando o token está no header Authorization
+    console.log("Criando cliente Supabase com anon key...");
+    const supabaseClientForAuth = createClient(supabaseUrl, supabaseAnonKey, {
       global: {
         headers: {
           Authorization: authHeader,
         },
       },
     });
-
-    // Verificar se o usuário está autenticado e é admin
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
     
-    if (userError || !user) {
+    // Validar JWT e obter usuário autenticado
+    // O getUser() sem parâmetros usa o token do header Authorization
+    console.log("Validando usuário...");
+    const { data: { user }, error: userError } = await supabaseClientForAuth.auth.getUser();
+    
+    if (userError) {
+      console.error("Erro ao validar usuário:", JSON.stringify(userError, null, 2));
+      console.error("Código do erro:", userError.status);
+      console.error("Mensagem do erro:", userError.message);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: "Usuário não autenticado" 
+          error: userError.message || "Token inválido ou usuário não autenticado",
+          code: userError.status || 401
         }),
         {
           status: 401,
@@ -98,6 +130,25 @@ Deno.serve(async (req: Request) => {
         }
       );
     }
+    
+    if (!user) {
+      console.error("Usuário não encontrado após validação");
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: "Usuário não encontrado" 
+        }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+    
+    console.log("Usuário autenticado com sucesso:", user.id, user.email);
+    
+    // Usar o mesmo cliente para consultar a tabela usuarios (respeitando RLS)
+    const supabaseClient = supabaseClientForAuth;
 
     // Verificar se o usuário é admin
     const { data: usuarioAdmin, error: adminError } = await supabaseClient
@@ -123,12 +174,17 @@ Deno.serve(async (req: Request) => {
     // Parse request body
     let body: RequestBody;
     try {
-      body = await req.json();
+      const bodyText = await req.text();
+      console.log("Body recebido (raw):", bodyText);
+      body = JSON.parse(bodyText);
+      console.log("Body parseado:", JSON.stringify(body, null, 2));
     } catch (parseError) {
+      console.error("Erro ao fazer parse do body:", parseError);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: "Body da requisição inválido" 
+          error: "Body da requisição inválido",
+          details: parseError instanceof Error ? parseError.message : String(parseError)
         }),
         {
           status: 400,
@@ -138,13 +194,16 @@ Deno.serve(async (req: Request) => {
     }
 
     const { email, senha, nome, permissao = "usuario" } = body;
+    console.log("Dados extraídos:", { email: email ? "presente" : "ausente", senha: senha ? "presente" : "ausente", nome: nome ? "presente" : "ausente", permissao });
 
     // Validações
     if (!email || !senha || !nome) {
+      console.error("Validação falhou: campos obrigatórios ausentes", { email: !!email, senha: !!senha, nome: !!nome });
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: "Email, senha e nome são obrigatórios" 
+          error: "Email, senha e nome são obrigatórios",
+          details: { email: !!email, senha: !!senha, nome: !!nome }
         }),
         {
           status: 400,
@@ -192,9 +251,9 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Criar cliente Supabase com service role key para criar usuário
+    // Criar cliente admin para operações administrativas (criar usuário)
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-
+    
     // Criar usuário no auth.users
     const { data: authUser, error: createAuthError } = await supabaseAdmin.auth.admin.createUser({
       email,
