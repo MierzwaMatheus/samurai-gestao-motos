@@ -8,11 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { 
-  ImagePlus, 
-  Loader2, 
-  X, 
-  ChevronDown, 
+import {
+  ImagePlus,
+  Loader2,
+  X,
+  ChevronDown,
   ChevronUp,
   Camera,
   CheckCircle2,
@@ -22,7 +22,8 @@ import {
   CheckCircle,
   Trash2,
   Settings,
-  Search
+  Search,
+  History
 } from "lucide-react";
 import { toast } from "sonner";
 import { SupabaseEntradaRepository } from "@/infrastructure/repositories/SupabaseEntradaRepository";
@@ -39,8 +40,10 @@ import { AtualizarProgressoStatusUseCase } from "@/domain/usecases/AtualizarProg
 import { useAdicionarFotoStatus } from "@/hooks/useAdicionarFotoStatus";
 import { useAtualizarProgressoStatus } from "@/hooks/useAtualizarProgressoStatus";
 import { useDeletarEntrada } from "@/hooks/useDeletarEntrada";
+import { MotoCompleta } from "@shared/types";
 import GaleriaFotos from "@/components/GaleriaFotos";
 import GaleriaFotosMoto from "@/components/GaleriaFotosMoto";
+import { HistoryModal } from "@/components/HistoryModal";
 
 export default function Oficina() {
   const entradaRepo = useMemo(() => new SupabaseEntradaRepository(), []);
@@ -61,6 +64,8 @@ export default function Oficina() {
   const [progressoFoto, setProgressoFoto] = useState<number | undefined>(undefined);
   const [buscaEmAndamento, setBuscaEmAndamento] = useState("");
   const [buscaConcluidos, setBuscaConcluidos] = useState("");
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [selectedEntradaId, setSelectedEntradaId] = useState<string | null>(null);
 
   // Ler parâmetro 'cliente' da URL e preencher a busca
   useEffect(() => {
@@ -203,6 +208,11 @@ export default function Oficina() {
     }));
   };
 
+  const handleOpenHistory = (entradaId: string) => {
+    setSelectedEntradaId(entradaId);
+    setHistoryModalOpen(true);
+  };
+
   // Separar motos por status
   const motosEmAndamento = motos.filter(
     (moto) => moto.status === "pendente" || moto.status === "alinhando"
@@ -210,21 +220,21 @@ export default function Oficina() {
   const motosConcluidas = motos.filter((moto) => moto.status === "concluido");
 
   // Filtrar motos por busca
-  const filtrarMotos = (motos: typeof motos, busca: string) => {
-    if (!busca.trim()) return motos;
-    
+  const filtrarMotos = (motosParaFiltrar: MotoCompleta[], busca: string) => {
+    if (!busca.trim()) return motosParaFiltrar;
+
     const buscaLower = busca.toLowerCase();
-    return motos.filter((moto) => {
+    return motosParaFiltrar.filter((moto: MotoCompleta) => {
       const modeloMatch = moto.modelo?.toLowerCase().includes(buscaLower);
       const placaMatch = moto.placa?.toLowerCase().includes(buscaLower);
       const clienteMatch = moto.cliente?.toLowerCase().includes(buscaLower);
       const tiposServicoMatch = moto.tiposServico?.some(
-        (tipo) => tipo.nome.toLowerCase().includes(buscaLower)
+        (tipo: any) => tipo.nome.toLowerCase().includes(buscaLower)
       );
       const servicosPersonalizadosMatch = moto.servicosPersonalizados?.some(
-        (servico) => servico.nome.toLowerCase().includes(buscaLower)
+        (servico: any) => servico.nome.toLowerCase().includes(buscaLower)
       );
-      
+
       return modeloMatch || placaMatch || clienteMatch || tiposServicoMatch || servicosPersonalizadosMatch;
     });
   };
@@ -232,179 +242,188 @@ export default function Oficina() {
   const motosEmAndamentoFiltradas = filtrarMotos(motosEmAndamento, buscaEmAndamento);
   const motosConcluidasFiltradas = filtrarMotos(motosConcluidas, buscaConcluidos);
 
-  const renderMotoCard = (moto: typeof motos[0]) => (
-              <Card
-                key={moto.entradaId}
-                className="card-samurai hover:shadow-lg transition-shadow"
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex-1">
-                    <div className="flex justify-between items-start">
-                      <h3 className="font-serif text-xl text-foreground">
-                        {moto.modelo}
-                      </h3>
-                      <button
-                        onClick={() => handleDeletarEntrada(moto.entradaId)}
-                        disabled={loadingDeletar}
-                        className="text-foreground/40 hover:text-red-600 transition-colors p-1"
-                        title="Excluir entrada"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
-                    <p className="font-sans text-sm text-foreground/60">
-                      {moto.placa ? `Placa: ${moto.placa} • ` : ""}{moto.cliente}
-                    </p>
-                    {/* Tipos de Serviço */}
-                    {moto.tiposServico && moto.tiposServico.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mt-2">
-                        {moto.tiposServico.map((tipo) => (
-                          <Badge
-                            key={tipo.id}
-                            variant="secondary"
-                            className="flex items-center gap-1 text-xs"
-                          >
-                            <Wrench size={10} />
-                            {tipo.nome}
-                            {tipo.quantidade > 1 && ` (${tipo.quantidade}x)`}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                    {/* Serviços Personalizados */}
-                    {moto.servicosPersonalizados && moto.servicosPersonalizados.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mt-2">
-                        {moto.servicosPersonalizados.map((servico) => (
-                          <Badge
-                            key={servico.id}
-                            variant="outline"
-                            className="flex items-center gap-1 text-xs border-accent/30"
-                          >
-                            <Settings size={10} />
-                            {servico.nome}
-                            {servico.quantidade > 1 && ` (${servico.quantidade}x)`}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
+  const renderMotoCard = (moto: MotoCompleta) => (
+    <Card
+      key={moto.entradaId}
+      className="card-samurai hover:shadow-lg transition-shadow"
+    >
+      <div className="flex justify-between items-start mb-4">
+        <div className="flex-1">
+          <div className="flex justify-between items-start">
+            <h3 className="font-serif text-xl text-foreground">
+              {moto.modelo}
+            </h3>
+            <button
+              onClick={() => handleDeletarEntrada(moto.entradaId)}
+              disabled={loadingDeletar}
+              className="text-foreground/40 hover:text-red-600 transition-colors p-1"
+              title="Excluir entrada"
+            >
+              <Trash2 size={18} />
+            </button>
+          </div>
+          <div className="flex justify-between items-center">
+            <p className="font-sans text-sm text-foreground/60">
+              {moto.placa ? `Placa: ${moto.placa} • ` : ""}{moto.cliente}
+            </p>
+            <button
+              onClick={() => handleOpenHistory(moto.entradaId)}
+              className="text-foreground/40 hover:text-accent transition-colors p-1"
+              title="Ver histórico"
+            >
+              <History size={16} />
+            </button>
+          </div>
+          {/* Tipos de Serviço */}
+          {moto.tiposServico && moto.tiposServico.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {moto.tiposServico.map((tipo) => (
+                <Badge
+                  key={tipo.id}
+                  variant="secondary"
+                  className="flex items-center gap-1 text-xs"
+                >
+                  <Wrench size={10} />
+                  {tipo.nome}
+                  {tipo.quantidade > 1 && ` (${tipo.quantidade}x)`}
+                </Badge>
+              ))}
+            </div>
+          )}
+          {/* Serviços Personalizados */}
+          {moto.servicosPersonalizados && moto.servicosPersonalizados.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {moto.servicosPersonalizados.map((servico) => (
+                <Badge
+                  key={servico.id}
+                  variant="outline"
+                  className="flex items-center gap-1 text-xs border-accent/30"
+                >
+                  <Settings size={10} />
+                  {servico.nome}
+                  {servico.quantidade > 1 && ` (${servico.quantidade}x)`}
+                </Badge>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
 
-                {/* Barra de Progresso */}
-                <div className="mb-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <span
-                      className={`font-serif text-xs tracking-tighter ${getStatusColor(
-                        moto.status
-                      )}`}
-                    >
-                      {getStatusLabel(moto.status)}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleAtualizarProgresso(moto.entradaId, Math.max(0, moto.progresso - 10))}
-                        className="text-foreground/40 hover:text-accent transition-colors"
-                        disabled={loadingProgresso}
-                      >
-                        <ChevronDown size={16} />
-                      </button>
-                      <span className="font-sans text-xs text-foreground/60 min-w-[3rem] text-center">
-                        {moto.progresso}%
-                      </span>
-                      <button
-                        onClick={() => handleAtualizarProgresso(moto.entradaId, Math.min(100, moto.progresso + 10))}
-                        className="text-foreground/40 hover:text-accent transition-colors"
-                        disabled={loadingProgresso}
-                      >
-                        <ChevronUp size={16} />
-                      </button>
-                    </div>
-                  </div>
-                  <Progress
-                    value={moto.progresso}
-                    className="h-2 bg-foreground/10"
-                  />
-                </div>
+      {/* Barra de Progresso */}
+      <div className="mb-4">
+        <div className="flex justify-between items-center mb-2">
+          <span
+            className={`font-serif text-xs tracking-tighter ${getStatusColor(
+              moto.status
+            )}`}
+          >
+            {getStatusLabel(moto.status)}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleAtualizarProgresso(moto.entradaId, Math.max(0, moto.progresso - 10))}
+              className="text-foreground/40 hover:text-accent transition-colors"
+              disabled={loadingProgresso}
+            >
+              <ChevronDown size={16} />
+            </button>
+            <span className="font-sans text-xs text-foreground/60 min-w-[3rem] text-center">
+              {moto.progresso}%
+            </span>
+            <button
+              onClick={() => handleAtualizarProgresso(moto.entradaId, Math.min(100, moto.progresso + 10))}
+              className="text-foreground/40 hover:text-accent transition-colors"
+              disabled={loadingProgresso}
+            >
+              <ChevronUp size={16} />
+            </button>
+          </div>
+        </div>
+        <Progress
+          value={moto.progresso}
+          className="h-2 bg-foreground/10"
+        />
+      </div>
 
-                {/* Galeria de Fotos da Moto (do orçamento) */}
-                {moto.fotos && moto.fotos.length > 0 && (
-                  <div className="mb-4">
-                    <button
-                      onClick={() => toggleGaleriaMoto(moto.entradaId)}
-                      className="w-full flex items-center justify-between p-2 bg-foreground/5 rounded-sm hover:bg-foreground/10 transition-colors"
-                    >
-                      <span className="font-sans text-sm text-foreground/80">
-                        {moto.fotos.length} foto(s) do orçamento
-                      </span>
-                      {mostrarGaleriaMoto[moto.entradaId] ? (
-                        <ChevronUp size={16} className="text-foreground/40" />
-                      ) : (
-                        <ChevronDown size={16} className="text-foreground/40" />
-                      )}
-                    </button>
-                    {mostrarGaleriaMoto[moto.entradaId] && (
-                      <GaleriaFotosMoto fotos={moto.fotos} />
-                    )}
-                  </div>
-                )}
+      {/* Galeria de Fotos da Moto (do orçamento) */}
+      {moto.fotos && moto.fotos.length > 0 && (
+        <div className="mb-4">
+          <button
+            onClick={() => toggleGaleriaMoto(moto.entradaId)}
+            className="w-full flex items-center justify-between p-2 bg-foreground/5 rounded-sm hover:bg-foreground/10 transition-colors"
+          >
+            <span className="font-sans text-sm text-foreground/80">
+              {moto.fotos.length} foto(s) do orçamento
+            </span>
+            {mostrarGaleriaMoto[moto.entradaId] ? (
+              <ChevronUp size={16} className="text-foreground/40" />
+            ) : (
+              <ChevronDown size={16} className="text-foreground/40" />
+            )}
+          </button>
+          {mostrarGaleriaMoto[moto.entradaId] && (
+            <GaleriaFotosMoto fotos={moto.fotos} />
+          )}
+        </div>
+      )}
 
-                {/* Galeria de Fotos de Status */}
-                {moto.fotosStatus && moto.fotosStatus.length > 0 && (
-                  <div className="mb-4">
-                    <button
-                      onClick={() => toggleGaleria(moto.entradaId)}
-                      className="w-full flex items-center justify-between p-2 bg-foreground/5 rounded-sm hover:bg-foreground/10 transition-colors"
-                    >
-                      <span className="font-sans text-sm text-foreground/80">
-                        {moto.fotosStatus.length} foto(s) de status
-                      </span>
-                      {mostrarGaleria[moto.entradaId] ? (
-                        <ChevronUp size={16} className="text-foreground/40" />
-                      ) : (
-                        <ChevronDown size={16} className="text-foreground/40" />
-                      )}
-                    </button>
-                    {mostrarGaleria[moto.entradaId] && (
-                      <GaleriaFotos fotos={moto.fotosStatus} />
-                    )}
-                  </div>
-                )}
+      {/* Galeria de Fotos de Status */}
+      {moto.fotosStatus && moto.fotosStatus.length > 0 && (
+        <div className="mb-4">
+          <button
+            onClick={() => toggleGaleria(moto.entradaId)}
+            className="w-full flex items-center justify-between p-2 bg-foreground/5 rounded-sm hover:bg-foreground/10 transition-colors"
+          >
+            <span className="font-sans text-sm text-foreground/80">
+              {moto.fotosStatus.length} foto(s) de status
+            </span>
+            {mostrarGaleria[moto.entradaId] ? (
+              <ChevronUp size={16} className="text-foreground/40" />
+            ) : (
+              <ChevronDown size={16} className="text-foreground/40" />
+            )}
+          </button>
+          {mostrarGaleria[moto.entradaId] && (
+            <GaleriaFotos fotos={moto.fotosStatus} />
+          )}
+        </div>
+      )}
 
-                {/* Ações */}
-                <div className="flex gap-2">
-                  <Button
-                    onClick={() => handleAbrirModalFoto(moto.entradaId)}
-                    variant="outline"
-                    className="flex-1 text-sm"
-                  >
-                    <Camera size={16} className="mr-2" />
-                    Adicionar Foto
-                  </Button>
-                  <Button
-                    onClick={() => handleAtualizarStatus(moto.entradaId, moto.status === "pendente" ? "alinhando" : moto.status === "alinhando" ? "concluido" : "pendente")}
-                    variant="default"
-                    className="flex-1 text-sm bg-accent hover:brightness-110"
-                    disabled={loadingProgresso}
-                  >
-                    {moto.status === "pendente" ? (
-                      <>
-                        <PlayCircle size={16} className="mr-2" />
-                        Iniciar
-                      </>
-                    ) : moto.status === "alinhando" ? (
-                      <>
-                        <CheckCircle2 size={16} className="mr-2" />
-                        Concluir
-                      </>
-                    ) : (
-                      <>
-                        <Clock size={16} className="mr-2" />
-                        Reabrir
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </Card>
+      {/* Ações */}
+      <div className="flex gap-2">
+        <Button
+          onClick={() => handleAbrirModalFoto(moto.entradaId)}
+          variant="outline"
+          className="flex-1 text-sm"
+        >
+          <Camera size={16} className="mr-2" />
+          Adicionar Foto
+        </Button>
+        <Button
+          onClick={() => handleAtualizarStatus(moto.entradaId, moto.status === "pendente" ? "alinhando" : moto.status === "alinhando" ? "concluido" : "pendente")}
+          variant="default"
+          className="flex-1 text-sm bg-accent hover:brightness-110"
+          disabled={loadingProgresso}
+        >
+          {moto.status === "pendente" ? (
+            <>
+              <PlayCircle size={16} className="mr-2" />
+              Iniciar
+            </>
+          ) : moto.status === "alinhando" ? (
+            <>
+              <CheckCircle2 size={16} className="mr-2" />
+              Concluir
+            </>
+          ) : (
+            <>
+              <Clock size={16} className="mr-2" />
+              Reabrir
+            </>
+          )}
+        </Button>
+      </div>
+    </Card>
   );
 
   return (
@@ -456,7 +475,7 @@ export default function Oficina() {
                     className="pl-10 bg-card border-foreground/10"
                   />
                 </div>
-                
+
                 {motosEmAndamentoFiltradas.length === 0 ? (
                   <Card className="card-samurai text-center py-12">
                     <p className="font-sans text-foreground/60">
@@ -464,7 +483,7 @@ export default function Oficina() {
                     </p>
                   </Card>
                 ) : (
-                  motosEmAndamentoFiltradas.map((moto) => renderMotoCard(moto))
+                  motosEmAndamentoFiltradas.map((moto: MotoCompleta) => renderMotoCard(moto))
                 )}
               </TabsContent>
 
@@ -479,7 +498,7 @@ export default function Oficina() {
                     className="pl-10 bg-card border-foreground/10"
                   />
                 </div>
-                
+
                 {motosConcluidasFiltradas.length === 0 ? (
                   <Card className="card-samurai text-center py-12">
                     <p className="font-sans text-foreground/60">
@@ -487,7 +506,7 @@ export default function Oficina() {
                     </p>
                   </Card>
                 ) : (
-                  motosConcluidasFiltradas.map((moto) => renderMotoCard(moto))
+                  motosConcluidasFiltradas.map((moto: MotoCompleta) => renderMotoCard(moto))
                 )}
               </TabsContent>
             </Tabs>
@@ -574,6 +593,18 @@ export default function Oficina() {
       )}
 
       <BottomNav active="oficina" />
+
+      {selectedEntradaId && (
+        <HistoryModal
+          isOpen={historyModalOpen}
+          onClose={() => {
+            setHistoryModalOpen(false);
+            setSelectedEntradaId(null);
+          }}
+          entidadeId={selectedEntradaId}
+          entidadeTipo="entrada"
+        />
+      )}
     </div>
   );
 }
