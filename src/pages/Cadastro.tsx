@@ -375,8 +375,8 @@ export default function Cadastro() {
 
     try {
       const resultado = await calcularFrete(cepDestino);
-      // Frete ida e volta = dobra o valor
-      const freteIdaVolta = resultado.valorFrete * 2;
+      // Frete ida e volta = quadruplica o valor
+      const freteIdaVolta = resultado.valorFrete * 4;
       setFormData({ ...formData, frete: freteIdaVolta });
       toast.success(
         `Frete calculado (ida e volta): R$ ${freteIdaVolta.toFixed(2)} (${resultado.distanciaKm.toFixed(2)} km)`
