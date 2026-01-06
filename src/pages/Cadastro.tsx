@@ -105,12 +105,12 @@ export default function Cadastro() {
       // Calcula data de entrega: 2 semanas (14 dias) após a data de entrada
       const dataEntregaCalculada = new Date(formData.dataEntrada);
       dataEntregaCalculada.setDate(dataEntregaCalculada.getDate() + 14);
-      
+
       // Só atualiza se a data de entrega atual for diferente da calculada
       // Isso evita loops infinitos e atualizações desnecessárias
       const dataEntregaAtual = formData.dataEntrega;
-      if (!dataEntregaAtual || 
-          dataEntregaAtual.getTime() !== dataEntregaCalculada.getTime()) {
+      if (!dataEntregaAtual ||
+        dataEntregaAtual.getTime() !== dataEntregaCalculada.getTime()) {
         setFormData((prev) => ({
           ...prev,
           dataEntrega: dataEntregaCalculada,
@@ -138,7 +138,7 @@ export default function Cadastro() {
         const tipos = await Promise.all(
           tiposIds.map((id) => tipoServicoRepo.buscarPorId(id))
         );
-        
+
         tipos.forEach((tipo, index) => {
           if (tipo) {
             const preco = tipoPreco === "particular" ? tipo.precoParticular : tipo.precoOficina;
@@ -165,7 +165,7 @@ export default function Cadastro() {
     if (dadosSalvos) {
       try {
         const dadosParsed = JSON.parse(dadosSalvos);
-        
+
         // Converte strings de data para Date objects (JSON.stringify converte Date para string ISO)
         // Campos opcionais só são preenchidos se tiverem valores
         const dadosCadastro: DadosCadastro = {
@@ -185,35 +185,35 @@ export default function Cadastro() {
           observacoes: "", // NÃO preenche observações/detalhes
           fotos: dadosParsed.fotos && Array.isArray(dadosParsed.fotos) && dadosParsed.fotos.length > 0 ? dadosParsed.fotos : [],
           frete: dadosParsed.frete || 0,
-          dataOrcamento: dadosParsed.dataOrcamento 
-            ? (dadosParsed.dataOrcamento instanceof Date 
-                ? dadosParsed.dataOrcamento 
-                : new Date(dadosParsed.dataOrcamento))
+          dataOrcamento: dadosParsed.dataOrcamento
+            ? (dadosParsed.dataOrcamento instanceof Date
+              ? dadosParsed.dataOrcamento
+              : new Date(dadosParsed.dataOrcamento))
             : undefined,
-          dataEntrada: dadosParsed.dataEntrada 
-            ? (dadosParsed.dataEntrada instanceof Date 
-                ? dadosParsed.dataEntrada 
-                : new Date(dadosParsed.dataEntrada))
+          dataEntrada: dadosParsed.dataEntrada
+            ? (dadosParsed.dataEntrada instanceof Date
+              ? dadosParsed.dataEntrada
+              : new Date(dadosParsed.dataEntrada))
             : undefined,
-          dataEntrega: dadosParsed.dataEntrega 
-            ? (dadosParsed.dataEntrega instanceof Date 
-                ? dadosParsed.dataEntrega 
-                : new Date(dadosParsed.dataEntrega))
+          dataEntrega: dadosParsed.dataEntrega
+            ? (dadosParsed.dataEntrega instanceof Date
+              ? dadosParsed.dataEntrega
+              : new Date(dadosParsed.dataEntrega))
             : undefined,
-          servicos: dadosParsed.servicos && Array.isArray(dadosParsed.servicos) && dadosParsed.servicos.length > 0 
-            ? dadosParsed.servicos 
+          servicos: dadosParsed.servicos && Array.isArray(dadosParsed.servicos) && dadosParsed.servicos.length > 0
+            ? dadosParsed.servicos
             : (dadosParsed.tiposServico && Array.isArray(dadosParsed.tiposServico) && dadosParsed.tiposServico.length > 0
               ? dadosParsed.tiposServico.map((id: string) => ({ tipoServicoId: id, quantidade: 1 }))
               : []),
-          servicosPersonalizados: dadosParsed.servicosPersonalizados && Array.isArray(dadosParsed.servicosPersonalizados) && dadosParsed.servicosPersonalizados.length > 0 
-            ? dadosParsed.servicosPersonalizados 
+          servicosPersonalizados: dadosParsed.servicosPersonalizados && Array.isArray(dadosParsed.servicosPersonalizados) && dadosParsed.servicosPersonalizados.length > 0
+            ? dadosParsed.servicosPersonalizados
             : [],
         };
 
         // Preenche o formulário com os dados
         setFormData(dadosCadastro);
         setTipo(dadosCadastro.tipo);
-        
+
         // Se há clienteId, ativa o modo de cliente existente
         if (dadosCadastro.clienteId) {
           setUsarClienteExistente(true);
@@ -231,7 +231,7 @@ export default function Cadastro() {
         if (dadosCadastro.servicos && dadosCadastro.servicos.length > 0) {
           setServicos(dadosCadastro.servicos);
         }
-        
+
         if (dadosCadastro.servicosPersonalizados && dadosCadastro.servicosPersonalizados.length > 0) {
           setServicosPersonalizados(dadosCadastro.servicosPersonalizados);
         }
@@ -243,7 +243,7 @@ export default function Cadastro() {
 
         // Remove os dados do sessionStorage após usar
         sessionStorage.removeItem("dadosOrcamentoParaOS");
-        
+
         toast.success("Formulário preenchido com dados do orçamento!");
       } catch (err) {
         console.error("Erro ao processar dados do orçamento:", err);
@@ -341,7 +341,7 @@ export default function Cadastro() {
 
   const handleFotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    
+
     // Valida tamanho (5MB por arquivo)
     const maxSize = 5 * 1024 * 1024;
     const arquivosValidos = files.filter((file) => {
@@ -354,7 +354,7 @@ export default function Cadastro() {
 
     // Adiciona arquivos
     setFotosArquivos((prev) => [...prev, ...arquivosValidos]);
-    
+
     // Cria preview
     arquivosValidos.forEach((file) => {
       const reader = new FileReader();
@@ -394,7 +394,7 @@ export default function Cadastro() {
       toast.error("Selecione um cliente existente");
       return;
     }
-    
+
     if (!usarClienteExistente && (!formData.cliente || !formData.telefone)) {
       toast.error("Preencha todos os campos obrigatórios (*)");
       return;
@@ -437,14 +437,14 @@ export default function Cadastro() {
         const resultados = await Promise.allSettled(
           fotosArquivos.map((file) => uploadFoto(file, entradaId, "moto"))
         );
-        
+
         // Verifica se houve erros
         const erros = resultados.filter((r) => r.status === "rejected");
         if (erros.length > 0) {
           console.error("Erros no upload de fotos:", erros);
           toast.error(`${erros.length} foto(s) falharam no upload`);
         }
-        
+
         const sucessos = resultados.filter((r) => r.status === "fulfilled");
         if (sucessos.length > 0) {
           console.log(`${sucessos.length} foto(s) salvas com sucesso na tabela`);
@@ -452,7 +452,7 @@ export default function Cadastro() {
       }
 
       toast.success(`${tipo === "entrada" ? "Entrada" : "Orçamento"} registrado com sucesso!`);
-      
+
       // Reset form
       setFormData({
         tipo: "entrada",
