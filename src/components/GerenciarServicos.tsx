@@ -31,6 +31,7 @@ import { Label } from "@/components/ui/label";
 import { Search, Check, Plus, X, Wrench, Edit, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
 import { Card } from "@/components/ui/card";
 
 interface GerenciarServicosProps {
@@ -68,6 +69,7 @@ export function GerenciarServicos({
   const [dialogQuantidadeOpen, setDialogQuantidadeOpen] = useState(false);
   const [tipoParaQuantidade, setTipoParaQuantidade] = useState<TipoServico | null>(null);
   const [quantidadeInput, setQuantidadeInput] = useState("1");
+  const [comOleoInput, setComOleoInput] = useState(false);
   const [dialogPersonalizadoOpen, setDialogPersonalizadoOpen] = useState(false);
   const [servicoPersonalizadoNome, setServicoPersonalizadoNome] = useState("");
   const [servicoPersonalizadoValor, setServicoPersonalizadoValor] = useState("");
@@ -129,7 +131,7 @@ export function GerenciarServicos({
       setNovoTipoNome("");
       setNovoTipoValor("");
       setDialogCriarOpen(false);
-      
+
       // Atualizar lista
       const resultados = await listarTiposServicoUseCase.execute();
       setTiposServico(resultados);
@@ -165,12 +167,12 @@ export function GerenciarServicos({
       } else {
         updateData.precoOficina = valor;
       }
-      
+
       await atualizarTipoServicoUseCase.execute(tipoEditando.id, updateData);
       toast.success("Tipo de serviço atualizado com sucesso!");
       setDialogEditarOpen(false);
       setTipoEditando(null);
-      
+
       // Atualizar lista
       const resultados = await listarTiposServicoUseCase.execute();
       setTiposServico(resultados);
@@ -186,6 +188,7 @@ export function GerenciarServicos({
     setTipoParaQuantidade(tipo);
     const servicoExistente = servicos.find((s) => s.tipoServicoId === tipo.id);
     setQuantidadeInput(servicoExistente?.quantidade.toString() || "1");
+    setComOleoInput(servicoExistente?.comOleo || false);
     setDialogQuantidadeOpen(true);
   };
 
@@ -203,17 +206,22 @@ export function GerenciarServicos({
       // Atualizar quantidade
       onServicosChange(
         servicos.map((s) =>
-          s.tipoServicoId === tipoParaQuantidade.id ? { ...s, quantidade } : s
+          s.tipoServicoId === tipoParaQuantidade.id ? { ...s, quantidade, comOleo: comOleoInput } : s
         )
       );
     } else {
       // Adicionar novo serviço
-      onServicosChange([...servicos, { tipoServicoId: tipoParaQuantidade.id, quantidade }]);
+      onServicosChange([...servicos, {
+        tipoServicoId: tipoParaQuantidade.id,
+        quantidade,
+        comOleo: comOleoInput
+      }]);
     }
 
     setDialogQuantidadeOpen(false);
     setTipoParaQuantidade(null);
     setQuantidadeInput("1");
+    setComOleoInput(false);
   };
 
   const handleRemoverServico = (tipoServicoId: string) => {
@@ -265,7 +273,7 @@ export function GerenciarServicos({
   };
 
   // Buscar tipos selecionados com dados completos
-  const [tiposSelecionadosCompletos, setTiposSelecionadosCompletos] = useState<(TipoServico & { quantidade: number })[]>([]);
+  const [tiposSelecionadosCompletos, setTiposSelecionadosCompletos] = useState<(TipoServico & { quantidade: number; comOleo?: boolean })[]>([]);
 
   useEffect(() => {
     const buscarTipos = async () => {
@@ -277,12 +285,17 @@ export function GerenciarServicos({
       const tipos = await Promise.all(
         servicos.map(async (servico) => {
           const tipo = await tipoServicoRepo.buscarPorId(servico.tipoServicoId);
-          return tipo ? { ...tipo, quantidade: servico.quantidade } : null;
+          if (!tipo) return null;
+          return {
+            ...tipo,
+            quantidade: servico.quantidade,
+            comOleo: servico.comOleo
+          } as TipoServico & { quantidade: number; comOleo?: boolean };
         })
       );
 
       setTiposSelecionadosCompletos(
-        tipos.filter((t): t is TipoServico & { quantidade: number } => t !== null)
+        tipos.filter((t): t is TipoServico & { quantidade: number; comOleo?: boolean } => t !== null)
       );
     };
 
@@ -292,7 +305,24 @@ export function GerenciarServicos({
   // Calcular valor total
   const valorTotal = useMemo(() => {
     const valorTipos = tiposSelecionadosCompletos.reduce(
-      (acc, tipo) => acc + (tipoPreco === "particular" ? tipo.precoParticular : tipo.precoOficina) * tipo.quantidade,
+      (acc, tipo) => {
+        let preco = 0;
+        if (tipo.categoria === "alinhamento") {
+          // Decide price based on comOleo and tipoPreco
+          if (tipo.comOleo) {
+            preco = tipoPreco === "particular"
+              ? (tipo.precoParticularComOleo ?? tipo.precoParticular)
+              : (tipo.precoOficinaComOleo ?? tipo.precoOficina);
+          } else {
+            preco = tipoPreco === "particular"
+              ? (tipo.precoParticularSemOleo ?? tipo.precoParticular)
+              : (tipo.precoOficinaSemOleo ?? tipo.precoOficina);
+          }
+        } else {
+          preco = tipoPreco === "particular" ? tipo.precoParticular : tipo.precoOficina;
+        }
+        return acc + preco * tipo.quantidade;
+      },
       0
     );
     const valorPersonalizados = servicosPersonalizados.reduce(
@@ -512,13 +542,41 @@ export function GerenciarServicos({
                 placeholder="1"
               />
             </div>
+            {tipoParaQuantidade?.categoria === "alinhamento" && (
+              <div className="flex items-center space-x-2">
+                <Switch id="com-oleo" checked={comOleoInput} onCheckedChange={setComOleoInput} />
+                <Label htmlFor="com-oleo">Com Troca de Óleo</Label>
+              </div>
+            )}
+
             {tipoParaQuantidade && (
               <div className="p-3 bg-foreground/5 rounded-lg">
                 <p className="text-sm text-foreground/60">
-                  Valor unitário: R$ {(tipoPreco === "particular" ? tipoParaQuantidade.precoParticular : tipoParaQuantidade.precoOficina).toFixed(2)}
+                  Valor unitário: R$ {(() => {
+                    if (tipoParaQuantidade.categoria === "alinhamento") {
+                      if (comOleoInput) {
+                        return (tipoPreco === "particular" ? (tipoParaQuantidade.precoParticularComOleo ?? tipoParaQuantidade.precoParticular) : (tipoParaQuantidade.precoOficinaComOleo ?? tipoParaQuantidade.precoOficina)).toFixed(2);
+                      } else {
+                        return (tipoPreco === "particular" ? (tipoParaQuantidade.precoParticularSemOleo ?? tipoParaQuantidade.precoParticular) : (tipoParaQuantidade.precoOficinaSemOleo ?? tipoParaQuantidade.precoOficina)).toFixed(2);
+                      }
+                    }
+                    return (tipoPreco === "particular" ? tipoParaQuantidade.precoParticular : tipoParaQuantidade.precoOficina).toFixed(2);
+                  })()}
                 </p>
                 <p className="text-sm font-semibold">
-                  Total: R$ {((tipoPreco === "particular" ? tipoParaQuantidade.precoParticular : tipoParaQuantidade.precoOficina) * (parseInt(quantidadeInput) || 1)).toFixed(2)}
+                  Total: R$ {(() => {
+                    let unitario = 0;
+                    if (tipoParaQuantidade.categoria === "alinhamento") {
+                      if (comOleoInput) {
+                        unitario = (tipoPreco === "particular" ? (tipoParaQuantidade.precoParticularComOleo ?? tipoParaQuantidade.precoParticular) : (tipoParaQuantidade.precoOficinaComOleo ?? tipoParaQuantidade.precoOficina));
+                      } else {
+                        unitario = (tipoPreco === "particular" ? (tipoParaQuantidade.precoParticularSemOleo ?? tipoParaQuantidade.precoParticular) : (tipoParaQuantidade.precoOficinaSemOleo ?? tipoParaQuantidade.precoOficina));
+                      }
+                    } else {
+                      unitario = (tipoPreco === "particular" ? tipoParaQuantidade.precoParticular : tipoParaQuantidade.precoOficina);
+                    }
+                    return (unitario * (parseInt(quantidadeInput) || 1)).toFixed(2);
+                  })()}
                 </p>
               </div>
             )}
@@ -544,9 +602,26 @@ export function GerenciarServicos({
                     <div className="flex items-center gap-2">
                       <Wrench size={14} className="text-accent" />
                       <span className="font-medium text-sm">{tipo.nome}</span>
+                      {tipo.categoria === "alinhamento" && (
+                        <Badge variant="outline" className="text-[10px] ml-2">
+                          {tipo.comOleo ? "Com Óleo" : "Sem Óleo"}
+                        </Badge>
+                      )}
                     </div>
                     <div className="text-xs text-foreground/60 mt-1">
-                      {tipo.quantidade}x R$ {(tipoPreco === "particular" ? tipo.precoParticular : tipo.precoOficina).toFixed(2)} = R$ {((tipoPreco === "particular" ? tipo.precoParticular : tipo.precoOficina) * tipo.quantidade).toFixed(2)}
+                      {tipo.quantidade}x R$ {(() => {
+                        let preco = 0;
+                        if (tipo.categoria === "alinhamento") {
+                          if (tipo.comOleo) {
+                            preco = tipoPreco === "particular" ? (tipo.precoParticularComOleo ?? tipo.precoParticular) : (tipo.precoOficinaComOleo ?? tipo.precoOficina);
+                          } else {
+                            preco = tipoPreco === "particular" ? (tipo.precoParticularSemOleo ?? tipo.precoParticular) : (tipo.precoOficinaSemOleo ?? tipo.precoOficina);
+                          }
+                        } else {
+                          preco = tipoPreco === "particular" ? tipo.precoParticular : tipo.precoOficina;
+                        }
+                        return `${preco.toFixed(2)} = R$ ${(preco * tipo.quantidade).toFixed(2)}`;
+                      })()}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">

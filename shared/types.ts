@@ -17,6 +17,7 @@ export interface Endereco {
 export interface ServicoSelecionado {
   tipoServicoId: string;
   quantidade: number;
+  comOleo?: boolean;
 }
 
 export interface ServicoPersonalizadoInput {
@@ -155,8 +156,13 @@ export interface MotoCompleta extends Moto {
 export interface TipoServico {
   id: string;
   nome: string;
+  categoria?: "padrao" | "alinhamento";
   precoOficina: number;
   precoParticular: number;
+  precoOficinaComOleo?: number;
+  precoOficinaSemOleo?: number;
+  precoParticularComOleo?: number;
+  precoParticularSemOleo?: number;
   quantidadeServicos: number;
   criadoEm: Date;
   atualizadoEm: Date;
@@ -174,6 +180,7 @@ export interface TipoServicoLegado {
 
 export interface TipoServicoComQuantidade extends TipoServico {
   quantidade: number; // Quantidade usada nesta entrada/orçamento
+  comOleo?: boolean;
 }
 
 export interface ServicoPersonalizado {

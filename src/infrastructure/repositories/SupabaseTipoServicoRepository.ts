@@ -14,6 +14,11 @@ export class SupabaseTipoServicoRepository implements TipoServicoRepository {
         nome: tipoServico.nome,
         preco_oficina: tipoServico.precoOficina || 0,
         preco_particular: tipoServico.precoParticular || 0,
+        categoria: tipoServico.categoria || "padrao",
+        preco_oficina_com_oleo: tipoServico.precoOficinaComOleo,
+        preco_oficina_sem_oleo: tipoServico.precoOficinaSemOleo,
+        preco_particular_com_oleo: tipoServico.precoParticularComOleo,
+        preco_particular_sem_oleo: tipoServico.precoParticularSemOleo,
         quantidade_servicos: 0,
       })
       .select()
@@ -75,6 +80,11 @@ export class SupabaseTipoServicoRepository implements TipoServicoRepository {
     if (dados.nome !== undefined) updateData.nome = dados.nome;
     if (dados.precoOficina !== undefined) updateData.preco_oficina = dados.precoOficina;
     if (dados.precoParticular !== undefined) updateData.preco_particular = dados.precoParticular;
+    if (dados.categoria !== undefined) updateData.categoria = dados.categoria;
+    if (dados.precoOficinaComOleo !== undefined) updateData.preco_oficina_com_oleo = dados.precoOficinaComOleo;
+    if (dados.precoOficinaSemOleo !== undefined) updateData.preco_oficina_sem_oleo = dados.precoOficinaSemOleo;
+    if (dados.precoParticularComOleo !== undefined) updateData.preco_particular_com_oleo = dados.precoParticularComOleo;
+    if (dados.precoParticularSemOleo !== undefined) updateData.preco_particular_sem_oleo = dados.precoParticularSemOleo;
 
     const { data, error } = await supabase
       .from("tipos_servico")
@@ -101,7 +111,7 @@ export class SupabaseTipoServicoRepository implements TipoServicoRepository {
     }
   }
 
-  async vincularTiposServicoAEntrada(entradaId: string, servicos: Array<{ tipoServicoId: string; quantidade: number }>): Promise<void> {
+  async vincularTiposServicoAEntrada(entradaId: string, servicos: Array<{ tipoServicoId: string; quantidade: number; comOleo?: boolean }>): Promise<void> {
     if (servicos.length === 0) {
       return;
     }
@@ -121,6 +131,7 @@ export class SupabaseTipoServicoRepository implements TipoServicoRepository {
       entrada_id: entradaId,
       tipo_servico_id: servico.tipoServicoId,
       quantidade: servico.quantidade || 1,
+      com_oleo: servico.comOleo || false,
     }));
 
     const { error: insertError } = await supabase
@@ -136,7 +147,7 @@ export class SupabaseTipoServicoRepository implements TipoServicoRepository {
     // Busca os vínculos com quantidade
     const { data: vinculos, error: vinculosError } = await supabase
       .from("entradas_tipos_servico")
-      .select("tipo_servico_id, quantidade")
+      .select("tipo_servico_id, quantidade, com_oleo")
       .eq("entrada_id", entradaId);
 
     if (vinculosError) {
@@ -168,6 +179,7 @@ export class SupabaseTipoServicoRepository implements TipoServicoRepository {
       return {
         ...this.mapToTipoServico(tipo),
         quantidade: vinculo?.quantidade || 1,
+        comOleo: vinculo?.com_oleo || false,
       };
     });
   }
@@ -178,6 +190,11 @@ export class SupabaseTipoServicoRepository implements TipoServicoRepository {
       nome: data.nome,
       precoOficina: parseFloat(data.preco_oficina ?? data.valor ?? 0) || 0, // Suporte a migração: usa valor se preco_oficina não existir
       precoParticular: parseFloat(data.preco_particular ?? data.valor ?? 0) || 0, // Suporte a migração: usa valor se preco_particular não existir
+      categoria: data.categoria || "padrao",
+      precoOficinaComOleo: data.preco_oficina_com_oleo ? parseFloat(data.preco_oficina_com_oleo) : undefined,
+      precoOficinaSemOleo: data.preco_oficina_sem_oleo ? parseFloat(data.preco_oficina_sem_oleo) : undefined,
+      precoParticularComOleo: data.preco_particular_com_oleo ? parseFloat(data.preco_particular_com_oleo) : undefined,
+      precoParticularSemOleo: data.preco_particular_sem_oleo ? parseFloat(data.preco_particular_sem_oleo) : undefined,
       quantidadeServicos: data.quantidade_servicos || 0,
       criadoEm: new Date(data.criado_em),
       atualizadoEm: new Date(data.atualizado_em),
