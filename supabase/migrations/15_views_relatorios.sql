@@ -81,13 +81,19 @@ CREATE OR REPLACE VIEW vw_conversao_orcamentos AS
 SELECT
   DATE_TRUNC('month', e.criado_em) AS mes,
   COUNT(*) FILTER (WHERE e.tipo = 'orcamento') AS orcamentos_criados,
-  COUNT(*) FILTER (WHERE e.tipo = 'entrada') AS orcamentos_convertidos,
+  COUNT(*) FILTER (WHERE e.tipo = 'entrada' AND EXISTS (
+    SELECT 1 FROM public.orcamentos o WHERE o.entrada_id = e.id AND o.status = 'convertido'
+  )) AS orcamentos_convertidos,
   ROUND(
-    COUNT(*) FILTER (WHERE e.tipo = 'entrada')::NUMERIC /
+    COUNT(*) FILTER (WHERE e.tipo = 'entrada' AND EXISTS (
+      SELECT 1 FROM public.orcamentos o WHERE o.entrada_id = e.id AND o.status = 'convertido'
+    ))::NUMERIC /
     NULLIF(COUNT(*) FILTER (WHERE e.tipo = 'orcamento'), 0) * 100,
     2
   ) AS taxa_conversao_percentual,
-  COUNT(*) FILTER (WHERE e.tipo = 'orcamento' AND e.status = 'cancelado') AS orcamentos_expirados
+  COUNT(*) FILTER (WHERE e.tipo = 'orcamento' AND EXISTS (
+    SELECT 1 FROM public.orcamentos o WHERE o.entrada_id = e.id AND o.status = 'expirado'
+  )) AS orcamentos_expirados
 FROM public.entradas e
 WHERE e.criado_em >= NOW() - INTERVAL '12 months'
 GROUP BY DATE_TRUNC('month', e.criado_em)

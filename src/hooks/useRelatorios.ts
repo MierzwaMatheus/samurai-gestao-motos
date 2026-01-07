@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/infrastructure/supabase/client';
 import type {
   FaturamentoMensal,
@@ -23,7 +23,7 @@ interface UseQueryResult<T> {
   refetch: () => void;
 }
 
-function useSupabaseQuery<T>(query: any): UseQueryResult<T> {
+function useSupabaseQuery<T>(queryFn: () => any, deps: any[] = []) {
   const [data, setData] = useState<T[] | T | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -32,6 +32,7 @@ function useSupabaseQuery<T>(query: any): UseQueryResult<T> {
     setIsLoading(true);
     setError(null);
     try {
+      const query = queryFn();
       const { data: result, error: err } = await query;
       if (err) throw err;
       setData(result);
@@ -44,28 +45,28 @@ function useSupabaseQuery<T>(query: any): UseQueryResult<T> {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, deps);
 
   return { data, isLoading, error, refetch: fetchData };
 }
 
 export function useFaturamentoMensal(periodo: FiltrosRelatorio['periodo'] = '12m') {
-  const intervalo = getIntervaloSql(periodo);
-
   return useSupabaseQuery<FaturamentoMensal[]>(
-    supabase
-      .from('vw_faturamento_mensal')
-      .select('*')
-      .gte('mes', intervalo)
-      .order('mes', { ascending: false })
+    () => {
+      const intervalo = getIntervaloSql(periodo);
+      return supabase
+        .from('vw_faturamento_mensal')
+        .select('*')
+        .gte('mes', intervalo)
+        .order('mes', { ascending: false });
+    },
+    [periodo]
   );
 }
 
 export function useFaturamentoPorServico(periodo: FiltrosRelatorio['periodo'] = '12m') {
-  const intervalo = getIntervaloSql(periodo);
-
   return useSupabaseQuery<FaturamentoPorServico[]>(
-    supabase
+    () => supabase
       .from('vw_faturamento_por_servico')
       .select('*')
       .order('faturamento_total', { ascending: false })
@@ -75,7 +76,7 @@ export function useFaturamentoPorServico(periodo: FiltrosRelatorio['periodo'] = 
 
 export function useTopClientes(limit: number = 20) {
   return useSupabaseQuery<TopCliente[]>(
-    supabase
+    () => supabase
       .from('vw_top_clientes')
       .select('*')
       .order('faturamento_total', { ascending: false })
@@ -85,7 +86,7 @@ export function useTopClientes(limit: number = 20) {
 
 export function useServicosMaisRealizados() {
   return useSupabaseQuery<ServicoMaisRealizado[]>(
-    supabase
+    () => supabase
       .from('vw_servicos_mais_realizados')
       .select('*')
       .order('total_execucoes', { ascending: false })
@@ -94,19 +95,18 @@ export function useServicosMaisRealizados() {
 }
 
 export function useConversaoOrcamentos(periodo: FiltrosRelatorio['periodo'] = '12m') {
-  const intervalo = getIntervaloSql(periodo);
-
   return useSupabaseQuery<ConversaoOrcamento[]>(
-    supabase
+    () => supabase
       .from('vw_conversao_orcamentos')
       .select('*')
-      .order('mes', { ascending: false })
+      .order('mes', { ascending: false }),
+    [periodo]
   );
 }
 
 export function useStatusEntradas() {
   return useSupabaseQuery<StatusEntrada[]>(
-    supabase
+    () => supabase
       .from('vw_status_entradas')
       .select('*')
       .order('quantidade', { ascending: false })
@@ -115,7 +115,7 @@ export function useStatusEntradas() {
 
 export function useStatusEntrega() {
   return useSupabaseQuery<StatusEntrega[]>(
-    supabase
+    () => supabase
       .from('vw_status_entrega')
       .select('*')
       .order('quantidade', { ascending: false })
@@ -123,20 +123,22 @@ export function useStatusEntrega() {
 }
 
 export function useResumoDiario(periodo: FiltrosRelatorio['periodo'] = '90d') {
-  const intervalo = getIntervaloSql(periodo);
-
   return useSupabaseQuery<ResumoDiario[]>(
-    supabase
-      .from('vw_resumo_diario')
-      .select('*')
-      .gte('data', intervalo)
-      .order('data', { ascending: false })
+    () => {
+      const intervalo = getIntervaloSql(periodo);
+      return supabase
+        .from('vw_resumo_diario')
+        .select('*')
+        .gte('data', intervalo)
+        .order('data', { ascending: false });
+    },
+    [periodo]
   );
 }
 
 export function useDistribuicaoCategoria() {
   return useSupabaseQuery<DistribuicaoCategoria[]>(
-    supabase
+    () => supabase
       .from('vw_distribuicao_categoria')
       .select('*')
       .order('faturamento_categoria', { ascending: false })
@@ -145,34 +147,38 @@ export function useDistribuicaoCategoria() {
 
 export function useMetricasPerformance() {
   return useSupabaseQuery<MetricasPerformance>(
-    supabase
+    () => supabase
       .from('vw_metricas_performance')
       .select('*')
       .single()
   );
 }
 
-export function useNovosClientes(periodo: FiltrosRelatorio['periodo'] = '12m') {
-  const intervalo = getIntervaloSql(periodo);
-
+export function useNovosClientesPeriodo(periodo: FiltrosRelatorio['periodo'] = '12m') {
   return useSupabaseQuery<NovosClientesPeriodo[]>(
-    supabase
-      .from('vw_novos_clientes_periodo')
-      .select('*')
-      .gte('mes', intervalo)
-      .order('mes', { ascending: false })
+    () => {
+      const intervalo = getIntervaloSql(periodo);
+      return supabase
+        .from('vw_novos_clientes_periodo')
+        .select('*')
+        .gte('mes', intervalo)
+        .order('mes', { ascending: false });
+    },
+    [periodo]
   );
 }
 
 export function useFotosPeriodo(periodo: FiltrosRelatorio['periodo'] = '12m') {
-  const intervalo = getIntervaloSql(periodo);
-
   return useSupabaseQuery<FotosPeriodo[]>(
-    supabase
-      .from('vw_fotos_periodo')
-      .select('*')
-      .gte('mes', intervalo)
-      .order('mes', { ascending: false })
+    () => {
+      const intervalo = getIntervaloSql(periodo);
+      return supabase
+        .from('vw_fotos_periodo')
+        .select('*')
+        .gte('mes', intervalo)
+        .order('mes', { ascending: false });
+    },
+    [periodo]
   );
 }
 

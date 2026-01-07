@@ -1,4 +1,6 @@
 import React from 'react';
+import Header from '@/components/Header';
+import BottomNav from '@/components/BottomNav';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { TrendingUp, DollarSign, Users, Wrench, Package, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -63,18 +65,20 @@ export function Relatorios() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Relatórios e Métricas</h1>
-          <p className="text-muted-foreground">Acompanhe o desempenho do seu negócio</p>
-        </div>
-        <Select value={periodo} onValueChange={(v: FiltrosRelatorio['periodo']) => setPeriodo(v)}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="7d">Últimos 7 dias</SelectItem>
+    <div className="min-h-screen bg-background">
+      <Header title="Relatórios" />
+      <div className="container mx-auto p-6 space-y-6 pb-24 pt-20">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Relatórios e Métricas</h1>
+            <p className="text-muted-foreground">Acompanhe o desempenho do seu negócio</p>
+          </div>
+          <Select value={periodo} onValueChange={(v: FiltrosRelatorio['periodo']) => setPeriodo(v)}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="7d">Últimos 7 dias</SelectItem>
             <SelectItem value="30d">Últimos 30 dias</SelectItem>
             <SelectItem value="90d">Últimos 90 dias</SelectItem>
             <SelectItem value="12m">Últimos 12 meses</SelectItem>
@@ -165,24 +169,6 @@ export function Relatorios() {
             </Card>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Conversão de Orçamentos</CardTitle>
-              <CardDescription>Taxa de conversão de orçamentos em entradas</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={dadosConversaoChart}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="mesFormatado" />
-                  <YAxis />
-                  <Tooltip formatter={(value: number) => `${value}%`} />
-                  <Legend />
-                  <Line type="monotone" dataKey="taxa_conversao_percentual" stroke="#8b5cf6" strokeWidth={2} name="Taxa de Conversão (%)" />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
         </TabsContent>
 
         <TabsContent value="servicos" className="space-y-4">
@@ -388,6 +374,8 @@ export function Relatorios() {
           </div>
         </TabsContent>
       </Tabs>
+      </div>
+      <BottomNav />
     </div>
   );
 }
