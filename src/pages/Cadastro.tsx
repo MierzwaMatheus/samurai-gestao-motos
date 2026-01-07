@@ -627,8 +627,8 @@ export default function Cadastro() {
           </div>
 
           {/* Toggle Tipo de Preço */}
-          <div className="flex items-center justify-between p-4 bg-card border border-foreground/10 rounded-lg">
-            <div className="space-y-0.5">
+          <div className="p-4 bg-card border border-foreground/10 rounded-lg space-y-4">
+            <div className="space-y-1">
               <Label htmlFor="tipo-preco" className="text-sm font-medium">
                 Tipo de Preço
               </Label>
@@ -636,10 +636,11 @@ export default function Cadastro() {
                 Selecione se é serviço de oficina ou particular
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="grid grid-cols-2 gap-2 w-full">
               <Button
                 variant={tipoPreco === "oficina" ? "default" : "outline"}
                 size="sm"
+                className="w-full"
                 onClick={() => {
                   setTipoPreco("oficina");
                   setFormData({ ...formData, tipoPreco: "oficina" });
@@ -650,6 +651,7 @@ export default function Cadastro() {
               <Button
                 variant={tipoPreco === "particular" ? "default" : "outline"}
                 size="sm"
+                className="w-full"
                 onClick={() => {
                   setTipoPreco("particular");
                   setFormData({ ...formData, tipoPreco: "particular" });
