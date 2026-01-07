@@ -1,11 +1,11 @@
-import { Plus, Wrench, FileText, Users, Cog, UserCog } from "lucide-react";
+import { Plus, Wrench, FileText, Users, Cog, UserCog, BarChart3 } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMemo, useEffect, useState } from "react";
 import { SupabaseUsuarioRepository } from "@/infrastructure/repositories/SupabaseUsuarioRepository";
 
 interface BottomNavProps {
-  active: "cadastro" | "oficina" | "orcamentos" | "clientes" | "servicos" | "usuarios" | "configuracoes";
+  active: "cadastro" | "oficina" | "orcamentos" | "clientes" | "servicos" | "usuarios" | "configuracoes" | "relatorios";
 }
 
 export default function BottomNav({ active }: BottomNavProps) {
@@ -37,6 +37,7 @@ export default function BottomNav({ active }: BottomNavProps) {
     { id: "orcamentos", label: "Orçamentos", icon: FileText, href: "/orcamentos" },
     { id: "clientes", label: "Clientes", icon: Users, href: "/clientes" },
     { id: "servicos", label: "Serviços", icon: Cog, href: "/servicos" },
+    { id: "relatorios", label: "Relatórios", icon: BarChart3, href: "/relatorios" },
     ...(isAdmin
       ? [{ id: "usuarios", label: "Usuários", icon: UserCog, href: "/usuarios" }]
       : []),
