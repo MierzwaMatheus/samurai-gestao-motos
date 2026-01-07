@@ -275,15 +275,16 @@ export async function gerarOSPDF(dados: DadosOS): Promise<Blob> {
           ${renderServicosETotal(dados.tiposServico, dados.servicosPersonalizados, dados.entrada.descricao, dados.entrada.frete, valorTotal)}
         </table>
 
+         ${dados.entrada.descricao ? `
          <!-- OBSERVAÇÃO -->
         <div class="section-header">OBSERVAÇÕES</div>
         <table style="width: 100%;">
           <tr>
             <td style="height: 60px; border: none;">
-              ${dados.entrada.observacoes || ''}
+              ${dados.entrada.descricao}
             </td>
           </tr>
-        </table>
+        </table>` : ''}
 
         <!-- IMAGENS -->
         ${(fotosOrcamento.length > 0 || fotosServico.length > 0) ? `
