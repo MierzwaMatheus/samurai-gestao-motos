@@ -74,7 +74,7 @@ export function Relatorios() {
             <p className="text-muted-foreground">Acompanhe o desempenho do seu negócio</p>
           </div>
           <Select value={periodo} onValueChange={(v: FiltrosRelatorio['periodo']) => setPeriodo(v)}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-[180px] hidden">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -390,10 +390,6 @@ function MetricCard({ title, value, icon, description, trend }: { title: string;
       <CardContent>
         <div className="text-2xl font-bold">{value}</div>
         <p className="text-xs text-muted-foreground">{description}</p>
-        <div className="mt-2 flex items-center text-xs text-green-600">
-          <TrendingUp className="h-3 w-3 mr-1" />
-          {trend} vs período anterior
-        </div>
       </CardContent>
     </Card>
   );
