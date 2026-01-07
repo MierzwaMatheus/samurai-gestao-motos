@@ -793,13 +793,29 @@ export default function Cadastro() {
             <Label className="text-xs uppercase tracking-widest">
               Valor Cobrado (Calculado)
             </Label>
-            <Card className="p-4 bg-accent/10 border-accent/20">
+            <Card className="p-4 bg-accent/10 border-accent/20 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="font-sans text-sm text-foreground/60">
-                  Total dos serviços
+                  Valor dos serviços
                 </span>
-                <span className="font-serif text-2xl text-accent">
+                <span className="font-serif text-lg">
                   R$ {valorTotalCalculado.toFixed(2)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="font-sans text-sm text-foreground/60">
+                  Frete
+                </span>
+                <span className="font-serif text-lg">
+                  R$ {(formData.frete ?? 0).toFixed(2)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between pt-2 border-t border-accent/20">
+                <span className="font-sans text-sm font-medium text-foreground">
+                  Total
+                </span>
+                <span className="font-serif text-2xl font-bold text-accent">
+                  R$ {(valorTotalCalculado + (formData.frete ?? 0)).toFixed(2)}
                 </span>
               </div>
             </Card>
