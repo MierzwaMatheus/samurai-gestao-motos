@@ -190,6 +190,7 @@ export default function Cadastro() {
           clienteId: dadosParsed.clienteId,
           moto: dadosParsed.moto || "",
           valorCobrado: dadosParsed.valorCobrado,
+          tipoPreco: dadosParsed.tipoPreco || "oficina",
           // Campos opcionais - só preenche se tiverem valores
           telefone: dadosParsed.telefone && dadosParsed.telefone.trim() !== "" ? dadosParsed.telefone : "",
           endereco: dadosParsed.endereco && dadosParsed.endereco.trim() !== "" ? dadosParsed.endereco : "",
@@ -228,6 +229,11 @@ export default function Cadastro() {
         // Preenche o formulário com os dados
         setFormData(dadosCadastro);
         setTipo(dadosCadastro.tipo);
+
+        // Carrega o tipoPreco se existir nos dados
+        if (dadosCadastro.tipoPreco) {
+          setTipoPreco(dadosCadastro.tipoPreco);
+        }
 
         // Se há clienteId, ativa o modo de cliente existente
         if (dadosCadastro.clienteId) {
