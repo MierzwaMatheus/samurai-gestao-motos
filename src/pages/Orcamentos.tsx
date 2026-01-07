@@ -298,6 +298,16 @@ export default function Orcamentos() {
                             </div>
                           )}
 
+                          {/* Detalhes do Valor */}
+                        <div className="space-y-1.5 mb-3">
+                          {/* Valor dos Serviços */}
+                          {orcamento.valorCobrado && (
+                            <div className="flex items-center gap-1.5 text-xs text-foreground/60">
+                              <Wrench size={12} />
+                              <span>Serviços: R$ {(orcamento.valorCobrado - (orcamento.frete || 0)).toFixed(2)}</span>
+                            </div>
+                          )}
+
                           {/* Frete */}
                           {orcamento.frete > 0 && (
                             <div className="flex items-center gap-1.5 text-xs text-foreground/60">
@@ -305,6 +315,7 @@ export default function Orcamentos() {
                               <span>Frete: R$ {orcamento.frete.toFixed(2)}</span>
                             </div>
                           )}
+                        </div>
 
                           {/* Descrição */}
                           {orcamento.descricao && (

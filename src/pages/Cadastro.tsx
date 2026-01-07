@@ -815,7 +815,7 @@ export default function Cadastro() {
             {tipo === "orcamento" && (
               <div className="space-y-2">
                 <Label htmlFor="descricao" className="text-xs uppercase tracking-widest">
-                  Descrição do Serviço *
+                  Descrição do Serviço
                 </Label>
                 <Textarea
                   id="descricao"
@@ -824,7 +824,6 @@ export default function Cadastro() {
                   value={formData.descricao || ""}
                   onChange={handleInputChange}
                   className="bg-card border-foreground/10 min-h-24"
-                  required
                 />
               </div>
             )}
