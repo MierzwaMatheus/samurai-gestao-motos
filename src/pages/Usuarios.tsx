@@ -249,27 +249,28 @@ export default function Usuarios() {
 
   return (
     <div className="min-h-screen bg-background admin-background">
-      <Header title="Gerenciar Usuários" />
+      <Header title="Usuários" />
 
       <main className="pt-20 pb-32 px-6">
         <div className="max-w-4xl mx-auto space-y-6">
           {/* Barra de busca e botão criar */}
-          <div className="flex gap-3">
-            <div className="flex-1 relative">
+          <div className="flex flex-col sm:flex-row gap-3 w-full">
+            <div className="relative w-full sm:w-[calc(100%-160px)]">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-foreground/40" size={18} />
               <Input
                 placeholder="Buscar por nome ou email..."
                 value={busca}
                 onChange={(e) => setBusca(e.target.value)}
-                className="pl-10 bg-card border-foreground/10"
+                className="pl-10 bg-card border-foreground/10 h-11 w-full"
               />
             </div>
             <Button
               onClick={handleAbrirDialogCriar}
-              className="btn-samurai whitespace-nowrap"
+              className="btn-samurai h-11 w-full sm:w-auto sm:min-w-[140px]"
             >
-              <Plus size={18} className="mr-2" />
-              Novo Usuário
+              <Plus size={18} className="mr-2 shrink-0" />
+              <span className="hidden sm:inline">Novo Usuário</span>
+              <span className="sm:hidden">Novo</span>
             </Button>
           </div>
 
@@ -294,46 +295,73 @@ export default function Usuarios() {
             <div className="space-y-3">
               {usuariosFiltrados.map((usuario) => (
                 <Card key={usuario.id} className="bg-card border-foreground/10 p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className="p-2 bg-accent/10 rounded-lg">
-                          {usuario.ativo ? (
-                            <UserCheck size={20} className="text-accent" />
-                          ) : (
-                            <UserX size={20} className="text-foreground/40" />
-                          )}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-semibold text-foreground">{usuario.nome}</h3>
-                            <Badge
-                              variant={usuario.permissao === "admin" ? "default" : "secondary"}
-                              className="text-xs"
-                            >
-                              {usuario.permissao === "admin" ? "Admin" : "Usuário"}
-                            </Badge>
-                            {!usuario.ativo && (
-                              <Badge variant="outline" className="text-xs">
-                                Inativo
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-4 mt-1">
-                            <div className="flex items-center gap-1.5 text-sm text-foreground/60">
-                              <Mail size={14} />
-                              <span>{usuario.email}</span>
-                            </div>
-                          </div>
-                        </div>
+                  <div className="flex items-start gap-3 sm:gap-4">
+                    {/* Avatar/Ícone de Status */}
+                    <div className="shrink-0 p-2.5 bg-accent/10 rounded-lg">
+                      {usuario.ativo ? (
+                        <UserCheck size={20} className="text-accent" />
+                      ) : (
+                        <UserX size={20} className="text-foreground/40" />
+                      )}
+                    </div>
+
+                    {/* Informações do Usuário */}
+                    <div className="flex-1 min-w-0 space-y-2">
+                      {/* Nome e Badges */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-semibold text-foreground text-sm sm:text-base truncate">
+                          {usuario.nome}
+                        </h3>
+                        <Badge
+                          variant={usuario.permissao === "admin" ? "default" : "secondary"}
+                          className="text-xs shrink-0"
+                        >
+                          {usuario.permissao === "admin" ? "Admin" : "Usuário"}
+                        </Badge>
+                        {!usuario.ativo && (
+                          <Badge variant="outline" className="text-xs shrink-0">
+                            Inativo
+                          </Badge>
+                        )}
+                      </div>
+
+                      {/* Email */}
+                      <div className="flex items-center gap-1.5 text-xs sm:text-sm text-foreground/60">
+                        <Mail size={12} className="shrink-0" />
+                        <span className="truncate">{usuario.email}</span>
+                      </div>
+
+                      {/* Ações - Mobile */}
+                      <div className="flex gap-2 pt-1 sm:hidden">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleAbrirDialogEditar(usuario)}
+                          className="flex-1 h-9 text-xs"
+                        >
+                          <Edit size={14} className="mr-1.5 shrink-0" />
+                          <span className="truncate">Editar</span>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleAbrirDialogDeletar(usuario)}
+                          className="flex-1 h-9 text-xs text-red-500 hover:text-red-600 border-red-200 hover:border-red-300"
+                        >
+                          <Trash2 size={14} className="mr-1.5 shrink-0" />
+                          <span className="truncate">Excluir</span>
+                        </Button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+
+                    {/* Ações - Desktop */}
+                    <div className="hidden sm:flex items-center gap-2 shrink-0">
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleAbrirDialogEditar(usuario)}
                         className="h-9"
+                        title="Editar usuário"
                       >
                         <Edit size={16} />
                       </Button>
@@ -342,6 +370,7 @@ export default function Usuarios() {
                         size="sm"
                         onClick={() => handleAbrirDialogDeletar(usuario)}
                         className="h-9 text-red-500 hover:text-red-600"
+                        title="Excluir usuário"
                       >
                         <Trash2 size={16} />
                       </Button>
@@ -356,7 +385,7 @@ export default function Usuarios() {
 
       {/* Dialog Criar Usuário */}
       <Dialog open={mostrarDialogCriar} onOpenChange={setMostrarDialogCriar}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Criar Novo Usuário</DialogTitle>
             <DialogDescription>
@@ -373,7 +402,7 @@ export default function Usuarios() {
                   setFormDataCriar({ ...formDataCriar, nome: e.target.value })
                 }
                 placeholder="Nome completo"
-                className="bg-card border-foreground/10"
+                className="bg-card border-foreground/10 h-11"
               />
             </div>
             <div>
@@ -386,7 +415,7 @@ export default function Usuarios() {
                   setFormDataCriar({ ...formDataCriar, email: e.target.value })
                 }
                 placeholder="usuario@exemplo.com"
-                className="bg-card border-foreground/10"
+                className="bg-card border-foreground/10 h-11"
               />
             </div>
             <div>
@@ -399,7 +428,7 @@ export default function Usuarios() {
                   setFormDataCriar({ ...formDataCriar, senha: e.target.value })
                 }
                 placeholder="Mínimo 6 caracteres"
-                className="bg-card border-foreground/10"
+                className="bg-card border-foreground/10 h-11"
               />
             </div>
             <div>
@@ -410,7 +439,7 @@ export default function Usuarios() {
                   setFormDataCriar({ ...formDataCriar, permissao: value })
                 }
               >
-                <SelectTrigger className="bg-card border-foreground/10">
+                <SelectTrigger className="bg-card border-foreground/10 h-11">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -419,24 +448,24 @@ export default function Usuarios() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex gap-3 pt-2">
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
               <Button
                 variant="outline"
                 onClick={handleFecharDialogCriar}
-                className="flex-1"
+                className="flex-1 h-11"
                 disabled={salvando}
               >
                 Cancelar
               </Button>
               <Button
                 onClick={handleCriarUsuario}
-                className="flex-1 btn-samurai"
+                className="flex-1 btn-samurai h-11"
                 disabled={salvando}
               >
                 {salvando ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Criando...
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin shrink-0" />
+                    <span className="truncate">Criando...</span>
                   </>
                 ) : (
                   "Criar"
@@ -449,7 +478,7 @@ export default function Usuarios() {
 
       {/* Dialog Editar Usuário */}
       <Dialog open={mostrarDialogEditar} onOpenChange={setMostrarDialogEditar}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Editar Usuário</DialogTitle>
             <DialogDescription>
@@ -466,7 +495,7 @@ export default function Usuarios() {
                   setFormDataEditar({ ...formDataEditar, nome: e.target.value })
                 }
                 placeholder="Nome completo"
-                className="bg-card border-foreground/10"
+                className="bg-card border-foreground/10 h-11"
               />
             </div>
             <div>
@@ -477,7 +506,7 @@ export default function Usuarios() {
                   setFormDataEditar({ ...formDataEditar, permissao: value })
                 }
               >
-                <SelectTrigger className="bg-card border-foreground/10">
+                <SelectTrigger className="bg-card border-foreground/10 h-11">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -494,7 +523,7 @@ export default function Usuarios() {
                   setFormDataEditar({ ...formDataEditar, ativo: value === "ativo" })
                 }
               >
-                <SelectTrigger className="bg-card border-foreground/10">
+                <SelectTrigger className="bg-card border-foreground/10 h-11">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -503,24 +532,24 @@ export default function Usuarios() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex gap-3 pt-2">
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
               <Button
                 variant="outline"
                 onClick={handleFecharDialogEditar}
-                className="flex-1"
+                className="flex-1 h-11"
                 disabled={salvando}
               >
                 Cancelar
               </Button>
               <Button
                 onClick={handleSalvarEdicao}
-                className="flex-1 btn-samurai"
+                className="flex-1 btn-samurai h-11"
                 disabled={salvando}
               >
                 {salvando ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Salvando...
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin shrink-0" />
+                    <span className="truncate">Salvando...</span>
                   </>
                 ) : (
                   "Salvar"

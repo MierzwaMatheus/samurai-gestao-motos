@@ -264,16 +264,6 @@ export async function gerarOSPDF(dados: DadosOS): Promise<Blob> {
           </tr>
         </table>
 
-         <!-- TIPO DE SERVIÇO -->
-        <div class="section-header">TIPO DE SERVIÇO</div>
-        <table style="width: 100%;">
-          <tr>
-             <td style="padding: 0; border: none;">
-               ${renderServicesTable(dados.tiposServico, dados.servicosPersonalizados)}
-             </td>
-          </tr>
-        </table>
-
         <!-- DESCRIÇÃO / VALORES -->
         <div class="section-header">DESCRIÇÃO DOS SERVIÇOS / PEÇAS</div>
         <table>
@@ -282,30 +272,19 @@ export async function gerarOSPDF(dados: DadosOS): Promise<Blob> {
             <th class="val-col" style="font-size: 9px;">VALOR UNIT.</th>
             <th class="total-col" style="font-size: 9px;">TOTAL</th>
           </tr>
-          <tr>
-            <td class="desc-col" style="height: 150px;">
-              ${dados.entrada.descricao ? dados.entrada.descricao.replace(/\n/g, '<br>') : ''}
-              <br>
-              ${dados.entrada.frete > 0 ? `<br>Frete: R$ ${dados.entrada.frete.toFixed(2)}` : ''}
-            </td>
-            <td class="val-col">
-              R$ ${valorServicos.toFixed(2)}
-            </td>
-            <td class="total-col" style="font-size: 14px;">
-              R$ ${valorTotal.toFixed(2)}
-            </td>
-          </tr>
+          ${renderServicosETotal(dados.tiposServico, dados.servicosPersonalizados, dados.entrada.descricao, dados.entrada.frete, valorTotal)}
         </table>
 
+         ${dados.entrada.descricao ? `
          <!-- OBSERVAÇÃO -->
         <div class="section-header">OBSERVAÇÕES</div>
         <table style="width: 100%;">
           <tr>
             <td style="height: 60px; border: none;">
-              ${dados.entrada.observacoes || ''}
+              ${dados.entrada.descricao}
             </td>
           </tr>
-        </table>
+        </table>` : ''}
 
         <!-- IMAGENS -->
         ${(fotosOrcamento.length > 0 || fotosServico.length > 0) ? `
@@ -433,15 +412,116 @@ function renderServicesTable(
   `;
 }
 
-function formatarServico(t: any): string {
+function formatarServico(t: any): { nome: string, valor: number, quantidade: number } {
+  console.log('Serviço recebido:', JSON.stringify(t, null, 2));
+  
   let nome = t.nome;
   if (t.categoria === "alinhamento") {
     nome += t.comOleo ? " (Com Óleo)" : " (Sem Óleo)";
   }
-  if (t.quantidade && t.quantidade > 1) {
-    nome += ` (${t.quantidade}x)`;
+  const quantidade = t.quantidade || 1;
+  
+  // O preço já vem calculado no GerarOSUseCase (multiplicado pela quantidade)
+  const valor = t.preco || t.valor || 0;
+  
+  console.log(`Serviço: ${nome}, Valor: ${valor}, Quantidade: ${quantidade}`);
+  
+  return { 
+    nome,
+    valor: valor, // Já está multiplicado pela quantidade
+    quantidade
+  };
+}
+
+function renderServicosETotal(
+  tiposServico?: Array<any>,
+  servicosPersonalizados?: Array<any>,
+  descricao?: string,
+  frete: number = 0,
+  valorTotal: number = 0
+): string {
+  console.log('Tipos de serviço:', tiposServico);
+  console.log('Serviços personalizados:', servicosPersonalizados);
+  const servicos: Array<{ nome: string, valor: number, quantidade: number }> = [];
+
+  // Adicionar tipos de serviço padrão
+  if (tiposServico?.length) {
+    tiposServico.forEach(s => {
+      servicos.push(formatarServico(s));
+    });
   }
-  return nome;
+
+  // Adicionar serviços personalizados
+  if (servicosPersonalizados?.length) {
+    servicosPersonalizados.forEach(s => {
+      servicos.push({
+        nome: s.nome,
+        valor: s.valor,
+        quantidade: s.quantidade || 1
+      });
+    });
+  }
+
+  // Se não houver serviços, mostra apenas a descrição
+  if (servicos.length === 0) {
+    return `
+      <tr>
+        <td class="desc-col" style="height: 150px; vertical-align: top;">
+          ${descricao ? descricao.replace(/\n/g, '<br>') : ''}
+          ${frete > 0 ? `<br><br>Frete: R$ ${frete.toFixed(2)}` : ''}
+        </td>
+        <td class="val-col">
+          R$ 0,00
+        </td>
+        <td class="total-col" style="font-size: 14px;">
+          R$ ${valorTotal.toFixed(2)}
+        </td>
+      </tr>`;
+  }
+
+  // Renderiza cada serviço em uma linha
+  const linhas = servicos.map((servico, index) => {
+    const valorUnitario = servico.valor / (servico.quantidade || 1);
+    return `
+      <tr>
+        <td class="desc-col" style="vertical-align: top; ${index === 0 ? 'padding-top: 8px;' : ''}">
+          • ${servico.nome}${servico.quantidade > 1 ? ` (${servico.quantidade}x)` : ''}
+          ${index === 0 && descricao ? `<br><br>${descricao.replace(/\n/g, '<br>')}` : ''}
+        </td>
+        <td class="val-col" style="vertical-align: top; ${index === 0 ? 'padding-top: 8px;' : ''}">
+          R$ ${valorUnitario.toFixed(2)}
+        </td>
+        <td class="total-col" style="vertical-align: top; font-size: 14px; ${index === 0 ? 'padding-top: 8px;' : ''}">
+          R$ ${servico.valor.toFixed(2)}
+        </td>
+      </tr>`;
+  }).join('');
+
+  // Linha do frete e total
+  return `${linhas}
+    ${frete > 0 ? `
+      <tr>
+        <td class="desc-col" style="vertical-align: top;">
+          Frete
+        </td>
+        <td class="val-col">
+          R$ ${frete.toFixed(2)}
+        </td>
+        <td class="total-col" style="font-size: 14px;">
+          R$ ${frete.toFixed(2)}
+        </td>
+      </tr>` : ''}
+      <tr>
+        <td class="desc-col" style="border-top: 1px solid #000; padding-top: 8px;">
+          <strong>TOTAL</strong>
+        </td>
+        <td class="val-col" style="border-top: 1px solid #000;">
+          
+        </td>
+        <td class="total-col" style="font-size: 16px; font-weight: bold; border-top: 1px solid #000;">
+          R$ ${valorTotal.toFixed(2)}
+        </td>
+      </tr>`;
 }
 
 export function imprimirOS(html: string) {

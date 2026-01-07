@@ -427,10 +427,6 @@ export default function Cadastro() {
     }
 
     if (tipo === "orcamento") {
-      if (!formData.descricao) {
-        toast.error("Descrição é obrigatória para orçamentos");
-        return;
-      }
       if (!formData.cep || formData.cep.replace(/\D/g, "").length !== 8) {
         toast.error("CEP é obrigatório para orçamentos (para cálculo de frete)");
         return;
@@ -631,8 +627,8 @@ export default function Cadastro() {
           </div>
 
           {/* Toggle Tipo de Preço */}
-          <div className="flex items-center justify-between p-4 bg-card border border-foreground/10 rounded-lg">
-            <div className="space-y-0.5">
+          <div className="p-4 bg-card border border-foreground/10 rounded-lg space-y-4">
+            <div className="space-y-1">
               <Label htmlFor="tipo-preco" className="text-sm font-medium">
                 Tipo de Preço
               </Label>
@@ -640,10 +636,11 @@ export default function Cadastro() {
                 Selecione se é serviço de oficina ou particular
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="grid grid-cols-2 gap-2 w-full">
               <Button
                 variant={tipoPreco === "oficina" ? "default" : "outline"}
                 size="sm"
+                className="w-full"
                 onClick={() => {
                   setTipoPreco("oficina");
                   setFormData({ ...formData, tipoPreco: "oficina" });
@@ -654,6 +651,7 @@ export default function Cadastro() {
               <Button
                 variant={tipoPreco === "particular" ? "default" : "outline"}
                 size="sm"
+                className="w-full"
                 onClick={() => {
                   setTipoPreco("particular");
                   setFormData({ ...formData, tipoPreco: "particular" });
@@ -795,13 +793,29 @@ export default function Cadastro() {
             <Label className="text-xs uppercase tracking-widest">
               Valor Cobrado (Calculado)
             </Label>
-            <Card className="p-4 bg-accent/10 border-accent/20">
+            <Card className="p-4 bg-accent/10 border-accent/20 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="font-sans text-sm text-foreground/60">
-                  Total dos serviços
+                  Valor dos serviços
                 </span>
-                <span className="font-serif text-2xl text-accent">
+                <span className="font-serif text-lg">
                   R$ {valorTotalCalculado.toFixed(2)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="font-sans text-sm text-foreground/60">
+                  Frete
+                </span>
+                <span className="font-serif text-lg">
+                  R$ {(formData.frete ?? 0).toFixed(2)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between pt-2 border-t border-accent/20">
+                <span className="font-sans text-sm font-medium text-foreground">
+                  Total
+                </span>
+                <span className="font-serif text-2xl font-bold text-accent">
+                  R$ {(valorTotalCalculado + (formData.frete ?? 0)).toFixed(2)}
                 </span>
               </div>
             </Card>

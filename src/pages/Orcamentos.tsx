@@ -199,65 +199,56 @@ export default function Orcamentos() {
                     key={orcamento.id}
                     className="card-samurai hover:shadow-lg transition-shadow overflow-hidden"
                   >
-                    <div className="flex gap-4">
+                    <div className="flex gap-3 sm:gap-4">
                       {/* Foto da Moto */}
                       {orcamento.fotoMoto ? (
-                        <div className="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden border border-foreground/10 bg-foreground/5">
+                        <div className="shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden border border-foreground/10 bg-foreground/5">
                           <img
                             src={orcamento.fotoMoto}
                             alt={orcamento.moto}
                             className="w-full h-full object-cover"
                             onError={(e) => {
-                              // Se a imagem falhar, esconde o container
                               (e.target as HTMLImageElement).style.display = "none";
                             }}
                           />
                         </div>
                       ) : (
-                        <div className="flex-shrink-0 w-24 h-24 rounded-lg border border-foreground/10 bg-foreground/5 flex items-center justify-center">
-                          <ImageIcon size={32} className="text-foreground/20" />
+                        <div className="shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-lg border border-foreground/10 bg-foreground/5 flex items-center justify-center">
+                          <ImageIcon size={28} className="text-foreground/20" />
                         </div>
                       )}
 
                       {/* Informações Principais */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-start mb-2 gap-2">
+                      <div className="flex-1 min-w-0 space-y-2">
+                        {/* Header: Nome, Valor e Ações */}
+                        <div className="flex justify-between items-start gap-2">
                           <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-start gap-2 mb-1">
-                              <h3 className="font-serif text-lg text-foreground truncate">
+                            <div className="flex justify-between items-start gap-2">
+                              <h3 className="font-serif text-base sm:text-lg text-foreground truncate">
                                 {orcamento.moto}
                               </h3>
                               <button
                                 onClick={() => handleDeletarOrcamento(orcamento.id)}
                                 disabled={loadingDeletar}
-                                className="text-foreground/40 hover:text-red-600 transition-colors p-1 flex-shrink-0"
+                                className="text-foreground/40 hover:text-red-600 transition-colors p-1 shrink-0"
                                 title="Excluir orçamento"
                               >
-                                <Trash2 size={18} />
+                                <Trash2 size={16} />
                               </button>
                             </div>
-                            <div className="flex justify-between items-center">
-                              <p className="font-sans text-sm text-foreground/60 truncate">
-                                {orcamento.cliente || "Cliente não informado"}
-                              </p>
-                              <button
-                                onClick={() => handleOpenHistory(orcamento.id)}
-                                className="text-foreground/40 hover:text-accent transition-colors p-1"
-                                title="Ver histórico"
-                              >
-                                <History size={16} />
-                              </button>
-                            </div>
+                            <p className="font-sans text-xs sm:text-sm text-foreground/60 truncate">
+                              {orcamento.cliente || "Cliente não informado"}
+                            </p>
                           </div>
-                          <div className="text-right ml-2 flex-shrink-0">
-                            <p className="font-serif text-2xl text-accent">
+                          <div className="text-right shrink-0">
+                            <p className="font-serif text-xl sm:text-2xl text-accent">
                               R$ {(orcamento.valor + (orcamento.frete || 0)).toFixed(2)}
                             </p>
                           </div>
                         </div>
 
-                        {/* Informações Adicionais */}
-                        <div className="space-y-1.5 mb-3">
+                        {/* Informações Essenciais (Mobile) */}
+                        <div className="space-y-1">
                           {/* Placa / Final do Quadro */}
                           {(orcamento.placa || orcamento.finalNumeroQuadro) && (
                             <div className="flex items-center gap-2 text-xs text-foreground/60">
@@ -274,87 +265,91 @@ export default function Orcamentos() {
                             </div>
                           )}
 
-                          {/* Telefone */}
-                          {orcamento.telefone && (
-                            <div className="flex items-center gap-1.5 text-xs text-foreground/60">
-                              <Phone size={12} />
-                              <span>{orcamento.telefone}</span>
-                            </div>
-                          )}
+                          {/* Telefone e Endereço - Mobile Compacto */}
+                          <div className="flex items-center gap-3 text-xs text-foreground/60">
+                            {orcamento.telefone && (
+                              <div className="flex items-center gap-1">
+                                <Phone size={12} />
+                                <span className="truncate max-w-24">{orcamento.telefone}</span>
+                              </div>
+                            )}
+                            {orcamento.endereco && (
+                              <div className="flex items-center gap-1 truncate">
+                                <MapPin size={12} />
+                                <span className="truncate max-w-32">{orcamento.endereco}</span>
+                              </div>
+                            )}
+                          </div>
 
-                          {/* Endereço */}
-                          {orcamento.endereco && (
-                            <div className="flex items-center gap-1.5 text-xs text-foreground/60">
-                              <MapPin size={12} />
-                              <span className="truncate">{orcamento.endereco}</span>
-                              {orcamento.cep && (
-                                <span className="text-foreground/40">({orcamento.cep})</span>
+                          {/* Serviços - Compacto */}
+                          <div className="flex items-center gap-1.5 text-xs text-foreground/60">
+                            <Wrench size={12} />
+                            <span>Serviços: R$ {orcamento.valor.toFixed(2)}</span>
+                            {orcamento.frete > 0 && (
+                              <span className="text-foreground/40">• Frete: R$ {orcamento.frete.toFixed(2)}</span>
+                            )}
+                          </div>
+
+                          {/* Tipos de Serviço - Compacto */}
+                          {(orcamento.tiposServico?.length || 0) > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {orcamento.tiposServico.slice(0, 2).map((tipo) => (
+                                <Badge
+                                  key={tipo.id}
+                                  variant="secondary"
+                                  className="flex items-center gap-1 text-[10px] px-1.5 py-0.5"
+                                >
+                                  <Wrench size={8} />
+                                  {tipo.nome}
+                                  {tipo.quantidade > 1 && ` (${tipo.quantidade}x)`}
+                                </Badge>
+                              ))}
+                              {orcamento.tiposServico.length > 2 && (
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5">
+                                  +{orcamento.tiposServico.length - 2}
+                                </Badge>
                               )}
                             </div>
                           )}
 
-                          {/* Detalhes do Valor */}
-                        <div className="space-y-1.5 mb-3">
-                          {/* Valor dos Serviços */}
-                          <div className="flex items-center gap-1.5 text-xs text-foreground/60">
-                            <Wrench size={12} />
-                            <span>Serviços: R$ {orcamento.valor.toFixed(2)}</span>
-                          </div>
-
-                          {/* Frete */}
-                          {orcamento.frete > 0 && (
-                            <div className="flex items-center gap-1.5 text-xs text-foreground/60">
-                              <Truck size={12} />
-                              <span>Frete: R$ {orcamento.frete.toFixed(2)}</span>
-                            </div>
-                          )}
-                        </div>
-
-                          {/* Descrição */}
-                          {orcamento.descricao && (
-                            <p className="font-sans text-xs text-foreground/40 line-clamp-2">
-                              {orcamento.descricao}
-                            </p>
-                          )}
-
-                          {/* Tipos de Serviço */}
-                          {orcamento.tiposServico && orcamento.tiposServico.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5 mt-2">
-                              {orcamento.tiposServico.map((tipo) => (
-                                <Badge
-                                  key={tipo.id}
-                                  variant="secondary"
-                                  className="flex items-center gap-1 text-xs"
-                                >
-                                  <Wrench size={10} />
-                                  {tipo.nome}
-                                  {tipo.categoria === "alinhamento" && (
-                                    <span className="ml-1 text-[10px] opacity-70">
-                                      {tipo.comOleo ? "(Com Óleo)" : "(Sem Óleo)"}
-                                    </span>
-                                  )}
-                                  {tipo.quantidade > 1 && ` (${tipo.quantidade}x)`}
-                                </Badge>
-                              ))}
-                            </div>
-                          )}
-                          {/* Serviços Personalizados */}
-                          {orcamento.servicosPersonalizados && orcamento.servicosPersonalizados.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5 mt-2">
-                              {orcamento.servicosPersonalizados.map((servico) => (
+                          {/* Serviços Personalizados - Compacto */}
+                          {(orcamento.servicosPersonalizados?.length || 0) > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {orcamento.servicosPersonalizados.slice(0, 2).map((servico) => (
                                 <Badge
                                   key={servico.id}
                                   variant="outline"
-                                  className="flex items-center gap-1 text-xs border-accent/30"
+                                  className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 border-accent/30"
                                 >
-                                  <Settings size={10} />
+                                  <Settings size={8} />
                                   {servico.nome}
                                   {servico.quantidade > 1 && ` (${servico.quantidade}x)`}
                                 </Badge>
                               ))}
+                              {orcamento.servicosPersonalizados.length > 2 && (
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0.5 border-accent/30">
+                                  +{orcamento.servicosPersonalizados.length - 2}
+                                </Badge>
+                              )}
                             </div>
                           )}
                         </div>
+
+                        {/* Descrição - Mobile Apenas se curta */}
+                        {orcamento.descricao && orcamento.descricao.length < 60 && (
+                          <p className="font-sans text-xs text-foreground/40 line-clamp-1">
+                            {orcamento.descricao}
+                          </p>
+                        )}
+
+                        {/* Botão Histórico - Mobile */}
+                        <button
+                          onClick={() => handleOpenHistory(orcamento.id)}
+                          className="text-xs text-foreground/40 hover:text-accent transition-colors flex items-center gap-1"
+                        >
+                          <History size={12} />
+                          Ver histórico
+                        </button>
                       </div>
                     </div>
 
@@ -392,35 +387,35 @@ export default function Orcamentos() {
                     </div>
 
                     {/* Ações */}
-                    <div className="flex flex-col gap-2">
+                    <div className="space-y-2 w-full">
                       {orcamento.status === "ativo" && (
                         <>
-                          <div className="flex gap-2">
+                          <div className="flex flex-col sm:flex-row gap-2 w-full">
                             <Button
                               onClick={() => handleConverterEntrada(orcamento.id)}
                               variant="outline"
-                              className="flex-1 text-sm"
+                              className="w-full sm:flex-1 text-sm py-2 h-auto min-h-10"
                             >
-                              <CheckCircle2 size={16} className="mr-2" />
-                              Converter em Entrada
+                              <CheckCircle2 size={16} className="mr-2 shrink-0" />
+                              <span className="truncate">Converter em Entrada</span>
                             </Button>
                             <Button
                               onClick={() => handlePreencherFormulario(orcamento.id)}
                               variant="outline"
-                              className="flex-1 text-sm"
+                              className="w-full sm:flex-1 text-sm py-2 h-auto min-h-10"
                             >
-                              <ClipboardList size={16} className="mr-2" />
-                              Preencher Formulário
+                              <ClipboardList size={16} className="mr-2 shrink-0" />
+                              <span className="truncate">Preencher Formulário</span>
                             </Button>
                           </div>
                           <Button
                             onClick={() => handleGerarOS(orcamento.id)}
                             variant="default"
-                            className="w-full text-sm bg-accent hover:brightness-110"
+                            className="w-full text-sm bg-accent hover:brightness-110 py-2 h-auto min-h-10"
                             disabled={loadingOS}
                           >
-                            <FileText size={16} className="mr-2" />
-                            {loadingOS ? "Gerando..." : "Gerar OS"}
+                            <FileText size={16} className="mr-2 shrink-0" />
+                            <span className="truncate">{loadingOS ? "Gerando..." : "Gerar OS"}</span>
                           </Button>
                         </>
                       )}
@@ -428,9 +423,10 @@ export default function Orcamentos() {
                         <Button
                           onClick={() => handleConverterEntrada(orcamento.id)}
                           variant="outline"
-                          className="w-full text-sm"
+                          className="w-full text-sm py-2 h-auto min-h-10"
                         >
-                          Reativar Orçamento
+                          <RefreshCw size={16} className="mr-2 shrink-0" />
+                          <span className="truncate">Reativar Orçamento</span>
                         </Button>
                       )}
                     </div>

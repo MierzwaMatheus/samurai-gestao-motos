@@ -61,6 +61,8 @@ export class GerarOSUseCase {
       this.servicoPersonalizadoRepo.buscarPorEntradaId(entradaId),
     ]);
 
+    console.log('Tipos de serviço encontrados:', JSON.stringify(tiposServico, null, 2));
+
 
 
     if (!cliente || !moto) {
@@ -107,12 +109,31 @@ export class GerarOSUseCase {
         ...fotos.map((f) => ({ url: f.url, tipo: f.tipo })),
         ...fotosStatusFinal
       ],
-      tiposServico: tiposServico.map((t) => ({
-        nome: t.nome,
-        categoria: t.categoria,
-        comOleo: t.comOleo,
-        quantidade: t.quantidade
-      })),
+      tiposServico: tiposServico.map((t) => {
+        // Calcula o preço com base na categoria e se tem óleo
+        let preco = 0;
+        
+        if (t.categoria === "alinhamento") {
+          if (t.comOleo) {
+            preco = t.precoOficinaComOleo || t.precoOficina || 0;
+          } else {
+            preco = t.precoOficinaSemOleo || t.precoOficina || 0;
+          }
+        } else {
+          // Serviço padrão
+          preco = t.precoOficina || 0;
+        }
+        
+        console.log(`Tipo de serviço: ${t.nome}, Categoria: ${t.categoria}, Com Óleo: ${t.comOleo}, Preço Unitário: ${preco}, Quantidade: ${t.quantidade}`);
+        
+        return {
+          nome: t.nome,
+          categoria: t.categoria,
+          comOleo: t.comOleo,
+          quantidade: t.quantidade,
+          preco: preco // Preço unitário
+        };
+      }),
       servicosPersonalizados: servicosPersonalizados.map((s) => ({
         nome: s.nome,
         valor: s.valor,

@@ -149,6 +149,43 @@
     font-family: "Comfortaa", sans-serif;
   }
   
+  /* Estilos personalizados para a barra de rolagem */
+  .no-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+  
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;  /* Chrome, Safari and Opera */
+  }
+  
+  /* Estilo para a barra de rolagem quando visível em navegadores que a suportam */
+  @supports (scrollbar-width: thin) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: hsl(var(--border)) transparent;
+    }
+  }
+  
+  /* Estilo para WebKit (Chrome, Safari, etc) */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--border));
+    border-radius: 4px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground));
+  }
+  
   h1, h2, h3, h4, h5, h6 {
     font-family: "Libre Baskerville", serif;
     @apply font-bold;

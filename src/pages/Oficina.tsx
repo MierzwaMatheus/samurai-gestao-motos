@@ -483,21 +483,27 @@ export default function Oficina() {
             </Card>
           ) : (
             <Tabs defaultValue="em-andamento" className="w-full">
-              <TabsList className="w-full grid grid-cols-2">
-                <TabsTrigger value="em-andamento" className="flex items-center gap-2">
-                  <Wrench size={16} />
-                  Em Andamento
+              <TabsList className="w-full flex overflow-x-auto no-scrollbar rounded-lg bg-muted p-1">
+                <TabsTrigger 
+                  value="em-andamento" 
+                  className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 text-sm whitespace-nowrap rounded-md transition-colors"
+                >
+                  <Wrench size={16} className="shrink-0" />
+                  <span className="truncate">Em Andamento</span>
                   {motosEmAndamento.length > 0 && (
-                    <span className="ml-1 px-1.5 py-0.5 text-xs bg-accent/20 text-accent rounded-full">
+                    <span className="ml-0.5 px-1.5 py-0.5 text-xs bg-accent/20 text-accent rounded-full">
                       {motosEmAndamento.length}
                     </span>
                   )}
                 </TabsTrigger>
-                <TabsTrigger value="concluidos" className="flex items-center gap-2">
-                  <CheckCircle size={16} />
-                  Concluídos
+                <TabsTrigger 
+                  value="concluidos" 
+                  className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 text-sm whitespace-nowrap rounded-md transition-colors"
+                >
+                  <CheckCircle size={16} className="shrink-0" />
+                  <span className="truncate">Concluídos</span>
                   {motosConcluidas.length > 0 && (
-                    <span className="ml-1 px-1.5 py-0.5 text-xs bg-green-600/20 text-green-600 rounded-full">
+                    <span className="ml-0.5 px-1.5 py-0.5 text-xs bg-green-600/20 text-green-600 rounded-full">
                       {motosConcluidas.length}
                     </span>
                   )}
