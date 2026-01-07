@@ -141,7 +141,22 @@ export default function Cadastro() {
 
         tipos.forEach((tipo, index) => {
           if (tipo) {
-            const preco = tipoPreco === "particular" ? tipo.precoParticular : tipo.precoOficina;
+            let preco = 0;
+            if (tipo.categoria === "alinhamento") {
+              // Para alinhamento, verifica se tem ou não óleo
+              if (servicos[index].comOleo) {
+                preco = tipoPreco === "particular" 
+                  ? (tipo.precoParticularComOleo ?? tipo.precoParticular)
+                  : (tipo.precoOficinaComOleo ?? tipo.precoOficina);
+              } else {
+                preco = tipoPreco === "particular" 
+                  ? (tipo.precoParticularSemOleo ?? tipo.precoParticular)
+                  : (tipo.precoOficinaSemOleo ?? tipo.precoOficina);
+              }
+            } else {
+              // Para outros serviços, usa o preço padrão
+              preco = tipoPreco === "particular" ? tipo.precoParticular : tipo.precoOficina;
+            }
             total += preco * servicos[index].quantidade;
           }
         });
@@ -800,7 +815,7 @@ export default function Cadastro() {
             {tipo === "orcamento" && (
               <div className="space-y-2">
                 <Label htmlFor="descricao" className="text-xs uppercase tracking-widest">
-                  Descrição do Serviço *
+                  Descrição do Serviço
                 </Label>
                 <Textarea
                   id="descricao"
@@ -809,7 +824,6 @@ export default function Cadastro() {
                   value={formData.descricao || ""}
                   onChange={handleInputChange}
                   className="bg-card border-foreground/10 min-h-24"
-                  required
                 />
               </div>
             )}

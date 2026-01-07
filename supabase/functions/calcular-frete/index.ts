@@ -6,20 +6,80 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
  * 
  * Request body esperado:
  * {
- *   cepDestino: string (8 dígitos)
+ *   cepDestino: string (8 dígitos),
+ *   destinoCoords?: { lat: number, lng: number } // Opcional, vindo do cache do frontend
  * }
  * 
- * Resposta:
+ * Resposta de sucesso:
  * {
- *   distanciaKm: number
- *   valorFrete: number
- *   cepOrigem: string
- *   cepDestino: string
+ *   distanciaKm: number,
+ *   valorFrete: number,
+ *   cepOrigem: string,
+ *   cepDestino: string,
+ *   origemCoords: { lat: number, lng: number },
+ *   destinoCoords: { lat: number, lng: number }
+ * }
+ * 
+ * Resposta de erro:
+ * {
+ *   error: string,
+ *   code: string,
+ *   message: string,
+ *   details?: any
  * }
  */
 
+// Códigos de erro padronizados
+const ERROR_CODES = {
+  INVALID_REQUEST: 'INVALID_REQUEST',
+  INVALID_CEP: 'INVALID_CEP',
+  CONFIGURATION_ERROR: 'CONFIGURATION_ERROR',
+  CEP_NOT_FOUND: 'CEP_NOT_FOUND',
+  GEOCODING_ERROR: 'GEOCODING_ERROR',
+  ROUTE_CALCULATION_ERROR: 'ROUTE_CALCULATION_ERROR',
+  SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
+  RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
+  INTERNAL_ERROR: 'INTERNAL_ERROR',
+} as const;
+
+type ErrorCode = typeof ERROR_CODES[keyof typeof ERROR_CODES];
+
+interface ErrorResponse {
+  error: string;
+  code: ErrorCode;
+  message: string;
+  details?: any;
+}
+
+function createErrorResponse(
+  code: ErrorCode,
+  message: string,
+  status: number,
+  details?: any
+): Response {
+  const corsHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers":
+      "authorization, x-client-info, apikey, content-type",
+  };
+
+  return new Response(
+    JSON.stringify({
+      error: code,
+      code,
+      message,
+      ...(details && { details }),
+    }),
+    {
+      status,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    }
+  );
+}
+
 interface RequestBody {
   cepDestino: string;
+  destinoCoords?: { lat: number; lng: number }; // Opcional, vindo do cache do frontend
 }
 
 interface OpenRouteResponse {
@@ -43,6 +103,8 @@ const OPENROUTE_API_KEY = Deno.env.get("OPENROUTE_API_KEY");
 // Valores padrão caso não encontre configuração no banco
 const CEP_ORIGEM_DEFAULT = "06653010";
 const VALOR_POR_KM_DEFAULT = 2.0;
+// API key do CepAberto
+const CEPABERTO_API_KEY = Deno.env.get("CEPABERTO_API_KEY");
 
 Deno.serve(async (req: Request) => {
   // CORS headers
@@ -60,12 +122,11 @@ Deno.serve(async (req: Request) => {
   try {
     // Valida API key
     if (!OPENROUTE_API_KEY) {
-      return new Response(
-        JSON.stringify({ error: "OPENROUTE_API_KEY não configurada" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+      console.error("OPENROUTE_API_KEY não configurada");
+      return createErrorResponse(
+        ERROR_CODES.CONFIGURATION_ERROR,
+        "Serviço de cálculo de frete não configurado. Entre em contato com o suporte.",
+        503
       );
     }
 
@@ -75,24 +136,20 @@ Deno.serve(async (req: Request) => {
       body = await req.json();
     } catch (parseError) {
       console.error("Erro ao fazer parse do body:", parseError);
-      return new Response(
-        JSON.stringify({ error: "Body da requisição inválido ou ausente" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+      return createErrorResponse(
+        ERROR_CODES.INVALID_REQUEST,
+        "Formato da requisição inválido. Verifique os dados enviados.",
+        400
       );
     }
 
-    const { cepDestino } = body;
+    const { cepDestino, destinoCoords: cachedDestinoCoords } = body;
 
     if (!cepDestino || cepDestino.replace(/\D/g, "").length !== 8) {
-      return new Response(
-        JSON.stringify({ error: "CEP destino inválido. Deve conter 8 dígitos." }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+      return createErrorResponse(
+        ERROR_CODES.INVALID_CEP,
+        "CEP inválido. O CEP deve conter exatamente 8 dígitos numéricos.",
+        400
       );
     }
 
@@ -119,13 +176,92 @@ Deno.serve(async (req: Request) => {
         // Busca configuração do usuário
         const { data: config, error: configError } = await supabaseClient
           .from("configuracoes_frete")
-          .select("cep_origem, valor_por_km")
+          .select("cep_origem, valor_por_km, latitude, longitude")
           .single();
 
         if (!configError && config) {
           cepOrigem = config.cep_origem;
           valorPorKm = parseFloat(config.valor_por_km) || VALOR_POR_KM_DEFAULT;
-          console.log(`Configuração encontrada: CEP origem=${cepOrigem}, Valor por km=${valorPorKm}`);
+          console.log(`Configuração encontrada: CEP origem=${cepOrigem}, Valor por km=${valorPorKm}, Latitude=${config.latitude}, Longitude=${config.longitude}`);
+          
+          // Se já tiver coordenadas salvas, usa elas
+          if (config.latitude && config.longitude) {
+            const origemCoords = {
+              lat: parseFloat(config.latitude),
+              lng: parseFloat(config.longitude)
+            };
+            console.log(`Usando coordenadas em cache: ${origemCoords.lat}, ${origemCoords.lng}`);
+            
+            // Busca coordenadas do CEP de destino
+            console.log(`Buscando coordenadas do CEP de destino: ${cepDestino}`);
+            const destinoCoords = await buscarCoordenadasPorCep(cepDestino);
+            if (!destinoCoords) {
+              console.error("Falha ao buscar coordenadas do destino");
+              return createErrorResponse(
+                ERROR_CODES.CEP_NOT_FOUND,
+                `Não foi possível encontrar o CEP ${cepDestino.replace(/\D/g, "")}. Verifique se o CEP está correto.`,
+                404
+              );
+            }
+            console.log(`Coordenadas destino: ${destinoCoords.lat}, ${destinoCoords.lng}`);
+
+            // Continua com o cálculo da distância...
+            let distanciaKm: number | null;
+            try {
+              distanciaKm = await calcularDistancia(
+                origemCoords,
+                destinoCoords,
+                OPENROUTE_API_KEY
+              );
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              console.error("Erro capturado ao calcular distância:", errorMessage);
+              
+              // Verifica se é erro de rate limit
+              if (errorMessage.includes('429') || errorMessage.includes('rate limit')) {
+                return createErrorResponse(
+                  ERROR_CODES.RATE_LIMIT_EXCEEDED,
+                  "Muitas requisições em um curto período. Tente novamente em alguns instantes.",
+                  429
+                );
+              }
+              
+              return createErrorResponse(
+                ERROR_CODES.ROUTE_CALCULATION_ERROR,
+                "Não foi possível calcular a rota entre os endereços. Verifique se os CEPs estão corretos.",
+                500,
+                { debug: errorMessage }
+              );
+            }
+
+            if (distanciaKm === null) {
+              console.error("Falha ao calcular distância");
+              return createErrorResponse(
+                ERROR_CODES.ROUTE_CALCULATION_ERROR,
+                "Não foi possível calcular a distância entre os endereços. Tente novamente mais tarde.",
+                503
+              );
+            }
+            console.log(`Distância calculada: ${distanciaKm} km`);
+
+            // Calcula valor do frete (distância * valor por km)
+            const valorFrete = distanciaKm * valorPorKm;
+
+            return new Response(
+              JSON.stringify({
+                distanciaKm: Math.round(distanciaKm * 100) / 100, // 2 casas decimais
+                valorFrete: Math.round(valorFrete * 100) / 100,
+                cepOrigem: cepOrigem,
+                cepDestino: cepDestino.replace(/\D/g, ""),
+                origemCoords: origemCoords,
+                destinoCoords: destinoCoords,
+              }),
+              {
+                status: 200,
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+              }
+            );
+          }
         } else {
           // Se não encontrar configuração, usa valores padrão (não é erro)
           console.log(`Configuração não encontrada, usando valores padrão: CEP origem=${cepOrigem}, Valor por km=${valorPorKm}`);
@@ -147,30 +283,71 @@ Deno.serve(async (req: Request) => {
     const origemCoords = await buscarCoordenadasPorCep(cepOrigem);
     if (!origemCoords) {
       console.error("Falha ao buscar coordenadas da origem");
-      return new Response(
-        JSON.stringify({ error: "Erro ao buscar coordenadas da origem" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+      return createErrorResponse(
+        ERROR_CODES.CEP_NOT_FOUND,
+        `Não foi possível encontrar o CEP de origem ${cepOrigem}. Entre em contato com o suporte.`,
+        404
       );
     }
     console.log(`Coordenadas origem: ${origemCoords.lat}, ${origemCoords.lng}`);
-
-    // Busca coordenadas do CEP de destino
-    console.log(`Buscando coordenadas do CEP de destino: ${cepDestino}`);
-    const destinoCoords = await buscarCoordenadasPorCep(cepDestino);
-    if (!destinoCoords) {
-      console.error("Falha ao buscar coordenadas do destino");
-      return new Response(
-        JSON.stringify({ error: "Erro ao buscar coordenadas do destino" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+    
+    // Salva coordenadas no banco se tivermos o cliente Supabase e as coordenadas não estiverem salvas
+    if (supabaseUrl && supabaseAnonKey && authHeader) {
+      try {
+        const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+          global: {
+            headers: {
+              Authorization: authHeader,
+            },
+          },
+        });
+        
+        // Verifica se já tem coordenadas salvas
+        const { data: existingConfig } = await supabaseClient
+          .from("configuracoes_frete")
+          .select("latitude, longitude")
+          .eq("cep_origem", cepOrigem)
+          .single();
+        
+        // Se não tiver coordenadas ou estiverem diferentes, atualiza
+        if (!existingConfig?.latitude || !existingConfig?.longitude || 
+            parseFloat(existingConfig.latitude) !== origemCoords.lat || 
+            parseFloat(existingConfig.longitude) !== origemCoords.lng) {
+          
+          await supabaseClient
+            .from("configuracoes_frete")
+            .update({
+              latitude: origemCoords.lat,
+              longitude: origemCoords.lng
+            })
+            .eq("cep_origem", cepOrigem);
+          
+          console.log(`Coordenadas salvas no banco: ${origemCoords.lat}, ${origemCoords.lng}`);
         }
-      );
+      } catch (saveError) {
+        console.log("Erro ao salvar coordenadas (não crítico):", saveError instanceof Error ? saveError.message : String(saveError));
+      }
     }
-    console.log(`Coordenadas destino: ${destinoCoords.lat}, ${destinoCoords.lng}`);
+
+    // Busca coordenadas do CEP de destino (usa cache se disponível)
+    let destinoCoords: { lat: number; lng: number } | null;
+    
+    if (cachedDestinoCoords && cachedDestinoCoords.lat && cachedDestinoCoords.lng) {
+      destinoCoords = cachedDestinoCoords;
+      console.log(`Usando coordenadas do cache frontend: ${destinoCoords.lat}, ${destinoCoords.lng}`);
+    } else {
+      console.log(`Buscando coordenadas do CEP de destino: ${cepDestino}`);
+      destinoCoords = await buscarCoordenadasPorCep(cepDestino);
+      if (!destinoCoords) {
+        console.error("Falha ao buscar coordenadas do destino");
+        return createErrorResponse(
+          ERROR_CODES.CEP_NOT_FOUND,
+          `Não foi possível encontrar o CEP ${cepDestino.replace(/\D/g, "")}. Verifique se o CEP está correto.`,
+          404
+        );
+      }
+      console.log(`Coordenadas destino: ${destinoCoords.lat}, ${destinoCoords.lng}`);
+    }
 
     // Calcula distância usando OpenRouteService
     console.log("Calculando distância via OpenRouteService...");
@@ -185,49 +362,30 @@ Deno.serve(async (req: Request) => {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error("Erro capturado ao calcular distância:", errorMessage);
-      return new Response(
-        JSON.stringify({ 
-          error: "Erro ao calcular distância",
-          details: errorMessage,
-          debug: {
-            origem: origemCoords,
-            destino: destinoCoords,
-            apiKeyPresent: !!OPENROUTE_API_KEY,
-            apiKeyLength: OPENROUTE_API_KEY?.length || 0,
-            cepOrigem: cepOrigem,
-            cepDestino: cepDestino.replace(/\D/g, ""),
-          }
-        }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+      
+      // Verifica se é erro de rate limit
+      if (errorMessage.includes('429') || errorMessage.includes('rate limit')) {
+        return createErrorResponse(
+          ERROR_CODES.RATE_LIMIT_EXCEEDED,
+          "Muitas requisições em um curto período. Tente novamente em alguns instantes.",
+          429
+        );
+      }
+      
+      return createErrorResponse(
+        ERROR_CODES.ROUTE_CALCULATION_ERROR,
+        "Não foi possível calcular a rota entre os endereços. Verifique se os CEPs estão corretos.",
+        500,
+        { debug: errorMessage }
       );
     }
 
     if (distanciaKm === null) {
       console.error("Falha ao calcular distância");
-      console.error(`Origem: ${JSON.stringify(origemCoords)}`);
-      console.error(`Destino: ${JSON.stringify(destinoCoords)}`);
-      console.error(`API Key presente: ${!!OPENROUTE_API_KEY}`);
-      console.error(`API Key length: ${OPENROUTE_API_KEY?.length || 0}`);
-      
-      return new Response(
-        JSON.stringify({ 
-          error: "Erro ao calcular distância. Verifique os logs para mais detalhes.",
-          debug: {
-            origem: origemCoords,
-            destino: destinoCoords,
-            apiKeyPresent: !!OPENROUTE_API_KEY,
-            apiKeyLength: OPENROUTE_API_KEY?.length || 0,
-            cepOrigem: cepOrigem,
-            cepDestino: cepDestino.replace(/\D/g, ""),
-          }
-        }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+      return createErrorResponse(
+        ERROR_CODES.ROUTE_CALCULATION_ERROR,
+        "Não foi possível calcular a distância entre os endereços. Tente novamente mais tarde.",
+        503
       );
     }
     console.log(`Distância calculada: ${distanciaKm} km`);
@@ -241,6 +399,8 @@ Deno.serve(async (req: Request) => {
         valorFrete: Math.round(valorFrete * 100) / 100,
         cepOrigem: cepOrigem,
         cepDestino: cepDestino.replace(/\D/g, ""),
+        origemCoords: origemCoords,
+        destinoCoords: destinoCoords,
       }),
       {
         status: 200,
@@ -250,34 +410,89 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     console.error("Erro ao calcular frete:", error);
     const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
-    const errorStack = error instanceof Error ? error.stack : undefined;
     
-    return new Response(
-      JSON.stringify({
-        error: "Erro interno ao calcular frete",
-        message: errorMessage,
-        stack: errorStack,
-        debug: {
-          openrouteApiKeyPresent: !!OPENROUTE_API_KEY,
-          openrouteApiKeyLength: OPENROUTE_API_KEY?.length || 0,
-        }
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+    // Verifica se é erro de timeout
+    if (errorMessage.includes('timeout') || errorMessage.includes('AbortError')) {
+      return createErrorResponse(
+        ERROR_CODES.SERVICE_UNAVAILABLE,
+        "O serviço demorou muito para responder. Tente novamente.",
+        504
+      );
+    }
+    
+    // Verifica se é erro de rede
+    if (errorMessage.includes('fetch') || errorMessage.includes('network')) {
+      return createErrorResponse(
+        ERROR_CODES.SERVICE_UNAVAILABLE,
+        "Erro de conexão com o serviço. Verifique sua internet e tente novamente.",
+        503
+      );
+    }
+    
+    return createErrorResponse(
+      ERROR_CODES.INTERNAL_ERROR,
+      "Erro interno ao processar sua solicitação. Tente novamente mais tarde.",
+      500,
+      { debug: errorMessage }
     );
   }
 });
 
 /**
- * Busca coordenadas (lat, lng) de um CEP usando ViaCEP
+ * Busca coordenadas (lat, lng) de um CEP usando CepAberto (primário) ou ViaCEP (fallback)
  */
 async function buscarCoordenadasPorCep(
   cep: string
 ): Promise<{ lat: number; lng: number } | null> {
+  const cepLimpo = cep.replace(/\D/g, "");
+  
+  // Tenta CepAberto primeiro (já retorna coordenadas)
+  if (CEPABERTO_API_KEY) {
+    console.log(`Tentando CepAberto para CEP: ${cepLimpo}`);
+    try {
+      const response = await fetch(
+        `https://www.cepaberto.com/api/v3/cep?cep=${cepLimpo}`,
+        {
+          headers: {
+            "Authorization": `Token token=${CEPABERTO_API_KEY}`,
+          },
+          signal: AbortSignal.timeout(10000),
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        
+        if (data.latitude && data.longitude) {
+          const coords = {
+            lat: parseFloat(data.latitude),
+            lng: parseFloat(data.longitude),
+          };
+          console.log(`Coordenadas encontradas no CepAberto: ${coords.lat}, ${coords.lng}`);
+          return coords;
+        }
+      } else {
+        console.log(`CepAberto falhou com status: ${response.status}`);
+      }
+    } catch (error) {
+      console.log("Erro ao usar CepAberto:", error instanceof Error ? error.message : String(error));
+    }
+  } else {
+    console.log("CEPABERTO_API_KEY não configurada, pulando para ViaCEP");
+  }
+
+  // Fallback para ViaCEP + Nominatim
+  console.log(`Usando fallback ViaCEP para CEP: ${cepLimpo}`);
+  return await buscarCoordenadasViaCep(cepLimpo);
+}
+
+/**
+ * Busca coordenadas (lat, lng) de um CEP usando ViaCEP + Nominatim (fallback)
+ */
+async function buscarCoordenadasViaCep(
+  cepLimpo: string
+): Promise<{ lat: number; lng: number } | null> {
   try {
-    const cepLimpo = cep.replace(/\D/g, "");
     const response = await fetch(
       `https://viacep.com.br/ws/${cepLimpo}/json/`
     );
@@ -335,7 +550,7 @@ async function buscarCoordenadasPorCep(
         lng: parseFloat(nominatimData[0].lon),
       };
       
-      console.log(`Coordenadas encontradas: ${coords.lat}, ${coords.lng}`);
+      console.log(`Coordenadas encontradas no ViaCEP+Nominatim: ${coords.lat}, ${coords.lng}`);
       return coords;
     } catch (error) {
       console.error("Erro ao buscar no Nominatim:", error);
@@ -433,13 +648,29 @@ async function calcularDistancia(
       }
       
       console.error(`Erro OpenRouteService (${response.status}):`, errorText);
-      console.error(`URL chamada: https://api.openrouteservice.org/v2/directions/driving-car?api_key=***&start=${origem.lng},${origem.lat}&end=${destino.lng},${destino.lat}`);
-      console.error(`Coordenadas origem: [${origem.lng}, ${origem.lat}] (lng, lat)`);
-      console.error(`Coordenadas destino: [${destino.lng}, ${destino.lat}] (lng, lat)`);
-      console.error(`API Key presente: ${!!apiKey}, length: ${apiKey?.length || 0}`);
-      console.error(`Erro detalhado:`, JSON.stringify(errorJson));
       
-      // Retorna erro mais detalhado para debug
+      // Trata diferentes tipos de erros do OpenRouteService
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("Erro de autenticação no serviço de rotas. API key inválida.");
+      }
+      
+      if (response.status === 429) {
+        throw new Error("Rate limit excedido no serviço de rotas (429).");
+      }
+      
+      if (response.status === 400) {
+        throw new Error("Parâmetros inválidos para cálculo de rota (400).");
+      }
+      
+      if (response.status === 404) {
+        throw new Error("Rota não encontrada entre os pontos especificados (404).");
+      }
+      
+      if (response.status >= 500) {
+        throw new Error(`Serviço de rotas indisponível (${response.status}).`);
+      }
+      
+      // Erro genérico com detalhes
       throw new Error(`OpenRouteService error (${response.status}): ${JSON.stringify(errorJson)}`);
     }
 
