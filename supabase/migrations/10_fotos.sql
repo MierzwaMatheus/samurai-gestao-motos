@@ -16,10 +16,13 @@ CREATE INDEX IF NOT EXISTS idx_fotos_user_id ON public.fotos(user_id);
 CREATE INDEX IF NOT EXISTS idx_fotos_tipo ON public.fotos(tipo);
 
 -- Triggers
+DROP TRIGGER IF EXISTS set_fotos_user_id ON public.fotos;
 CREATE TRIGGER set_fotos_user_id
   BEFORE INSERT ON public.fotos
   FOR EACH ROW
   EXECUTE FUNCTION set_user_id();
+
+DROP TRIGGER IF EXISTS trigger_log_fotos ON public.fotos;
 CREATE TRIGGER trigger_log_fotos
   AFTER INSERT ON public.fotos
   FOR EACH ROW

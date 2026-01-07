@@ -176,11 +176,26 @@ DECLARE
   total_tipos DECIMAL;
   total_personalizados DECIMAL;
 BEGIN
-  SELECT COALESCE(SUM(valor * quantidade), 0) INTO total_tipos
-  FROM public.entradas_tipos_servico
-  WHERE entrada_id = entrada_id_param;
+  -- Calcular valor dos tipos de serviço (considerando alinhamento com/sem óleo)
+  SELECT COALESCE(SUM(
+    CASE 
+      WHEN ts.categoria = 'alinhamento' THEN
+        CASE 
+          WHEN ets.com_oleo = true THEN
+            COALESCE(ts.preco_oficina_com_oleo, ts.preco_oficina, 0)
+          ELSE
+            COALESCE(ts.preco_oficina_sem_oleo, ts.preco_oficina, 0)
+        END
+      ELSE
+        COALESCE(ts.preco_oficina, 0)
+    END * ets.quantidade
+  ), 0) INTO total_tipos
+  FROM public.entradas_tipos_servico ets
+  JOIN public.tipos_servico ts ON ets.tipo_servico_id = ts.id
+  WHERE ets.entrada_id = entrada_id_param;
   
-  SELECT COALESCE(SUM(valor), 0) INTO total_personalizados
+  -- Calcular valor dos serviços personalizados
+  SELECT COALESCE(SUM(valor * quantidade), 0) INTO total_personalizados
   FROM public.servicos_personalizados
   WHERE entrada_id = entrada_id_param;
   
