@@ -427,10 +427,6 @@ export default function Cadastro() {
     }
 
     if (tipo === "orcamento") {
-      if (!formData.descricao) {
-        toast.error("Descrição é obrigatória para orçamentos");
-        return;
-      }
       if (!formData.cep || formData.cep.replace(/\D/g, "").length !== 8) {
         toast.error("CEP é obrigatório para orçamentos (para cálculo de frete)");
         return;
