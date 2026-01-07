@@ -457,7 +457,23 @@ export function GerenciarServicos({
                           "text-xs",
                           isSelected ? "text-accent-foreground/80" : "text-foreground/60"
                         )}>
-                          R$ {(tipoPreco === "particular" ? tipo.precoParticular : tipo.precoOficina).toFixed(2)}
+                          R$ {(() => {
+                            if (tipo.categoria === "alinhamento") {
+                              const servicoSelecionado = servicos.find(s => s.tipoServicoId === tipo.id);
+                              if (servicoSelecionado?.comOleo) {
+                                return (tipoPreco === "particular" 
+                                  ? (tipo.precoParticularComOleo ?? tipo.precoParticular)
+                                  : (tipo.precoOficinaComOleo ?? tipo.precoOficina)
+                                ).toFixed(2);
+                              } else {
+                                return (tipoPreco === "particular" 
+                                  ? (tipo.precoParticularSemOleo ?? tipo.precoParticular)
+                                  : (tipo.precoOficinaSemOleo ?? tipo.precoOficina)
+                                ).toFixed(2);
+                              }
+                            }
+                            return (tipoPreco === "particular" ? tipo.precoParticular : tipo.precoOficina).toFixed(2);
+                          })()}
                         </div>
                       </div>
                       <Button

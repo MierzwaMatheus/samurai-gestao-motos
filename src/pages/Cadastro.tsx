@@ -141,7 +141,22 @@ export default function Cadastro() {
 
         tipos.forEach((tipo, index) => {
           if (tipo) {
-            const preco = tipoPreco === "particular" ? tipo.precoParticular : tipo.precoOficina;
+            let preco = 0;
+            if (tipo.categoria === "alinhamento") {
+              // Para alinhamento, verifica se tem ou não óleo
+              if (servicos[index].comOleo) {
+                preco = tipoPreco === "particular" 
+                  ? (tipo.precoParticularComOleo ?? tipo.precoParticular)
+                  : (tipo.precoOficinaComOleo ?? tipo.precoOficina);
+              } else {
+                preco = tipoPreco === "particular" 
+                  ? (tipo.precoParticularSemOleo ?? tipo.precoParticular)
+                  : (tipo.precoOficinaSemOleo ?? tipo.precoOficina);
+              }
+            } else {
+              // Para outros serviços, usa o preço padrão
+              preco = tipoPreco === "particular" ? tipo.precoParticular : tipo.precoOficina;
+            }
             total += preco * servicos[index].quantidade;
           }
         });
