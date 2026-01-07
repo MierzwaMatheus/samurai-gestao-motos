@@ -28,6 +28,7 @@ export class SupabaseEntradaRepository implements EntradaRepository {
         status_entrega: entrada.statusEntrega || "pendente",
         progresso: entrada.progresso,
         final_numero_quadro: entrada.finalNumeroQuadro,
+        tipo_preco: entrada.tipoPreco || "oficina",
       })
       .select()
       .single();
@@ -129,6 +130,7 @@ export class SupabaseEntradaRepository implements EntradaRepository {
     if (dados.progresso !== undefined) updateData.progresso = dados.progresso;
     if (dados.finalNumeroQuadro !== undefined) updateData.final_numero_quadro = dados.finalNumeroQuadro;
     if (dados.osAssinadaUrl !== undefined) updateData.os_assinada_url = dados.osAssinadaUrl;
+    if (dados.tipoPreco !== undefined) updateData.tipo_preco = dados.tipoPreco;
     if (dados.fotosStatus !== undefined) {
       // Converte array de FotoStatus para JSONB
       updateData.fotos_status = JSON.stringify(
@@ -201,6 +203,7 @@ export class SupabaseEntradaRepository implements EntradaRepository {
       progresso: data.progresso || 0,
       finalNumeroQuadro: data.final_numero_quadro,
       osAssinadaUrl: data.os_assinada_url,
+      tipoPreco: data.tipo_preco,
       fotosStatus: fotosStatus.map((foto: any) => ({
         url: foto.url,
         data: new Date(foto.data),

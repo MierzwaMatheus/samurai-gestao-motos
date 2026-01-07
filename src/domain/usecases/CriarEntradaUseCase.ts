@@ -98,6 +98,7 @@ export class CriarEntradaUseCase {
       status: dados.tipo === "entrada" ? "pendente" : "pendente",
       statusEntrega: "pendente",
       progresso: 0,
+      tipoPreco: dados.tipoPreco || "oficina",
     });
 
     // 5. Vincular tipos de serviço à entrada (se houver)
@@ -125,7 +126,7 @@ export class CriarEntradaUseCase {
 
     // 8. Se for orçamento, criar orçamento
     let orcamentoId: string | undefined;
-    if (dados.tipo === "orcamento" && dados.descricao && valorCobrado > 0) {
+    if (dados.tipo === "orcamento" && valorCobrado > 0) {
       const dataExpiracao = dados.dataOrcamento 
         ? new Date(dados.dataOrcamento.getTime() + 7 * 24 * 60 * 60 * 1000) // 7 dias após data do orçamento
         : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 dias a partir de agora

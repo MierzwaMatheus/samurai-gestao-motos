@@ -95,6 +95,7 @@ export interface Entrada {
   finalNumeroQuadro?: string;
   osAssinadaUrl?: string;
   fotosStatus?: FotoStatus[];
+  tipoPreco?: TipoPreco;
   criadoEm: Date;
   atualizadoEm: Date;
 }
