@@ -54,6 +54,7 @@ export default function Servicos() {
   );
 
   const [tiposServico, setTiposServico] = useState<TipoServico[]>([]);
+  const [tiposServicoFiltrados, setTiposServicoFiltrados] = useState<TipoServico[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [dialogCriarOpen, setDialogCriarOpen] = useState(false);
@@ -85,13 +86,11 @@ export default function Servicos() {
   const [editandoPrecoParticularComOleo, setEditandoPrecoParticularComOleo] = useState("");
   const [editandoPrecoParticularSemOleo, setEditandoPrecoParticularSemOleo] = useState("");
 
-  // Buscar tipos de serviço
+  // Buscar tipos de serviço (apenas uma vez no carregamento)
   const buscarTiposServico = useCallback(async () => {
     setLoading(true);
     try {
-      const resultados = await listarTiposServicoUseCase.execute(
-        searchQuery.trim() || undefined
-      );
+      const resultados = await listarTiposServicoUseCase.execute();
       setTiposServico(resultados);
     } catch (error) {
       console.error("Erro ao buscar tipos de serviço:", error);
@@ -100,7 +99,19 @@ export default function Servicos() {
     } finally {
       setLoading(false);
     }
-  }, [listarTiposServicoUseCase, searchQuery]);
+  }, [listarTiposServicoUseCase]);
+
+  // Filtrar tipos de serviço localmente
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setTiposServicoFiltrados(tiposServico);
+    } else {
+      const filtrados = tiposServico.filter(tipo =>
+        tipo.nome.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      setTiposServicoFiltrados(filtrados);
+    }
+  }, [searchQuery, tiposServico]);
 
   useEffect(() => {
     buscarTiposServico();
@@ -427,7 +438,7 @@ export default function Servicos() {
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-accent" />
             </div>
-          ) : tiposServico.length === 0 ? (
+          ) : tiposServicoFiltrados.length === 0 ? (
             <Card className="p-12 text-center">
               <Wrench className="mx-auto mb-4 text-foreground/40" size={48} />
               <p className="text-foreground/60">
@@ -438,7 +449,7 @@ export default function Servicos() {
             </Card>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {tiposServico.map((tipo) => (
+              {tiposServicoFiltrados.map((tipo) => (
                 <Card key={tipo.id} className="p-4 bg-card border-foreground/10">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">

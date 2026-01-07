@@ -185,13 +185,11 @@ export class SupabaseTipoServicoRepository implements TipoServicoRepository {
   }
 
   private mapToTipoServico(data: any): TipoServico {
-    console.log('Dados brutos do banco:', JSON.stringify(data, null, 2));
-    
     const tipoServico = {
       id: data.id,
       nome: data.nome,
-      precoOficina: parseFloat(data.preco_oficina ?? data.valor ?? 0) || 0, // Suporte a migração: usa valor se preco_oficina não existir
-      precoParticular: parseFloat(data.preco_particular ?? data.valor ?? 0) || 0, // Suporte a migração: usa valor se preco_particular não existir
+      precoOficina: parseFloat(data.preco_oficina ?? data.valor ?? 0) || 0,
+      precoParticular: parseFloat(data.preco_particular ?? data.valor ?? 0) || 0,
       categoria: data.categoria || "padrao",
       precoOficinaComOleo: data.preco_oficina_com_oleo ? parseFloat(data.preco_oficina_com_oleo) : undefined,
       precoOficinaSemOleo: data.preco_oficina_sem_oleo ? parseFloat(data.preco_oficina_sem_oleo) : undefined,
@@ -201,8 +199,6 @@ export class SupabaseTipoServicoRepository implements TipoServicoRepository {
       criadoEm: new Date(data.criado_em),
       atualizadoEm: new Date(data.atualizado_em),
     };
-    
-    console.log('Tipo de serviço mapeado:', JSON.stringify(tipoServico, null, 2));
     
     return tipoServico;
   }

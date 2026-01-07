@@ -9,6 +9,7 @@ import Clientes from "@/pages/Clientes";
 import Configuracoes from "@/pages/Configuracoes";
 import Servicos from "@/pages/Servicos";
 import Usuarios from "@/pages/Usuarios";
+import { Relatorios } from "@/pages/Relatorios";
 import { Route, Switch, useLocation } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -93,6 +94,11 @@ function Router() {
       <Route path={"/usuarios"}>
         <ProtectedRoute>
           <Usuarios />
+        </ProtectedRoute>
+      </Route>
+      <Route path={"/relatorios"}>
+        <ProtectedRoute>
+          <Relatorios />
         </ProtectedRoute>
       </Route>
       <Route path={"/404"} component={NotFound} />
