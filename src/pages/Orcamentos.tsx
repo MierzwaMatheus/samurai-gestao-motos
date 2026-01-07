@@ -4,7 +4,7 @@ import BottomNav from "@/components/BottomNav";
 import { OrcamentoCompleto } from "@shared/types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, Clock, CheckCircle2, Loader2, Phone, MapPin, Truck, Image as ImageIcon, Wrench, ClipboardList, Trash2, Settings, History } from "lucide-react";
+import { FileText, Clock, CheckCircle2, Loader2, Phone, MapPin, Truck, Image as ImageIcon, Wrench, ClipboardList, Trash2, Settings, History, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { SupabaseOrcamentoRepository } from "@/infrastructure/repositories/SupabaseOrcamentoRepository";
@@ -14,6 +14,7 @@ import { SupabaseMotoRepository } from "@/infrastructure/repositories/SupabaseMo
 import { SupabaseFotoRepository } from "@/infrastructure/repositories/SupabaseFotoRepository";
 import { SupabaseTipoServicoRepository } from "@/infrastructure/repositories/SupabaseTipoServicoRepository";
 import { SupabaseServicoPersonalizadoRepository } from "@/infrastructure/repositories/SupabaseServicoPersonalizadoRepository";
+import { SupabaseStorageApi } from "@/infrastructure/storage/SupabaseStorageApi";
 import { useOrcamentos } from "@/hooks/useOrcamentos";
 import { ConverterOrcamentoEntradaUseCase } from "@/domain/usecases/ConverterOrcamentoEntradaUseCase";
 import { useGerarOS } from "@/hooks/useGerarOS";
@@ -37,6 +38,7 @@ export default function Orcamentos() {
   const fotoRepo = useMemo(() => new SupabaseFotoRepository(), []);
   const tipoServicoRepo = useMemo(() => new SupabaseTipoServicoRepository(), []);
   const servicoPersonalizadoRepo = useMemo(() => new SupabaseServicoPersonalizadoRepository(), []);
+  const storageApi = useMemo(() => new SupabaseStorageApi(), []);
 
   // Converte filtro UI para status do banco
   const statusBanco = filtro === "ativos" ? "ativo" : "expirado";
@@ -64,7 +66,9 @@ export default function Orcamentos() {
     clienteRepo,
     motoRepo,
     fotoRepo,
-    tipoServicoRepo
+    tipoServicoRepo,
+    servicoPersonalizadoRepo,
+    storageApi
   );
 
   const { deletar: deletarOrcamento, loading: loadingDeletar } = useDeletarOrcamento(orcamentoRepo);
@@ -293,7 +297,7 @@ export default function Orcamentos() {
                           {/* Tipos de Serviço - Compacto */}
                           {(orcamento.tiposServico?.length || 0) > 0 && (
                             <div className="flex flex-wrap gap-1 mt-1">
-                              {orcamento.tiposServico.slice(0, 2).map((tipo) => (
+                              {(orcamento.tiposServico || []).slice(0, 2).map((tipo) => (
                                 <Badge
                                   key={tipo.id}
                                   variant="secondary"
@@ -304,9 +308,9 @@ export default function Orcamentos() {
                                   {tipo.quantidade > 1 && ` (${tipo.quantidade}x)`}
                                 </Badge>
                               ))}
-                              {orcamento.tiposServico.length > 2 && (
+                              {(orcamento.tiposServico?.length || 0) > 2 && (
                                 <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5">
-                                  +{orcamento.tiposServico.length - 2}
+                                  +{(orcamento.tiposServico?.length || 0) - 2}
                                 </Badge>
                               )}
                             </div>
@@ -315,7 +319,7 @@ export default function Orcamentos() {
                           {/* Serviços Personalizados - Compacto */}
                           {(orcamento.servicosPersonalizados?.length || 0) > 0 && (
                             <div className="flex flex-wrap gap-1 mt-1">
-                              {orcamento.servicosPersonalizados.slice(0, 2).map((servico) => (
+                              {(orcamento.servicosPersonalizados || []).slice(0, 2).map((servico) => (
                                 <Badge
                                   key={servico.id}
                                   variant="outline"
@@ -326,9 +330,9 @@ export default function Orcamentos() {
                                   {servico.quantidade > 1 && ` (${servico.quantidade}x)`}
                                 </Badge>
                               ))}
-                              {orcamento.servicosPersonalizados.length > 2 && (
+                              {(orcamento.servicosPersonalizados?.length || 0) > 2 && (
                                 <Badge variant="outline" className="text-[10px] px-1.5 py-0.5 border-accent/30">
-                                  +{orcamento.servicosPersonalizados.length - 2}
+                                  +{(orcamento.servicosPersonalizados?.length || 0) - 2}
                                 </Badge>
                               )}
                             </div>
