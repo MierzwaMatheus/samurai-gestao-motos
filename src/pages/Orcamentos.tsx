@@ -56,9 +56,10 @@ export default function Orcamentos() {
       clienteRepo,
       motoRepo,
       fotoRepo,
-      tipoServicoRepo
+      tipoServicoRepo,
+      servicoPersonalizadoRepo
     ),
-    [orcamentoRepo, entradaRepo, clienteRepo, motoRepo, fotoRepo, tipoServicoRepo]
+    [orcamentoRepo, entradaRepo, clienteRepo, motoRepo, fotoRepo, tipoServicoRepo, servicoPersonalizadoRepo]
   );
 
   const { gerar: gerarOS, loading: loadingOS } = useGerarOS(

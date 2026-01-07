@@ -4,6 +4,7 @@ import { ClienteRepository } from "@/domain/interfaces/ClienteRepository";
 import { MotoRepository } from "@/domain/interfaces/MotoRepository";
 import { FotoRepository } from "@/domain/interfaces/FotoRepository";
 import { TipoServicoRepository } from "@/domain/interfaces/TipoServicoRepository";
+import { ServicoPersonalizadoRepository } from "@/domain/interfaces/ServicoPersonalizadoRepository";
 import { DadosCadastro } from "@shared/types";
 
 /**
@@ -20,7 +21,8 @@ export class PrepararDadosOrcamentoParaOSUseCase {
     private clienteRepo: ClienteRepository,
     private motoRepo: MotoRepository,
     private fotoRepo: FotoRepository,
-    private tipoServicoRepo: TipoServicoRepository
+    private tipoServicoRepo: TipoServicoRepository,
+    private servicoPersonalizadoRepo: ServicoPersonalizadoRepository
   ) { }
 
   async execute(orcamentoId: string): Promise<DadosCadastro> {
@@ -54,19 +56,29 @@ export class PrepararDadosOrcamentoParaOSUseCase {
     const tiposServico = await this.tipoServicoRepo.buscarPorEntradaId(entrada.id);
     const tiposServicoIds = tiposServico.length > 0 ? tiposServico.map((t) => t.id) : [];
 
+    // Busca serviços personalizados da entrada (opcional)
+    const servicosPersonalizados = await this.servicoPersonalizadoRepo.buscarPorEntradaId(entrada.id);
+
     // Prepara dados para o formulário
-    // IMPORTANTE: 
+    // IMPORTANTE:
     // - Campos obrigatórios são sempre preenchidos
     // - Campos opcionais só são preenchidos se existirem e não forem vazios
-    // - observacoes NÃO é preenchido automaticamente
+    // - observações NÃO é preenchido automaticamente
 
     const servicosSelecionados = tiposServico.map(t => ({
       tipoServicoId: t.id,
       quantidade: t.quantidade,
       comOleo: t.comOleo
     }));
+
+    const servicosPersonalizadosInput = servicosPersonalizados.map(sp => ({
+      nome: sp.nome,
+      valor: sp.valor,
+      quantidade: sp.quantidade
+    }));
+
     const dadosCadastro: DadosCadastro = {
-      tipo: "entrada",
+      tipo: entrada.tipo,
       // Campos obrigatórios
       cliente: cliente.nome,
       clienteId: cliente.id,
@@ -91,8 +103,10 @@ export class PrepararDadosOrcamentoParaOSUseCase {
       dataOrcamento: entrada.dataOrcamento || undefined,
       dataEntrada: entrada.dataEntrada || undefined,
       dataEntrega: entrada.dataEntrega || undefined,
+      tipoPreco: entrada.tipoPreco || "oficina",
 
       servicos: servicosSelecionados,
+      servicosPersonalizados: servicosPersonalizadosInput,
     };
 
     return dadosCadastro;
