@@ -204,7 +204,7 @@ export async function gerarOSPDF(dados: DadosOS): Promise<Blob> {
               <img src="/assets/img/logo-samurai.png" alt="SAMURAI" style="max-width: 100%; max-height: 80px;" onerror="this.onerror=null; this.parentNode.innerHTML='<h2>SAMURAI</h2>';"/>
             </td>
             <td class="header-info">
-              <h1>SAMURAI GESTÃO DE MOTOS</h1>
+              <h1>SAMURAI ALINHAMENTO DE MOTO</h1>
               <p>R. Maria Ondina, 275 - Jardim Sagrado Coracao, Jandira - SP, 06608-280, Brasil</p>
               <p>WhatsApp: (11) 95759-3725 | Instagram: @SAMURAI_ALINHAMENTO</p>
               <br>
