@@ -46,6 +46,7 @@ import GaleriaFotosMoto from "@/components/GaleriaFotosMoto";
 import { HistoryModal } from "@/components/HistoryModal";
 import { useGerarOS } from "@/hooks/useGerarOS";
 import { FileText } from "lucide-react";
+import { FormaPagamento } from "@shared/types";
 
 export default function Oficina() {
   const entradaRepo = useMemo(() => new SupabaseEntradaRepository(), []);
@@ -68,6 +69,9 @@ export default function Oficina() {
   const [buscaConcluidos, setBuscaConcluidos] = useState("");
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const [selectedEntradaId, setSelectedEntradaId] = useState<string | null>(null);
+  const [mostrarModalPagamento, setMostrarModalPagamento] = useState(false);
+  const [entradaPagamentoId, setEntradaPagamentoId] = useState<string | null>(null);
+  const [formaPagamentoSelecionada, setFormaPagamentoSelecionada] = useState<FormaPagamento | null>(null);
 
   // Ler parâmetro 'cliente' da URL e preencher a busca
   useEffect(() => {
@@ -182,12 +186,54 @@ export default function Oficina() {
   };
 
   const handleAtualizarStatus = async (entradaId: string, novoStatus: "pendente" | "alinhando" | "concluido") => {
-    const sucesso = await atualizarProgresso(entradaId, { status: novoStatus });
+    if (novoStatus === "concluido") {
+      setEntradaPagamentoId(entradaId);
+      setFormaPagamentoSelecionada(null);
+      setMostrarModalPagamento(true);
+      return;
+    }
+
+    const sucesso = await atualizarProgresso(entradaId, {
+      status: novoStatus,
+      dataConclusao: null,
+      formaPagamento: null,
+    });
     if (sucesso) {
-      atualizarMoto(entradaId, { status: novoStatus });
+      atualizarMoto(entradaId, { status: novoStatus, dataConclusao: null, formaPagamento: null });
       toast.success("Status atualizado!");
     } else {
       toast.error("Erro ao atualizar status");
+    }
+  };
+
+  const handleCancelarPagamento = () => {
+    setMostrarModalPagamento(false);
+    setEntradaPagamentoId(null);
+    setFormaPagamentoSelecionada(null);
+  };
+
+  const handleConfirmarPagamento = async () => {
+    if (!entradaPagamentoId || !formaPagamentoSelecionada) {
+      toast.error("Selecione a forma de pagamento");
+      return;
+    }
+
+    const sucesso = await atualizarProgresso(entradaPagamentoId, {
+      status: "concluido",
+      dataConclusao: new Date(),
+      formaPagamento: formaPagamentoSelecionada,
+    });
+
+    if (sucesso) {
+      atualizarMoto(entradaPagamentoId, {
+        status: "concluido",
+        dataConclusao: new Date(),
+        formaPagamento: formaPagamentoSelecionada,
+      });
+      toast.success("Entrada concluída com sucesso!");
+      handleCancelarPagamento();
+    } else {
+      toast.error("Erro ao concluir entrada");
     }
   };
 
@@ -296,6 +342,16 @@ export default function Oficina() {
               <History size={16} />
             </button>
           </div>
+          {(moto.marca || moto.ano || moto.cilindrada) && (
+            <p className="font-sans text-xs text-foreground/50 mt-1">
+              {[moto.marca, moto.ano, moto.cilindrada].filter(Boolean).join(" • ")}
+            </p>
+          )}
+          {moto.status === "concluido" && moto.dataConclusao && (
+            <p className="font-sans text-xs text-foreground/60 mt-1">
+              Concluído em {new Date(moto.dataConclusao).toLocaleDateString("pt-BR")}
+            </p>
+          )}
           {/* Tipos de Serviço */}
           {moto.tiposServico && moto.tiposServico.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-2">
@@ -354,7 +410,7 @@ export default function Oficina() {
             >
               <ChevronDown size={16} />
             </button>
-            <span className="font-sans text-xs text-foreground/60 min-w-[3rem] text-center">
+            <span className="font-sans text-xs text-foreground/60 min-w-12 text-center">
               {moto.progresso}%
             </span>
             <button
@@ -631,6 +687,75 @@ export default function Oficina() {
                   ) : (
                     "Salvar"
                   )}
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {mostrarModalPagamento && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="card-samurai max-w-sm w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-serif text-lg text-foreground">Forma de pagamento</h3>
+              <button
+                onClick={handleCancelarPagamento}
+                className="text-foreground/40 hover:text-foreground transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-widest">Selecione</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant={formaPagamentoSelecionada === "pix" ? "default" : "outline"}
+                    onClick={() => setFormaPagamentoSelecionada("pix")}
+                  >
+                    Pix
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={formaPagamentoSelecionada === "credito" ? "default" : "outline"}
+                    onClick={() => setFormaPagamentoSelecionada("credito")}
+                  >
+                    Crédito
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={formaPagamentoSelecionada === "debito" ? "default" : "outline"}
+                    onClick={() => setFormaPagamentoSelecionada("debito")}
+                  >
+                    Débito
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={formaPagamentoSelecionada === "boleto" ? "default" : "outline"}
+                    onClick={() => setFormaPagamentoSelecionada("boleto")}
+                  >
+                    Boleto
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <Button
+                  onClick={handleCancelarPagamento}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleConfirmarPagamento}
+                  className="flex-1 bg-accent hover:brightness-110"
+                  disabled={!formaPagamentoSelecionada}
+                >
+                  Confirmar
                 </Button>
               </div>
             </div>

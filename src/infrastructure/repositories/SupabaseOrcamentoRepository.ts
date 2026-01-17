@@ -96,8 +96,8 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
       }
 
       // Busca clientes e motos em paralelo
-      const clienteIds = [...new Set(entradas?.map((e: any) => e.cliente_id).filter(Boolean) || [])];
-      const motoIds = [...new Set(entradas?.map((e: any) => e.moto_id).filter(Boolean) || [])];
+      const clienteIds = Array.from(new Set(entradas?.map((e: any) => e.cliente_id).filter(Boolean) || []));
+      const motoIds = Array.from(new Set(entradas?.map((e: any) => e.moto_id).filter(Boolean) || []));
 
       // Valida que os IDs são UUIDs válidos
       const clienteIdsValidos = clienteIds.filter((id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
@@ -113,7 +113,7 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
         motoIdsValidos.length > 0
           ? supabase
               .from("motos")
-              .select("id, modelo, placa")
+              .select("id, modelo, placa, marca, ano, cilindrada")
               .in("id", motoIdsValidos)
           : Promise.resolve({ data: [], error: null }),
       ]);
@@ -203,6 +203,9 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
           cliente: cliente?.nome || "Cliente não encontrado",
           telefone: cliente?.telefone,
           moto: moto?.modelo || "Moto não encontrada",
+          marca: moto?.marca,
+          ano: moto?.ano,
+          cilindrada: moto?.cilindrada,
           placa: moto?.placa,
           finalNumeroQuadro: (moto as any)?.final_numero_quadro,
           descricao: entrada?.descricao,

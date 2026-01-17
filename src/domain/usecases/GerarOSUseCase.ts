@@ -90,7 +90,11 @@ export class GerarOSUseCase {
     );
 
     return {
-      entrada,
+      entrada: {
+        ...entrada,
+        dataConclusao: entrada.dataConclusao ?? null,
+        formaPagamento: entrada.formaPagamento ?? null,
+      },
       cliente: {
         nome: cliente.nome,
         telefone: cliente.telefone,
@@ -100,10 +104,9 @@ export class GerarOSUseCase {
         modelo: moto.modelo,
         placa: moto.placa,
         finalNumeroQuadro: moto.finalNumeroQuadro,
-        // Campos placeholders conforme solicitado
-        ano: undefined,
-        marca: undefined,
-        cilindrada: undefined
+        ano: moto.ano,
+        marca: moto.marca,
+        cilindrada: moto.cilindrada
       },
       fotos: [
         ...fotos.map((f) => ({ url: f.url, tipo: f.tipo })),

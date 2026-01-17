@@ -254,6 +254,11 @@ export default function Orcamentos() {
 
                         {/* Informações Essenciais (Mobile) */}
                         <div className="space-y-1">
+                          {(orcamento.marca || orcamento.ano || orcamento.cilindrada) && (
+                            <p className="font-sans text-[11px] text-foreground/50">
+                              {[orcamento.marca, orcamento.ano, orcamento.cilindrada].filter(Boolean).join(" • ")}
+                            </p>
+                          )}
                           {/* Placa / Final do Quadro */}
                           {(orcamento.placa || orcamento.finalNumeroQuadro) && (
                             <div className="flex items-center gap-2 text-xs text-foreground/60">

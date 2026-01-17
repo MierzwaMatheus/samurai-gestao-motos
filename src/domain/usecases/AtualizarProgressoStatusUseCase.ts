@@ -12,6 +12,8 @@ export class AtualizarProgressoStatusUseCase {
     dados: {
       progresso?: number;
       status?: "pendente" | "alinhando" | "concluido";
+      dataConclusao?: Date | null;
+      formaPagamento?: "pix" | "credito" | "debito" | "boleto" | null;
     }
   ): Promise<void> {
     // Validações de negócio
@@ -29,6 +31,8 @@ export class AtualizarProgressoStatusUseCase {
     await this.entradaRepo.atualizar(entradaId, {
       progresso: dados.progresso,
       status: dados.status,
+      dataConclusao: dados.dataConclusao,
+      formaPagamento: dados.formaPagamento,
     });
   }
 }

@@ -36,6 +36,9 @@ export interface DadosCadastro {
   endereco?: string;
   cep?: string;
   moto: string;
+  marca?: string;
+  ano?: string;
+  cilindrada?: string;
   placa?: string;
   finalNumeroQuadro?: string;
   valorCobrado?: number; // Calculado automaticamente, não editável
@@ -68,11 +71,16 @@ export interface Moto {
   id: string;
   clienteId: string;
   modelo: string;
+  marca?: string;
+  ano?: string;
+  cilindrada?: string;
   placa?: string;
   finalNumeroQuadro?: string;
   criadoEm: Date;
   atualizadoEm: Date;
 }
+
+export type FormaPagamento = "pix" | "credito" | "debito" | "boleto";
 
 export interface Entrada {
   id: string;
@@ -96,6 +104,8 @@ export interface Entrada {
   osAssinadaUrl?: string;
   fotosStatus?: FotoStatus[];
   tipoPreco?: TipoPreco;
+  dataConclusao?: Date | null;
+  formaPagamento?: FormaPagamento | null;
   criadoEm: Date;
   atualizadoEm: Date;
 }
@@ -130,6 +140,9 @@ export interface OrcamentoCompleto extends Orcamento {
   cliente: string;
   telefone?: string;
   moto: string;
+  marca?: string;
+  ano?: string;
+  cilindrada?: string;
   placa?: string;
   finalNumeroQuadro?: string;
   descricao?: string;
@@ -148,6 +161,8 @@ export interface MotoCompleta extends Moto {
   cliente: string;
   status: "pendente" | "alinhando" | "concluido";
   progresso: number;
+  dataConclusao?: Date | null;
+  formaPagamento?: FormaPagamento | null;
   fotosStatus?: FotoStatus[];
   fotos: string[]; // Legado - fotos do tipo "moto"
   tiposServico?: TipoServicoComQuantidade[];

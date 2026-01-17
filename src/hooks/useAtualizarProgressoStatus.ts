@@ -10,6 +10,8 @@ export function useAtualizarProgressoStatus(useCase: AtualizarProgressoStatusUse
     dados: {
       progresso?: number;
       status?: "pendente" | "alinhando" | "concluido";
+      dataConclusao?: Date | null;
+      formaPagamento?: "pix" | "credito" | "debito" | "boleto" | null;
     }
   ): Promise<boolean> => {
     setLoading(true);

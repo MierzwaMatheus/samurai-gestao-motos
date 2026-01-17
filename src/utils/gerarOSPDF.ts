@@ -13,6 +13,8 @@ interface DadosOS {
     frete: number;
     dataEntrada?: Date;
     dataEntrega?: Date;
+    dataConclusao?: Date | null;
+    formaPagamento?: "pix" | "credito" | "debito" | "boleto" | null;
   };
   cliente: {
     nome: string;
@@ -49,6 +51,10 @@ export async function gerarOSPDF(dados: DadosOS): Promise<Blob> {
   const valorServicos = dados.entrada.valorCobrado || 0;
   const valorFrete = dados.entrada.frete || 0;
   const valorTotal = valorServicos + valorFrete;
+  const dataConclusao = dados.entrada.dataConclusao || dados.entrada.dataEntrega;
+  const formaPagamento = dados.entrada.formaPagamento;
+  const marcarFormaPagamento = (tipo: "pix" | "credito" | "debito" | "boleto") =>
+    formaPagamento === tipo ? "X" : "";
 
   // Separação de fotos
   // Fotos de entrada: 'moto' é o tipo legado usado para fotos tiradas na recepção/orçamento
@@ -204,7 +210,7 @@ export async function gerarOSPDF(dados: DadosOS): Promise<Blob> {
               <img src="/assets/img/logo-samurai.png" alt="SAMURAI" style="max-width: 100%; max-height: 80px;" onerror="this.onerror=null; this.parentNode.innerHTML='<h2>SAMURAI</h2>';"/>
             </td>
             <td class="header-info">
-              <h1>SAMURAI ALINHAMENTO DE MOTO</h1>
+              <h1>SAMURAI ALINHAMENTO DE MOTOS</h1>
               <p>R. Maria Ondina, 275 - Jardim Sagrado Coracao, Jandira - SP, 06608-280, Brasil</p>
               <p>WhatsApp: (11) 95759-3725 | Instagram: @SAMURAI_ALINHAMENTO</p>
               <br>
@@ -324,7 +330,7 @@ export async function gerarOSPDF(dados: DadosOS): Promise<Blob> {
             </td>
             <td width="33%">
               <span class="label">DATA</span>
-              <div style="height: 20px;">${dados.entrada.dataEntrega ? new Date(dados.entrada.dataEntrega).toLocaleDateString('pt-BR') : ''}</div>
+              <div style="height: 20px;">${dataConclusao ? new Date(dataConclusao).toLocaleDateString('pt-BR') : ''}</div>
             </td>
             <td width="34%">
               <span class="label">RECEBIDO/ENTREGUE POR</span>
@@ -336,9 +342,9 @@ export async function gerarOSPDF(dados: DadosOS): Promise<Blob> {
               <span class="label">FORMA DE PAGAMENTO</span>
               <div style="padding-top: 5px; font-size: 10px;">
                  (&nbsp;&nbsp;) DINHEIRO &nbsp;&nbsp;&nbsp;
-                 (&nbsp;&nbsp;) PIX &nbsp;&nbsp;&nbsp;
-                 (&nbsp;&nbsp;) CARTÃO DÉBITO &nbsp;&nbsp;&nbsp;
-                 (&nbsp;&nbsp;) CARTÃO CRÉDITO &nbsp;&nbsp;&nbsp;
+                 (&nbsp;${marcarFormaPagamento("pix")}&nbsp;) PIX &nbsp;&nbsp;&nbsp;
+                 (&nbsp;${marcarFormaPagamento("debito")}&nbsp;) CARTÃO DÉBITO &nbsp;&nbsp;&nbsp;
+                 (&nbsp;${marcarFormaPagamento("credito")}&nbsp;) CARTÃO CRÉDITO &nbsp;&nbsp;&nbsp;
                  (&nbsp;&nbsp;) OUTRO: _______________________
               </div>
             </td>

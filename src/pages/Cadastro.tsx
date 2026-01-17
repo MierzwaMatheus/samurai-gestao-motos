@@ -83,6 +83,9 @@ export default function Cadastro() {
     endereco: "",
     cep: "",
     moto: "",
+    marca: "",
+    ano: "",
+    cilindrada: "",
     placa: "",
     finalNumeroQuadro: "",
     valorCobrado: undefined,
@@ -189,6 +192,9 @@ export default function Cadastro() {
           cliente: dadosParsed.cliente || "",
           clienteId: dadosParsed.clienteId,
           moto: dadosParsed.moto || "",
+          marca: dadosParsed.marca || "",
+          ano: dadosParsed.ano || "",
+          cilindrada: dadosParsed.cilindrada || "",
           valorCobrado: dadosParsed.valorCobrado,
           tipoPreco: dadosParsed.tipoPreco || "oficina",
           // Campos opcionais - só preenche se tiverem valores
@@ -479,6 +485,9 @@ export default function Cadastro() {
         endereco: "",
         cep: "",
         moto: "",
+        marca: "",
+        ano: "",
+        cilindrada: "",
         placa: "",
         finalNumeroQuadro: "",
         valorCobrado: undefined,
@@ -603,6 +612,45 @@ export default function Cadastro() {
               />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="marca" className="text-xs text-foreground/70">
+                  Marca
+                </Label>
+                <Input
+                  id="marca"
+                  name="marca"
+                  placeholder="Ex: Honda"
+                  value={formData.marca || ""}
+                  onChange={handleInputChange}
+                  className="bg-card border-foreground/10"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ano" className="text-xs text-foreground/70">
+                  Ano
+                </Label>
+                <Input
+                  id="ano"
+                  name="ano"
+                  placeholder="Ex: 2022"
+                  value={formData.ano || ""}
+                  onChange={handleInputChange}
+                  className="bg-card border-foreground/10"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cilindrada" className="text-xs text-foreground/70">
+                  Cilindrada
+                </Label>
+                <Input
+                  id="cilindrada"
+                  name="cilindrada"
+                  placeholder="Ex: 500cc"
+                  value={formData.cilindrada || ""}
+                  onChange={handleInputChange}
+                  className="bg-card border-foreground/10"
+                />
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="placa" className="text-xs text-foreground/70">
                   Placa

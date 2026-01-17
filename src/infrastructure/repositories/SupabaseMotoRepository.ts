@@ -13,6 +13,9 @@ export class SupabaseMotoRepository implements MotoRepository {
       .insert({
         cliente_id: moto.clienteId,
         modelo: moto.modelo,
+        marca: moto.marca,
+        ano: moto.ano,
+        cilindrada: moto.cilindrada,
         placa: moto.placa,
         final_numero_quadro: moto.finalNumeroQuadro,
       })
@@ -74,6 +77,9 @@ export class SupabaseMotoRepository implements MotoRepository {
       .from("motos")
       .update({
         modelo: dados.modelo,
+        marca: dados.marca,
+        ano: dados.ano,
+        cilindrada: dados.cilindrada,
         placa: dados.placa,
       })
       .eq("id", id)
@@ -103,6 +109,9 @@ export class SupabaseMotoRepository implements MotoRepository {
       id: data.id,
       clienteId: data.cliente_id,
       modelo: data.modelo,
+      marca: data.marca,
+      ano: data.ano,
+      cilindrada: data.cilindrada,
       placa: data.placa,
       finalNumeroQuadro: data.final_numero_quadro,
       criadoEm: new Date(data.criado_em),

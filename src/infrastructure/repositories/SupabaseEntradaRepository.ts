@@ -125,12 +125,14 @@ export class SupabaseEntradaRepository implements EntradaRepository {
     if (dados.dataOrcamento !== undefined) updateData.data_orcamento = dados.dataOrcamento.toISOString();
     if (dados.dataEntrada !== undefined) updateData.data_entrada = dados.dataEntrada.toISOString();
     if (dados.dataEntrega !== undefined) updateData.data_entrega = dados.dataEntrega.toISOString();
+    if (dados.dataConclusao !== undefined) updateData.data_conclusao = dados.dataConclusao ? dados.dataConclusao.toISOString() : null;
     if (dados.status !== undefined) updateData.status = dados.status;
     if (dados.statusEntrega !== undefined) updateData.status_entrega = dados.statusEntrega;
     if (dados.progresso !== undefined) updateData.progresso = dados.progresso;
     if (dados.finalNumeroQuadro !== undefined) updateData.final_numero_quadro = dados.finalNumeroQuadro;
     if (dados.osAssinadaUrl !== undefined) updateData.os_assinada_url = dados.osAssinadaUrl;
     if (dados.tipoPreco !== undefined) updateData.tipo_preco = dados.tipoPreco;
+    if (dados.formaPagamento !== undefined) updateData.forma_pagamento = dados.formaPagamento;
     if (dados.fotosStatus !== undefined) {
       // Converte array de FotoStatus para JSONB
       updateData.fotos_status = JSON.stringify(
@@ -198,11 +200,13 @@ export class SupabaseEntradaRepository implements EntradaRepository {
       dataOrcamento: data.data_orcamento ? new Date(data.data_orcamento) : undefined,
       dataEntrada: data.data_entrada ? new Date(data.data_entrada) : undefined,
       dataEntrega: data.data_entrega ? new Date(data.data_entrega) : undefined,
+      dataConclusao: data.data_conclusao ? new Date(data.data_conclusao) : undefined,
       status: data.status,
       statusEntrega: data.status_entrega,
       progresso: data.progresso || 0,
       finalNumeroQuadro: data.final_numero_quadro,
       osAssinadaUrl: data.os_assinada_url,
+      formaPagamento: data.forma_pagamento || undefined,
       tipoPreco: data.tipo_preco,
       fotosStatus: fotosStatus.map((foto: any) => ({
         url: foto.url,
