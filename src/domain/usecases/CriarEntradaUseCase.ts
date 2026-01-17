@@ -57,6 +57,7 @@ export class CriarEntradaUseCase {
           telefone: dados.telefone,
           endereco: dados.endereco,
           cep: dados.cep?.replace(/\D/g, ""),
+          numeroServicos: 0,
         });
         clienteId = novoCliente.id;
       }
@@ -66,6 +67,9 @@ export class CriarEntradaUseCase {
     const moto = await this.motoRepo.criar({
       clienteId,
       modelo: dados.moto,
+      marca: dados.marca,
+      ano: dados.ano,
+      cilindrada: dados.cilindrada,
       placa: dados.placa || undefined,
       finalNumeroQuadro: dados.finalNumeroQuadro || undefined,
     });

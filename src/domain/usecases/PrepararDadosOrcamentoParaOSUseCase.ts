@@ -83,6 +83,9 @@ export class PrepararDadosOrcamentoParaOSUseCase {
       cliente: cliente.nome,
       clienteId: cliente.id,
       moto: moto.modelo,
+      marca: moto.marca,
+      ano: moto.ano,
+      cilindrada: moto.cilindrada,
       valorCobrado: entrada.valorCobrado,
       // Campos opcionais - só preenche se existirem e não forem vazios
       telefone: (cliente.telefone && cliente.telefone.trim() !== "") ? cliente.telefone : "",
