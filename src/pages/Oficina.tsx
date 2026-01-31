@@ -23,7 +23,7 @@ import {
   Trash2,
   Settings,
   Search,
-  History
+  History,
 } from "lucide-react";
 import { toast } from "sonner";
 import { SupabaseEntradaRepository } from "@/infrastructure/repositories/SupabaseEntradaRepository";
@@ -52,26 +52,52 @@ export default function Oficina() {
   const entradaRepo = useMemo(() => new SupabaseEntradaRepository(), []);
   const clienteRepo = useMemo(() => new SupabaseClienteRepository(), []);
   const motoRepo = useMemo(() => new SupabaseMotoRepository(), []);
-  const tipoServicoRepo = useMemo(() => new SupabaseTipoServicoRepository(), []);
+  const tipoServicoRepo = useMemo(
+    () => new SupabaseTipoServicoRepository(),
+    []
+  );
   const fotoRepo = useMemo(() => new SupabaseFotoRepository(), []);
   const storageApi = useMemo(() => new SupabaseStorageApi(), []);
-  const servicoPersonalizadoRepo = useMemo(() => new SupabaseServicoPersonalizadoRepository(), []);
-  const { motos, loading, error, recarregar, atualizarMoto } = useMotosOficina(entradaRepo, clienteRepo, motoRepo, tipoServicoRepo, fotoRepo, servicoPersonalizadoRepo);
+  const servicoPersonalizadoRepo = useMemo(
+    () => new SupabaseServicoPersonalizadoRepository(),
+    []
+  );
+  const { motos, loading, error, recarregar, atualizarMoto } = useMotosOficina(
+    entradaRepo,
+    clienteRepo,
+    motoRepo,
+    tipoServicoRepo,
+    fotoRepo,
+    servicoPersonalizadoRepo
+  );
 
-  const [entradaSelecionada, setEntradaSelecionada] = useState<string | null>(null);
+  const [entradaSelecionada, setEntradaSelecionada] = useState<string | null>(
+    null
+  );
   const [mostrarModalFoto, setMostrarModalFoto] = useState(false);
-  const [mostrarGaleria, setMostrarGaleria] = useState<Record<string, boolean>>({});
-  const [mostrarGaleriaMoto, setMostrarGaleriaMoto] = useState<Record<string, boolean>>({});
+  const [mostrarGaleria, setMostrarGaleria] = useState<Record<string, boolean>>(
+    {}
+  );
+  const [mostrarGaleriaMoto, setMostrarGaleriaMoto] = useState<
+    Record<string, boolean>
+  >({});
   const [arquivoFoto, setArquivoFoto] = useState<File | null>(null);
   const [observacaoFoto, setObservacaoFoto] = useState("");
-  const [progressoFoto, setProgressoFoto] = useState<number | undefined>(undefined);
+  const [progressoFoto, setProgressoFoto] = useState<number | undefined>(
+    undefined
+  );
   const [buscaEmAndamento, setBuscaEmAndamento] = useState("");
   const [buscaConcluidos, setBuscaConcluidos] = useState("");
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
-  const [selectedEntradaId, setSelectedEntradaId] = useState<string | null>(null);
+  const [selectedEntradaId, setSelectedEntradaId] = useState<string | null>(
+    null
+  );
   const [mostrarModalPagamento, setMostrarModalPagamento] = useState(false);
-  const [entradaPagamentoId, setEntradaPagamentoId] = useState<string | null>(null);
-  const [formaPagamentoSelecionada, setFormaPagamentoSelecionada] = useState<FormaPagamento | null>(null);
+  const [entradaPagamentoId, setEntradaPagamentoId] = useState<string | null>(
+    null
+  );
+  const [formaPagamentoSelecionada, setFormaPagamentoSelecionada] =
+    useState<FormaPagamento | null>(null);
 
   // Ler parâmetro 'cliente' da URL e preencher a busca
   useEffect(() => {
@@ -96,9 +122,12 @@ export default function Oficina() {
     [entradaRepo]
   );
 
-  const { adicionar: adicionarFoto, loading: loadingFoto } = useAdicionarFotoStatus(adicionarFotoStatusUseCase);
-  const { atualizar: atualizarProgresso, loading: loadingProgresso } = useAtualizarProgressoStatus(atualizarProgressoStatusUseCase);
-  const { deletar: deletarEntrada, loading: loadingDeletar } = useDeletarEntrada(entradaRepo);
+  const { adicionar: adicionarFoto, loading: loadingFoto } =
+    useAdicionarFotoStatus(adicionarFotoStatusUseCase);
+  const { atualizar: atualizarProgresso, loading: loadingProgresso } =
+    useAtualizarProgressoStatus(atualizarProgressoStatusUseCase);
+  const { deletar: deletarEntrada, loading: loadingDeletar } =
+    useDeletarEntrada(entradaRepo);
 
   const { gerar: gerarOS, loading: loadingOS } = useGerarOS(
     entradaRepo,
@@ -138,7 +167,7 @@ export default function Oficina() {
 
   const handleAbrirModalFoto = (entradaId: string) => {
     setEntradaSelecionada(entradaId);
-    const moto = motos.find((m) => m.entradaId === entradaId);
+    const moto = motos.find(m => m.entradaId === entradaId);
     if (moto) {
       setProgressoFoto(moto.progresso);
     }
@@ -175,8 +204,13 @@ export default function Oficina() {
     }
   };
 
-  const handleAtualizarProgresso = async (entradaId: string, novoProgresso: number) => {
-    const sucesso = await atualizarProgresso(entradaId, { progresso: novoProgresso });
+  const handleAtualizarProgresso = async (
+    entradaId: string,
+    novoProgresso: number
+  ) => {
+    const sucesso = await atualizarProgresso(entradaId, {
+      progresso: novoProgresso,
+    });
     if (sucesso) {
       atualizarMoto(entradaId, { progresso: novoProgresso });
       toast.success("Progresso atualizado!");
@@ -185,7 +219,10 @@ export default function Oficina() {
     }
   };
 
-  const handleAtualizarStatus = async (entradaId: string, novoStatus: "pendente" | "alinhando" | "concluido") => {
+  const handleAtualizarStatus = async (
+    entradaId: string,
+    novoStatus: "pendente" | "alinhando" | "concluido"
+  ) => {
     if (novoStatus === "concluido") {
       setEntradaPagamentoId(entradaId);
       setFormaPagamentoSelecionada(null);
@@ -199,7 +236,11 @@ export default function Oficina() {
       formaPagamento: null,
     });
     if (sucesso) {
-      atualizarMoto(entradaId, { status: novoStatus, dataConclusao: null, formaPagamento: null });
+      atualizarMoto(entradaId, {
+        status: novoStatus,
+        dataConclusao: null,
+        formaPagamento: null,
+      });
       toast.success("Status atualizado!");
     } else {
       toast.error("Erro ao atualizar status");
@@ -238,7 +279,11 @@ export default function Oficina() {
   };
 
   const handleDeletarEntrada = async (entradaId: string) => {
-    if (!confirm("Tem certeza que deseja excluir esta entrada? Esta ação não pode ser desfeita.")) {
+    if (
+      !confirm(
+        "Tem certeza que deseja excluir esta entrada? Esta ação não pode ser desfeita."
+      )
+    ) {
       return;
     }
 
@@ -261,16 +306,15 @@ export default function Oficina() {
     }
   };
 
-
   const toggleGaleria = (entradaId: string) => {
-    setMostrarGaleria((prev) => ({
+    setMostrarGaleria(prev => ({
       ...prev,
       [entradaId]: !prev[entradaId],
     }));
   };
 
   const toggleGaleriaMoto = (entradaId: string) => {
-    setMostrarGaleriaMoto((prev) => ({
+    setMostrarGaleriaMoto(prev => ({
       ...prev,
       [entradaId]: !prev[entradaId],
     }));
@@ -283,9 +327,9 @@ export default function Oficina() {
 
   // Separar motos por status
   const motosEmAndamento = motos.filter(
-    (moto) => moto.status === "pendente" || moto.status === "alinhando"
+    moto => moto.status === "pendente" || moto.status === "alinhando"
   );
-  const motosConcluidas = motos.filter((moto) => moto.status === "concluido");
+  const motosConcluidas = motos.filter(moto => moto.status === "concluido");
 
   // Filtrar motos por busca
   const filtrarMotos = (motosParaFiltrar: MotoCompleta[], busca: string) => {
@@ -296,19 +340,31 @@ export default function Oficina() {
       const modeloMatch = moto.modelo?.toLowerCase().includes(buscaLower);
       const placaMatch = moto.placa?.toLowerCase().includes(buscaLower);
       const clienteMatch = moto.cliente?.toLowerCase().includes(buscaLower);
-      const tiposServicoMatch = moto.tiposServico?.some(
-        (tipo: any) => tipo.nome.toLowerCase().includes(buscaLower)
+      const tiposServicoMatch = moto.tiposServico?.some((tipo: any) =>
+        tipo.nome.toLowerCase().includes(buscaLower)
       );
       const servicosPersonalizadosMatch = moto.servicosPersonalizados?.some(
         (servico: any) => servico.nome.toLowerCase().includes(buscaLower)
       );
 
-      return modeloMatch || placaMatch || clienteMatch || tiposServicoMatch || servicosPersonalizadosMatch;
+      return (
+        modeloMatch ||
+        placaMatch ||
+        clienteMatch ||
+        tiposServicoMatch ||
+        servicosPersonalizadosMatch
+      );
     });
   };
 
-  const motosEmAndamentoFiltradas = filtrarMotos(motosEmAndamento, buscaEmAndamento);
-  const motosConcluidasFiltradas = filtrarMotos(motosConcluidas, buscaConcluidos);
+  const motosEmAndamentoFiltradas = filtrarMotos(
+    motosEmAndamento,
+    buscaEmAndamento
+  );
+  const motosConcluidasFiltradas = filtrarMotos(
+    motosConcluidas,
+    buscaConcluidos
+  );
 
   const renderMotoCard = (moto: MotoCompleta) => (
     <Card
@@ -332,7 +388,20 @@ export default function Oficina() {
           </div>
           <div className="flex justify-between items-center">
             <p className="font-sans text-sm text-foreground/60">
-              {moto.placa ? `Placa: ${moto.placa} • ` : ""}{moto.cliente}
+              {moto.placa ? `Placa: ${moto.placa} • ` : ""}
+              {moto.cliente}
+              {moto.telefone && (
+                <span
+                  onClick={() => {
+                    navigator.clipboard.writeText(moto.telefone!);
+                    toast.success(`Telefone ${moto.telefone} copiado!`);
+                  }}
+                  className="ml-2 text-accent cursor-pointer hover:underline"
+                  title="Clique para copiar o telefone"
+                >
+                  📞 {moto.telefone}
+                </span>
+              )}
             </p>
             <button
               onClick={() => handleOpenHistory(moto.entradaId)}
@@ -344,18 +413,21 @@ export default function Oficina() {
           </div>
           {(moto.marca || moto.ano || moto.cilindrada) && (
             <p className="font-sans text-xs text-foreground/50 mt-1">
-              {[moto.marca, moto.ano, moto.cilindrada].filter(Boolean).join(" • ")}
+              {[moto.marca, moto.ano, moto.cilindrada]
+                .filter(Boolean)
+                .join(" • ")}
             </p>
           )}
           {moto.status === "concluido" && moto.dataConclusao && (
             <p className="font-sans text-xs text-foreground/60 mt-1">
-              Concluído em {new Date(moto.dataConclusao).toLocaleDateString("pt-BR")}
+              Concluído em{" "}
+              {new Date(moto.dataConclusao).toLocaleDateString("pt-BR")}
             </p>
           )}
           {/* Tipos de Serviço */}
           {moto.tiposServico && moto.tiposServico.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-2">
-              {moto.tiposServico.map((tipo) => (
+              {moto.tiposServico.map(tipo => (
                 <Badge
                   key={tipo.id}
                   variant="secondary"
@@ -374,21 +446,22 @@ export default function Oficina() {
             </div>
           )}
           {/* Serviços Personalizados */}
-          {moto.servicosPersonalizados && moto.servicosPersonalizados.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mt-2">
-              {moto.servicosPersonalizados.map((servico) => (
-                <Badge
-                  key={servico.id}
-                  variant="outline"
-                  className="flex items-center gap-1 text-xs border-accent/30"
-                >
-                  <Settings size={10} />
-                  {servico.nome}
-                  {servico.quantidade > 1 && ` (${servico.quantidade}x)`}
-                </Badge>
-              ))}
-            </div>
-          )}
+          {moto.servicosPersonalizados &&
+            moto.servicosPersonalizados.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {moto.servicosPersonalizados.map(servico => (
+                  <Badge
+                    key={servico.id}
+                    variant="outline"
+                    className="flex items-center gap-1 text-xs border-accent/30"
+                  >
+                    <Settings size={10} />
+                    {servico.nome}
+                    {servico.quantidade > 1 && ` (${servico.quantidade}x)`}
+                  </Badge>
+                ))}
+              </div>
+            )}
         </div>
       </div>
 
@@ -404,7 +477,12 @@ export default function Oficina() {
           </span>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => handleAtualizarProgresso(moto.entradaId, Math.max(0, moto.progresso - 10))}
+              onClick={() =>
+                handleAtualizarProgresso(
+                  moto.entradaId,
+                  Math.max(0, moto.progresso - 10)
+                )
+              }
               className="text-foreground/40 hover:text-accent transition-colors"
               disabled={loadingProgresso}
             >
@@ -414,7 +492,12 @@ export default function Oficina() {
               {moto.progresso}%
             </span>
             <button
-              onClick={() => handleAtualizarProgresso(moto.entradaId, Math.min(100, moto.progresso + 10))}
+              onClick={() =>
+                handleAtualizarProgresso(
+                  moto.entradaId,
+                  Math.min(100, moto.progresso + 10)
+                )
+              }
               className="text-foreground/40 hover:text-accent transition-colors"
               disabled={loadingProgresso}
             >
@@ -422,10 +505,7 @@ export default function Oficina() {
             </button>
           </div>
         </div>
-        <Progress
-          value={moto.progresso}
-          className="h-2 bg-foreground/10"
-        />
+        <Progress value={moto.progresso} className="h-2 bg-foreground/10" />
       </div>
 
       {/* Galeria de Fotos da Moto (do orçamento) */}
@@ -483,7 +563,16 @@ export default function Oficina() {
           Adicionar Foto
         </Button>
         <Button
-          onClick={() => handleAtualizarStatus(moto.entradaId, moto.status === "pendente" ? "alinhando" : moto.status === "alinhando" ? "concluido" : "pendente")}
+          onClick={() =>
+            handleAtualizarStatus(
+              moto.entradaId,
+              moto.status === "pendente"
+                ? "alinhando"
+                : moto.status === "alinhando"
+                  ? "concluido"
+                  : "pendente"
+            )
+          }
           variant="default"
           className="flex-1 text-sm bg-accent hover:brightness-110"
           disabled={loadingProgresso}
@@ -531,7 +620,9 @@ export default function Oficina() {
           {loading ? (
             <Card className="card-samurai text-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-accent mx-auto mb-4" />
-              <p className="font-sans text-foreground/60">Carregando motos...</p>
+              <p className="font-sans text-foreground/60">
+                Carregando motos...
+              </p>
             </Card>
           ) : error ? (
             <Card className="card-samurai text-center py-12">
@@ -540,8 +631,8 @@ export default function Oficina() {
           ) : (
             <Tabs defaultValue="em-andamento" className="w-full">
               <TabsList className="w-full flex overflow-x-auto no-scrollbar rounded-lg bg-muted p-1">
-                <TabsTrigger 
-                  value="em-andamento" 
+                <TabsTrigger
+                  value="em-andamento"
                   className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 text-sm whitespace-nowrap rounded-md transition-colors"
                 >
                   <Wrench size={16} className="shrink-0" />
@@ -552,8 +643,8 @@ export default function Oficina() {
                     </span>
                   )}
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="concluidos" 
+                <TabsTrigger
+                  value="concluidos"
                   className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 text-sm whitespace-nowrap rounded-md transition-colors"
                 >
                   <CheckCircle size={16} className="shrink-0" />
@@ -569,11 +660,14 @@ export default function Oficina() {
               <TabsContent value="em-andamento" className="space-y-6 mt-6">
                 {/* Barra de busca */}
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-foreground/40" size={18} />
+                  <Search
+                    className="absolute left-3 top-1/2 transform -translate-y-1/2 text-foreground/40"
+                    size={18}
+                  />
                   <Input
                     placeholder="Buscar por modelo, placa, cliente ou serviço..."
                     value={buscaEmAndamento}
-                    onChange={(e) => setBuscaEmAndamento(e.target.value)}
+                    onChange={e => setBuscaEmAndamento(e.target.value)}
                     className="pl-10 bg-card border-foreground/10"
                   />
                 </div>
@@ -581,22 +675,29 @@ export default function Oficina() {
                 {motosEmAndamentoFiltradas.length === 0 ? (
                   <Card className="card-samurai text-center py-12">
                     <p className="font-sans text-foreground/60">
-                      {buscaEmAndamento ? "Nenhuma moto encontrada" : "Nenhuma moto em processamento"}
+                      {buscaEmAndamento
+                        ? "Nenhuma moto encontrada"
+                        : "Nenhuma moto em processamento"}
                     </p>
                   </Card>
                 ) : (
-                  motosEmAndamentoFiltradas.map((moto: MotoCompleta) => renderMotoCard(moto))
+                  motosEmAndamentoFiltradas.map((moto: MotoCompleta) =>
+                    renderMotoCard(moto)
+                  )
                 )}
               </TabsContent>
 
               <TabsContent value="concluidos" className="space-y-6 mt-6">
                 {/* Barra de busca */}
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-foreground/40" size={18} />
+                  <Search
+                    className="absolute left-3 top-1/2 transform -translate-y-1/2 text-foreground/40"
+                    size={18}
+                  />
                   <Input
                     placeholder="Buscar por modelo, placa, cliente ou serviço..."
                     value={buscaConcluidos}
-                    onChange={(e) => setBuscaConcluidos(e.target.value)}
+                    onChange={e => setBuscaConcluidos(e.target.value)}
                     className="pl-10 bg-card border-foreground/10"
                   />
                 </div>
@@ -604,11 +705,15 @@ export default function Oficina() {
                 {motosConcluidasFiltradas.length === 0 ? (
                   <Card className="card-samurai text-center py-12">
                     <p className="font-sans text-foreground/60">
-                      {buscaConcluidos ? "Nenhuma moto encontrada" : "Nenhum serviço concluído"}
+                      {buscaConcluidos
+                        ? "Nenhuma moto encontrada"
+                        : "Nenhum serviço concluído"}
                     </p>
                   </Card>
                 ) : (
-                  motosConcluidasFiltradas.map((moto: MotoCompleta) => renderMotoCard(moto))
+                  motosConcluidasFiltradas.map((moto: MotoCompleta) =>
+                    renderMotoCard(moto)
+                  )
                 )}
               </TabsContent>
             </Tabs>
@@ -621,7 +726,9 @@ export default function Oficina() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <Card className="card-samurai max-w-md w-full p-6">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="font-serif text-lg text-foreground">Adicionar Foto de Status</h3>
+              <h3 className="font-serif text-lg text-foreground">
+                Adicionar Foto de Status
+              </h3>
               <button
                 onClick={handleFecharModalFoto}
                 className="text-foreground/40 hover:text-foreground transition-colors"
@@ -637,7 +744,7 @@ export default function Oficina() {
                   id="foto"
                   type="file"
                   accept="image/*"
-                  onChange={(e) => setArquivoFoto(e.target.files?.[0] || null)}
+                  onChange={e => setArquivoFoto(e.target.files?.[0] || null)}
                   className="mt-1"
                 />
               </div>
@@ -650,7 +757,11 @@ export default function Oficina() {
                   min="0"
                   max="100"
                   value={progressoFoto ?? ""}
-                  onChange={(e) => setProgressoFoto(e.target.value ? parseInt(e.target.value) : undefined)}
+                  onChange={e =>
+                    setProgressoFoto(
+                      e.target.value ? parseInt(e.target.value) : undefined
+                    )
+                  }
                   className="mt-1"
                 />
               </div>
@@ -660,7 +771,7 @@ export default function Oficina() {
                 <Textarea
                   id="observacao"
                   value={observacaoFoto}
-                  onChange={(e) => setObservacaoFoto(e.target.value)}
+                  onChange={e => setObservacaoFoto(e.target.value)}
                   className="mt-1"
                   rows={3}
                 />
@@ -698,7 +809,9 @@ export default function Oficina() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <Card className="card-samurai max-w-sm w-full p-6">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="font-serif text-lg text-foreground">Forma de pagamento</h3>
+              <h3 className="font-serif text-lg text-foreground">
+                Forma de pagamento
+              </h3>
               <button
                 onClick={handleCancelarPagamento}
                 className="text-foreground/40 hover:text-foreground transition-colors"
@@ -709,32 +822,50 @@ export default function Oficina() {
 
             <div className="space-y-3">
               <div className="space-y-2">
-                <Label className="text-xs uppercase tracking-widest">Selecione</Label>
+                <Label className="text-xs uppercase tracking-widest">
+                  Selecione
+                </Label>
                 <div className="grid grid-cols-2 gap-2">
                   <Button
                     type="button"
-                    variant={formaPagamentoSelecionada === "pix" ? "default" : "outline"}
+                    variant={
+                      formaPagamentoSelecionada === "pix"
+                        ? "default"
+                        : "outline"
+                    }
                     onClick={() => setFormaPagamentoSelecionada("pix")}
                   >
                     Pix
                   </Button>
                   <Button
                     type="button"
-                    variant={formaPagamentoSelecionada === "credito" ? "default" : "outline"}
+                    variant={
+                      formaPagamentoSelecionada === "credito"
+                        ? "default"
+                        : "outline"
+                    }
                     onClick={() => setFormaPagamentoSelecionada("credito")}
                   >
                     Crédito
                   </Button>
                   <Button
                     type="button"
-                    variant={formaPagamentoSelecionada === "debito" ? "default" : "outline"}
+                    variant={
+                      formaPagamentoSelecionada === "debito"
+                        ? "default"
+                        : "outline"
+                    }
                     onClick={() => setFormaPagamentoSelecionada("debito")}
                   >
                     Débito
                   </Button>
                   <Button
                     type="button"
-                    variant={formaPagamentoSelecionada === "boleto" ? "default" : "outline"}
+                    variant={
+                      formaPagamentoSelecionada === "boleto"
+                        ? "default"
+                        : "outline"
+                    }
                     onClick={() => setFormaPagamentoSelecionada("boleto")}
                   >
                     Boleto

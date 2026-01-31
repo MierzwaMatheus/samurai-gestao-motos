@@ -159,6 +159,7 @@ export interface OrcamentoCompleto extends Orcamento {
 export interface MotoCompleta extends Moto {
   entradaId: string;
   cliente: string;
+  telefone?: string;
   status: "pendente" | "alinhando" | "concluido";
   progresso: number;
   dataConclusao?: Date | null;
