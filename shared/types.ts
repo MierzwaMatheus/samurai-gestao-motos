@@ -45,7 +45,8 @@ export interface DadosCadastro {
   descricao?: string;
   observacoes?: string;
   fotos: string[];
-  frete: number;
+  frete: number | null; // null quando for retirada, number quando for frete
+  isRetirada?: boolean; // Indica se é retirada (frete = null) ou frete
   dataOrcamento?: Date;
   dataEntrada?: Date;
   dataEntrega?: Date;
@@ -90,7 +91,7 @@ export interface Entrada {
   endereco?: string;
   cep?: string;
   telefone?: string;
-  frete: number;
+  frete: number | null; // null quando for retirada
   valorCobrado?: number;
   descricao?: string;
   observacoes?: string;
@@ -146,7 +147,7 @@ export interface OrcamentoCompleto extends Orcamento {
   placa?: string;
   finalNumeroQuadro?: string;
   descricao?: string;
-  frete: number;
+  frete: number | null; // null quando for retirada
   fotoMoto?: string; // URL da primeira foto do tipo "moto"
   endereco?: string;
   cep?: string;
@@ -159,6 +160,7 @@ export interface OrcamentoCompleto extends Orcamento {
 export interface MotoCompleta extends Moto {
   entradaId: string;
   cliente: string;
+  telefone?: string;
   status: "pendente" | "alinhando" | "concluido";
   progresso: number;
   dataConclusao?: Date | null;

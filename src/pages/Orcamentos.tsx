@@ -4,7 +4,23 @@ import BottomNav from "@/components/BottomNav";
 import { OrcamentoCompleto } from "@shared/types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, Clock, CheckCircle2, Loader2, Phone, MapPin, Truck, Image as ImageIcon, Wrench, ClipboardList, Trash2, Settings, History, RefreshCw } from "lucide-react";
+import {
+  FileText,
+  Clock,
+  CheckCircle2,
+  Loader2,
+  Phone,
+  MapPin,
+  Truck,
+  Image as ImageIcon,
+  Wrench,
+  ClipboardList,
+  Trash2,
+  Settings,
+  History,
+  RefreshCw,
+  Store,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { SupabaseOrcamentoRepository } from "@/infrastructure/repositories/SupabaseOrcamentoRepository";
@@ -25,24 +41,43 @@ import { HistoryModal } from "@/components/HistoryModal";
 
 type FilterType = "ativos" | "expirados";
 
+// Helper para verificar se o orçamento é retirada
+const isRetirada = (frete: number | null | undefined): boolean => {
+  return frete === null || frete === undefined || frete === 0;
+};
+
 export default function Orcamentos() {
   const [filtro, setFiltro] = useState<FilterType>("ativos");
   const [, setLocation] = useLocation();
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
-  const [selectedOrcamentoId, setSelectedOrcamentoId] = useState<string | null>(null);
+  const [selectedOrcamentoId, setSelectedOrcamentoId] = useState<string | null>(
+    null
+  );
 
   const orcamentoRepo = useMemo(() => new SupabaseOrcamentoRepository(), []);
   const entradaRepo = useMemo(() => new SupabaseEntradaRepository(), []);
   const clienteRepo = useMemo(() => new SupabaseClienteRepository(), []);
   const motoRepo = useMemo(() => new SupabaseMotoRepository(), []);
   const fotoRepo = useMemo(() => new SupabaseFotoRepository(), []);
-  const tipoServicoRepo = useMemo(() => new SupabaseTipoServicoRepository(), []);
-  const servicoPersonalizadoRepo = useMemo(() => new SupabaseServicoPersonalizadoRepository(), []);
+  const tipoServicoRepo = useMemo(
+    () => new SupabaseTipoServicoRepository(),
+    []
+  );
+  const servicoPersonalizadoRepo = useMemo(
+    () => new SupabaseServicoPersonalizadoRepository(),
+    []
+  );
   const storageApi = useMemo(() => new SupabaseStorageApi(), []);
 
   // Converte filtro UI para status do banco
   const statusBanco = filtro === "ativos" ? "ativo" : "expirado";
-  const { orcamentos, loading, error, recarregar, removerOrcamento } = useOrcamentos(orcamentoRepo, statusBanco, tipoServicoRepo, servicoPersonalizadoRepo);
+  const { orcamentos, loading, error, recarregar, removerOrcamento } =
+    useOrcamentos(
+      orcamentoRepo,
+      statusBanco,
+      tipoServicoRepo,
+      servicoPersonalizadoRepo
+    );
 
   const converterOrcamentoEntradaUseCase = useMemo(
     () => new ConverterOrcamentoEntradaUseCase(orcamentoRepo, entradaRepo),
@@ -50,16 +85,25 @@ export default function Orcamentos() {
   );
 
   const prepararDadosOSUseCase = useMemo(
-    () => new PrepararDadosOrcamentoParaOSUseCase(
+    () =>
+      new PrepararDadosOrcamentoParaOSUseCase(
+        orcamentoRepo,
+        entradaRepo,
+        clienteRepo,
+        motoRepo,
+        fotoRepo,
+        tipoServicoRepo,
+        servicoPersonalizadoRepo
+      ),
+    [
       orcamentoRepo,
       entradaRepo,
       clienteRepo,
       motoRepo,
       fotoRepo,
       tipoServicoRepo,
-      servicoPersonalizadoRepo
-    ),
-    [orcamentoRepo, entradaRepo, clienteRepo, motoRepo, fotoRepo, tipoServicoRepo, servicoPersonalizadoRepo]
+      servicoPersonalizadoRepo,
+    ]
   );
 
   const { gerar: gerarOS, loading: loadingOS } = useGerarOS(
@@ -72,7 +116,8 @@ export default function Orcamentos() {
     storageApi
   );
 
-  const { deletar: deletarOrcamento, loading: loadingDeletar } = useDeletarOrcamento(orcamentoRepo);
+  const { deletar: deletarOrcamento, loading: loadingDeletar } =
+    useDeletarOrcamento(orcamentoRepo);
 
   const calcularDiasRestantes = (data: Date): number => {
     const agora = new Date();
@@ -86,7 +131,8 @@ export default function Orcamentos() {
       removerOrcamento(orcamentoId);
       toast.success("Orçamento convertido em entrada!");
     } catch (err) {
-      const mensagem = err instanceof Error ? err.message : "Erro ao converter orçamento";
+      const mensagem =
+        err instanceof Error ? err.message : "Erro ao converter orçamento";
       toast.error(mensagem);
     }
   };
@@ -115,19 +161,31 @@ export default function Orcamentos() {
       const dadosCadastro = await prepararDadosOSUseCase.execute(orcamentoId);
 
       // Salva os dados no sessionStorage para a página de Cadastro acessar
-      sessionStorage.setItem("dadosOrcamentoParaOS", JSON.stringify(dadosCadastro));
+      sessionStorage.setItem(
+        "dadosOrcamentoParaOS",
+        JSON.stringify(dadosCadastro)
+      );
 
       // Navega para a página de Cadastro
       setLocation("/");
-      toast.success("Dados do orçamento carregados! Preencha os campos restantes.");
+      toast.success(
+        "Dados do orçamento carregados! Preencha os campos restantes."
+      );
     } catch (err) {
-      const mensagem = err instanceof Error ? err.message : "Erro ao preparar dados do orçamento";
+      const mensagem =
+        err instanceof Error
+          ? err.message
+          : "Erro ao preparar dados do orçamento";
       toast.error(mensagem);
     }
   };
 
   const handleDeletarOrcamento = async (orcamentoId: string) => {
-    if (!confirm("Tem certeza que deseja excluir este orçamento? Esta ação não pode ser desfeita.")) {
+    if (
+      !confirm(
+        "Tem certeza que deseja excluir este orçamento? Esta ação não pode ser desfeita."
+      )
+    ) {
       return;
     }
 
@@ -156,19 +214,21 @@ export default function Orcamentos() {
           <div className="flex gap-2 mb-8">
             <button
               onClick={() => setFiltro("ativos")}
-              className={`px-6 py-2 rounded-full font-sans font-semibold text-sm transition-all ${filtro === "ativos"
-                ? "bg-accent text-white shadow-lg shadow-accent/20"
-                : "bg-card border border-foreground/10 text-foreground/60 hover:text-foreground"
-                }`}
+              className={`px-6 py-2 rounded-full font-sans font-semibold text-sm transition-all ${
+                filtro === "ativos"
+                  ? "bg-accent text-white shadow-lg shadow-accent/20"
+                  : "bg-card border border-foreground/10 text-foreground/60 hover:text-foreground"
+              }`}
             >
               Ativos
             </button>
             <button
               onClick={() => setFiltro("expirados")}
-              className={`px-6 py-2 rounded-full font-sans font-semibold text-sm transition-all ${filtro === "expirados"
-                ? "bg-accent text-white shadow-lg shadow-accent/20"
-                : "bg-card border border-foreground/10 text-foreground/60 hover:text-foreground"
-                }`}
+              className={`px-6 py-2 rounded-full font-sans font-semibold text-sm transition-all ${
+                filtro === "expirados"
+                  ? "bg-accent text-white shadow-lg shadow-accent/20"
+                  : "bg-card border border-foreground/10 text-foreground/60 hover:text-foreground"
+              }`}
             >
               Expirados
             </button>
@@ -179,7 +239,9 @@ export default function Orcamentos() {
             {loading ? (
               <Card className="card-samurai text-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-accent mx-auto mb-4" />
-                <p className="font-sans text-foreground/60">Carregando orçamentos...</p>
+                <p className="font-sans text-foreground/60">
+                  Carregando orçamentos...
+                </p>
               </Card>
             ) : error ? (
               <Card className="card-samurai text-center py-12">
@@ -192,11 +254,12 @@ export default function Orcamentos() {
                 </p>
               </Card>
             ) : (
-              orcamentos.map((orcamento) => {
+              orcamentos.map(orcamento => {
                 const diasRestantes = calcularDiasRestantes(
                   orcamento.dataExpiracao
                 );
-                const estaProximoDeExpirar = diasRestantes < 3 && diasRestantes >= 0;
+                const estaProximoDeExpirar =
+                  diasRestantes < 3 && diasRestantes >= 0;
                 const estaExpirado = diasRestantes < 0;
 
                 return (
@@ -212,8 +275,9 @@ export default function Orcamentos() {
                             src={orcamento.fotoMoto}
                             alt={orcamento.moto}
                             className="w-full h-full object-cover"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = "none";
+                            onError={e => {
+                              (e.target as HTMLImageElement).style.display =
+                                "none";
                             }}
                           />
                         </div>
@@ -233,7 +297,9 @@ export default function Orcamentos() {
                                 {orcamento.moto}
                               </h3>
                               <button
-                                onClick={() => handleDeletarOrcamento(orcamento.id)}
+                                onClick={() =>
+                                  handleDeletarOrcamento(orcamento.id)
+                                }
                                 disabled={loadingDeletar}
                                 className="text-foreground/40 hover:text-red-600 transition-colors p-1 shrink-0"
                                 title="Excluir orçamento"
@@ -247,16 +313,30 @@ export default function Orcamentos() {
                           </div>
                           <div className="text-right shrink-0">
                             <p className="font-serif text-xl sm:text-2xl text-accent">
-                              R$ {(orcamento.valor + (orcamento.frete || 0)).toFixed(2)}
+                              R${" "}
+                              {(
+                                orcamento.valor +
+                                (isRetirada(orcamento.frete)
+                                  ? 0
+                                  : orcamento.frete || 0)
+                              ).toFixed(2)}
                             </p>
                           </div>
                         </div>
 
                         {/* Informações Essenciais (Mobile) */}
                         <div className="space-y-1">
-                          {(orcamento.marca || orcamento.ano || orcamento.cilindrada) && (
+                          {(orcamento.marca ||
+                            orcamento.ano ||
+                            orcamento.cilindrada) && (
                             <p className="font-sans text-[11px] text-foreground/50">
-                              {[orcamento.marca, orcamento.ano, orcamento.cilindrada].filter(Boolean).join(" • ")}
+                              {[
+                                orcamento.marca,
+                                orcamento.ano,
+                                orcamento.cilindrada,
+                              ]
+                                .filter(Boolean)
+                                .join(" • ")}
                             </p>
                           )}
                           {/* Placa / Final do Quadro */}
@@ -280,13 +360,17 @@ export default function Orcamentos() {
                             {orcamento.telefone && (
                               <div className="flex items-center gap-1">
                                 <Phone size={12} />
-                                <span className="truncate max-w-24">{orcamento.telefone}</span>
+                                <span className="truncate max-w-24">
+                                  {orcamento.telefone}
+                                </span>
                               </div>
                             )}
                             {orcamento.endereco && (
                               <div className="flex items-center gap-1 truncate">
                                 <MapPin size={12} />
-                                <span className="truncate max-w-32">{orcamento.endereco}</span>
+                                <span className="truncate max-w-32">
+                                  {orcamento.endereco}
+                                </span>
                               </div>
                             )}
                           </div>
@@ -294,28 +378,42 @@ export default function Orcamentos() {
                           {/* Serviços - Compacto */}
                           <div className="flex items-center gap-1.5 text-xs text-foreground/60">
                             <Wrench size={12} />
-                            <span>Serviços: R$ {orcamento.valor.toFixed(2)}</span>
-                            {orcamento.frete > 0 && (
-                              <span className="text-foreground/40">• Frete: R$ {orcamento.frete.toFixed(2)}</span>
+                            <span>
+                              Serviços: R$ {orcamento.valor.toFixed(2)}
+                            </span>
+                            {isRetirada(orcamento.frete) ? (
+                              <span className="text-foreground/40 flex items-center gap-1">
+                                • <Store size={10} /> Retirada
+                              </span>
+                            ) : (
+                              <span className="text-foreground/40">
+                                • Frete: R$ {(orcamento.frete || 0).toFixed(2)}
+                              </span>
                             )}
                           </div>
 
                           {/* Tipos de Serviço - Compacto */}
                           {(orcamento.tiposServico?.length || 0) > 0 && (
                             <div className="flex flex-wrap gap-1 mt-1">
-                              {(orcamento.tiposServico || []).slice(0, 2).map((tipo) => (
-                                <Badge
-                                  key={tipo.id}
-                                  variant="secondary"
-                                  className="flex items-center gap-1 text-[10px] px-1.5 py-0.5"
-                                >
-                                  <Wrench size={8} />
-                                  {tipo.nome}
-                                  {tipo.quantidade > 1 && ` (${tipo.quantidade}x)`}
-                                </Badge>
-                              ))}
+                              {(orcamento.tiposServico || [])
+                                .slice(0, 2)
+                                .map(tipo => (
+                                  <Badge
+                                    key={tipo.id}
+                                    variant="secondary"
+                                    className="flex items-center gap-1 text-[10px] px-1.5 py-0.5"
+                                  >
+                                    <Wrench size={8} />
+                                    {tipo.nome}
+                                    {tipo.quantidade > 1 &&
+                                      ` (${tipo.quantidade}x)`}
+                                  </Badge>
+                                ))}
                               {(orcamento.tiposServico?.length || 0) > 2 && (
-                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5">
+                                <Badge
+                                  variant="secondary"
+                                  className="text-[10px] px-1.5 py-0.5"
+                                >
                                   +{(orcamento.tiposServico?.length || 0) - 2}
                                 </Badge>
                               )}
@@ -323,22 +421,32 @@ export default function Orcamentos() {
                           )}
 
                           {/* Serviços Personalizados - Compacto */}
-                          {(orcamento.servicosPersonalizados?.length || 0) > 0 && (
+                          {(orcamento.servicosPersonalizados?.length || 0) >
+                            0 && (
                             <div className="flex flex-wrap gap-1 mt-1">
-                              {(orcamento.servicosPersonalizados || []).slice(0, 2).map((servico) => (
+                              {(orcamento.servicosPersonalizados || [])
+                                .slice(0, 2)
+                                .map(servico => (
+                                  <Badge
+                                    key={servico.id}
+                                    variant="outline"
+                                    className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 border-accent/30"
+                                  >
+                                    <Settings size={8} />
+                                    {servico.nome}
+                                    {servico.quantidade > 1 &&
+                                      ` (${servico.quantidade}x)`}
+                                  </Badge>
+                                ))}
+                              {(orcamento.servicosPersonalizados?.length || 0) >
+                                2 && (
                                 <Badge
-                                  key={servico.id}
                                   variant="outline"
-                                  className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 border-accent/30"
+                                  className="text-[10px] px-1.5 py-0.5 border-accent/30"
                                 >
-                                  <Settings size={8} />
-                                  {servico.nome}
-                                  {servico.quantidade > 1 && ` (${servico.quantidade}x)`}
-                                </Badge>
-                              ))}
-                              {(orcamento.servicosPersonalizados?.length || 0) > 2 && (
-                                <Badge variant="outline" className="text-[10px] px-1.5 py-0.5 border-accent/30">
-                                  +{(orcamento.servicosPersonalizados?.length || 0) - 2}
+                                  +
+                                  {(orcamento.servicosPersonalizados?.length ||
+                                    0) - 2}
                                 </Badge>
                               )}
                             </div>
@@ -346,11 +454,12 @@ export default function Orcamentos() {
                         </div>
 
                         {/* Descrição - Mobile Apenas se curta */}
-                        {orcamento.descricao && orcamento.descricao.length < 60 && (
-                          <p className="font-sans text-xs text-foreground/40 line-clamp-1">
-                            {orcamento.descricao}
-                          </p>
-                        )}
+                        {orcamento.descricao &&
+                          orcamento.descricao.length < 60 && (
+                            <p className="font-sans text-xs text-foreground/40 line-clamp-1">
+                              {orcamento.descricao}
+                            </p>
+                          )}
 
                         {/* Botão Histórico - Mobile */}
                         <button
@@ -365,10 +474,11 @@ export default function Orcamentos() {
 
                     {/* Contagem Regressiva */}
                     <div
-                      className={`flex items-center gap-2 mb-4 p-3 rounded-sm ${estaProximoDeExpirar || estaExpirado
-                        ? "bg-accent/10"
-                        : "bg-foreground/5"
-                        }`}
+                      className={`flex items-center gap-2 mb-4 p-3 rounded-sm ${
+                        estaProximoDeExpirar || estaExpirado
+                          ? "bg-accent/10"
+                          : "bg-foreground/5"
+                      }`}
                     >
                       <Clock
                         size={18}
@@ -379,20 +489,21 @@ export default function Orcamentos() {
                         }
                       />
                       <span
-                        className={`font-sans text-sm ${estaProximoDeExpirar || estaExpirado
-                          ? "text-accent font-semibold"
-                          : "text-foreground/60"
-                          }`}
+                        className={`font-sans text-sm ${
+                          estaProximoDeExpirar || estaExpirado
+                            ? "text-accent font-semibold"
+                            : "text-foreground/60"
+                        }`}
                       >
                         {estaExpirado
                           ? "Expirado há " +
-                          Math.abs(diasRestantes) +
-                          " dia" +
-                          (Math.abs(diasRestantes) !== 1 ? "s" : "")
+                            Math.abs(diasRestantes) +
+                            " dia" +
+                            (Math.abs(diasRestantes) !== 1 ? "s" : "")
                           : "Expira em " +
-                          diasRestantes +
-                          " dia" +
-                          (diasRestantes !== 1 ? "s" : "")}
+                            diasRestantes +
+                            " dia" +
+                            (diasRestantes !== 1 ? "s" : "")}
                       </span>
                     </div>
 
@@ -402,20 +513,34 @@ export default function Orcamentos() {
                         <>
                           <div className="flex flex-col sm:flex-row gap-2 w-full">
                             <Button
-                              onClick={() => handleConverterEntrada(orcamento.id)}
+                              onClick={() =>
+                                handleConverterEntrada(orcamento.id)
+                              }
                               variant="outline"
                               className="w-full sm:flex-1 text-sm py-2 h-auto min-h-10"
                             >
-                              <CheckCircle2 size={16} className="mr-2 shrink-0" />
-                              <span className="truncate">Converter em Entrada</span>
+                              <CheckCircle2
+                                size={16}
+                                className="mr-2 shrink-0"
+                              />
+                              <span className="truncate">
+                                Converter em Entrada
+                              </span>
                             </Button>
                             <Button
-                              onClick={() => handlePreencherFormulario(orcamento.id)}
+                              onClick={() =>
+                                handlePreencherFormulario(orcamento.id)
+                              }
                               variant="outline"
                               className="w-full sm:flex-1 text-sm py-2 h-auto min-h-10"
                             >
-                              <ClipboardList size={16} className="mr-2 shrink-0" />
-                              <span className="truncate">Preencher Formulário</span>
+                              <ClipboardList
+                                size={16}
+                                className="mr-2 shrink-0"
+                              />
+                              <span className="truncate">
+                                Preencher Formulário
+                              </span>
                             </Button>
                           </div>
                           <Button
@@ -425,7 +550,9 @@ export default function Orcamentos() {
                             disabled={loadingOS}
                           >
                             <FileText size={16} className="mr-2 shrink-0" />
-                            <span className="truncate">{loadingOS ? "Gerando..." : "Gerar OS"}</span>
+                            <span className="truncate">
+                              {loadingOS ? "Gerando..." : "Gerar OS"}
+                            </span>
                           </Button>
                         </>
                       )}

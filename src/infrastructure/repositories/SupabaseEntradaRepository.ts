@@ -7,7 +7,9 @@ import { supabase } from "@/infrastructure/supabase/client";
  * Esta é uma implementação de infraestrutura que conhece detalhes do Supabase
  */
 export class SupabaseEntradaRepository implements EntradaRepository {
-  async criar(entrada: Omit<Entrada, "id" | "criadoEm" | "atualizadoEm">): Promise<Entrada> {
+  async criar(
+    entrada: Omit<Entrada, "id" | "criadoEm" | "atualizadoEm">
+  ): Promise<Entrada> {
     const { data, error } = await supabase
       .from("entradas")
       .insert({
@@ -119,24 +121,36 @@ export class SupabaseEntradaRepository implements EntradaRepository {
     if (dados.cep !== undefined) updateData.cep = dados.cep;
     if (dados.telefone !== undefined) updateData.telefone = dados.telefone;
     if (dados.frete !== undefined) updateData.frete = dados.frete;
-    if (dados.valorCobrado !== undefined) updateData.valor_cobrado = dados.valorCobrado;
+    if (dados.valorCobrado !== undefined)
+      updateData.valor_cobrado = dados.valorCobrado;
     if (dados.descricao !== undefined) updateData.descricao = dados.descricao;
-    if (dados.observacoes !== undefined) updateData.observacoes = dados.observacoes;
-    if (dados.dataOrcamento !== undefined) updateData.data_orcamento = dados.dataOrcamento.toISOString();
-    if (dados.dataEntrada !== undefined) updateData.data_entrada = dados.dataEntrada.toISOString();
-    if (dados.dataEntrega !== undefined) updateData.data_entrega = dados.dataEntrega.toISOString();
-    if (dados.dataConclusao !== undefined) updateData.data_conclusao = dados.dataConclusao ? dados.dataConclusao.toISOString() : null;
+    if (dados.observacoes !== undefined)
+      updateData.observacoes = dados.observacoes;
+    if (dados.dataOrcamento !== undefined)
+      updateData.data_orcamento = dados.dataOrcamento.toISOString();
+    if (dados.dataEntrada !== undefined)
+      updateData.data_entrada = dados.dataEntrada.toISOString();
+    if (dados.dataEntrega !== undefined)
+      updateData.data_entrega = dados.dataEntrega.toISOString();
+    if (dados.dataConclusao !== undefined)
+      updateData.data_conclusao = dados.dataConclusao
+        ? dados.dataConclusao.toISOString()
+        : null;
     if (dados.status !== undefined) updateData.status = dados.status;
-    if (dados.statusEntrega !== undefined) updateData.status_entrega = dados.statusEntrega;
+    if (dados.statusEntrega !== undefined)
+      updateData.status_entrega = dados.statusEntrega;
     if (dados.progresso !== undefined) updateData.progresso = dados.progresso;
-    if (dados.finalNumeroQuadro !== undefined) updateData.final_numero_quadro = dados.finalNumeroQuadro;
-    if (dados.osAssinadaUrl !== undefined) updateData.os_assinada_url = dados.osAssinadaUrl;
+    if (dados.finalNumeroQuadro !== undefined)
+      updateData.final_numero_quadro = dados.finalNumeroQuadro;
+    if (dados.osAssinadaUrl !== undefined)
+      updateData.os_assinada_url = dados.osAssinadaUrl;
     if (dados.tipoPreco !== undefined) updateData.tipo_preco = dados.tipoPreco;
-    if (dados.formaPagamento !== undefined) updateData.forma_pagamento = dados.formaPagamento;
+    if (dados.formaPagamento !== undefined)
+      updateData.forma_pagamento = dados.formaPagamento;
     if (dados.fotosStatus !== undefined) {
       // Converte array de FotoStatus para JSONB
       updateData.fotos_status = JSON.stringify(
-        dados.fotosStatus.map((foto) => ({
+        dados.fotosStatus.map(foto => ({
           url: foto.url,
           data: foto.data.toISOString(),
           observacao: foto.observacao,
@@ -160,10 +174,7 @@ export class SupabaseEntradaRepository implements EntradaRepository {
   }
 
   async deletar(id: string): Promise<void> {
-    const { error } = await supabase
-      .from("entradas")
-      .delete()
-      .eq("id", id);
+    const { error } = await supabase.from("entradas").delete().eq("id", id);
 
     if (error) {
       throw new Error(`Erro ao deletar entrada: ${error.message}`);
@@ -175,9 +186,10 @@ export class SupabaseEntradaRepository implements EntradaRepository {
     let fotosStatus: any[] = [];
     if (data.fotos_status) {
       try {
-        const parsed = typeof data.fotos_status === 'string' 
-          ? JSON.parse(data.fotos_status) 
-          : data.fotos_status;
+        const parsed =
+          typeof data.fotos_status === "string"
+            ? JSON.parse(data.fotos_status)
+            : data.fotos_status;
         fotosStatus = Array.isArray(parsed) ? parsed : [];
       } catch (e) {
         console.error("Erro ao parsear fotos_status:", e);
@@ -193,14 +205,23 @@ export class SupabaseEntradaRepository implements EntradaRepository {
       endereco: data.endereco,
       cep: data.cep,
       telefone: data.telefone,
-      frete: parseFloat(data.frete || 0),
-      valorCobrado: data.valor_cobrado ? parseFloat(data.valor_cobrado) : undefined,
+      frete:
+        data.frete !== null && data.frete !== undefined
+          ? parseFloat(data.frete)
+          : null,
+      valorCobrado: data.valor_cobrado
+        ? parseFloat(data.valor_cobrado)
+        : undefined,
       descricao: data.descricao,
       observacoes: data.observacoes,
-      dataOrcamento: data.data_orcamento ? new Date(data.data_orcamento) : undefined,
+      dataOrcamento: data.data_orcamento
+        ? new Date(data.data_orcamento)
+        : undefined,
       dataEntrada: data.data_entrada ? new Date(data.data_entrada) : undefined,
       dataEntrega: data.data_entrega ? new Date(data.data_entrega) : undefined,
-      dataConclusao: data.data_conclusao ? new Date(data.data_conclusao) : undefined,
+      dataConclusao: data.data_conclusao
+        ? new Date(data.data_conclusao)
+        : undefined,
       status: data.status,
       statusEntrega: data.status_entrega,
       progresso: data.progresso || 0,
@@ -219,4 +240,3 @@ export class SupabaseEntradaRepository implements EntradaRepository {
     };
   }
 }
-

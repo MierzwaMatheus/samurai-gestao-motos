@@ -10,7 +10,7 @@ interface DadosOS {
     descricao?: string;
     observacoes?: string;
     valorCobrado?: number;
-    frete: number;
+    frete: number | null; // null quando for retirada
     dataEntrada?: Date;
     dataEntrega?: Date;
     dataConclusao?: Date | null;
@@ -51,17 +51,21 @@ export async function gerarOSPDF(dados: DadosOS): Promise<Blob> {
   const valorServicos = dados.entrada.valorCobrado || 0;
   const valorFrete = dados.entrada.frete || 0;
   const valorTotal = valorServicos + valorFrete;
-  const dataConclusao = dados.entrada.dataConclusao || dados.entrada.dataEntrega;
+  const dataConclusao =
+    dados.entrada.dataConclusao || dados.entrada.dataEntrega;
   const formaPagamento = dados.entrada.formaPagamento;
-  const marcarFormaPagamento = (tipo: "pix" | "credito" | "debito" | "boleto") =>
-    formaPagamento === tipo ? "X" : "";
+  const marcarFormaPagamento = (
+    tipo: "pix" | "credito" | "debito" | "boleto"
+  ) => (formaPagamento === tipo ? "X" : "");
 
   // Separação de fotos
   // Fotos de entrada: 'moto' é o tipo legado usado para fotos tiradas na recepção/orçamento
   // Fotos de orçamento: 'orcamento' é um tipo mais recente
   // Fotos de documento: 'documento' geralmente são CNH/CRLV, mas podem ser relevantes dependendo do uso
-  const fotosOrcamento = dados.fotos.filter(f => f.tipo === 'moto' || f.tipo === 'orcamento' || f.tipo === 'documento');
-  const fotosServico = dados.fotos.filter(f => f.tipo === 'status');
+  const fotosOrcamento = dados.fotos.filter(
+    f => f.tipo === "moto" || f.tipo === "orcamento" || f.tipo === "documento"
+  );
+  const fotosServico = dados.fotos.filter(f => f.tipo === "status");
 
   const html = `
     <!DOCTYPE html>
@@ -215,7 +219,7 @@ export async function gerarOSPDF(dados: DadosOS): Promise<Blob> {
               <p>WhatsApp: (11) 95759-3725 | Instagram: @SAMURAI_ALINHAMENTO</p>
               <br>
               <p style="font-weight: bold; font-size: 12px;">ORDEM DE SERVIÇO Nº ${dados.entrada.id.substring(0, 8).toUpperCase()}</p>
-              <p>Data de Emissão: ${new Date().toLocaleDateString('pt-BR')}</p>
+              <p>Data de Emissão: ${new Date().toLocaleDateString("pt-BR")}</p>
             </td>
           </tr>
         </table>
@@ -230,11 +234,11 @@ export async function gerarOSPDF(dados: DadosOS): Promise<Blob> {
             </td>
             <td>
               <span class="label">TELEFONE</span>
-              <span class="value">${dados.cliente.telefone || ''}</span>
+              <span class="value">${dados.cliente.telefone || ""}</span>
             </td>
             <td colspan="2">
               <span class="label">ENDEREÇO</span>
-              <span class="value">${dados.cliente.endereco || ''}</span>
+              <span class="value">${dados.cliente.endereco || ""}</span>
             </td>
           </tr>
         </table>
@@ -249,23 +253,23 @@ export async function gerarOSPDF(dados: DadosOS): Promise<Blob> {
             </td>
             <td>
               <span class="label">MARCA</span>
-              <span class="value">${dados.moto.marca || ''}</span>
+              <span class="value">${dados.moto.marca || ""}</span>
             </td>
             <td>
               <span class="label">CILINDRADA</span>
-              <span class="value">${dados.moto.cilindrada || ''}</span>
+              <span class="value">${dados.moto.cilindrada || ""}</span>
             </td>
             <td>
               <span class="label">ANO</span>
-              <span class="value">${dados.moto.ano || ''}</span>
+              <span class="value">${dados.moto.ano || ""}</span>
             </td>
             <td>
               <span class="label">PLACA</span>
-              <span class="value">${dados.moto.placa || ''}</span>
+              <span class="value">${dados.moto.placa || ""}</span>
             </td>
              <td>
               <span class="label">Nº CHASSI</span>
-              <span class="value">${dados.moto.finalNumeroQuadro || ''}</span>
+              <span class="value">${dados.moto.finalNumeroQuadro || ""}</span>
             </td>
           </tr>
         </table>
@@ -281,7 +285,9 @@ export async function gerarOSPDF(dados: DadosOS): Promise<Blob> {
           ${renderServicosETotal(dados.tiposServico, dados.servicosPersonalizados, dados.entrada.descricao, dados.entrada.frete, valorTotal)}
         </table>
 
-         ${dados.entrada.descricao ? `
+         ${
+           dados.entrada.descricao
+             ? `
          <!-- OBSERVAÇÃO -->
         <div class="section-header">OBSERVAÇÕES</div>
         <table style="width: 100%;">
@@ -290,35 +296,57 @@ export async function gerarOSPDF(dados: DadosOS): Promise<Blob> {
               ${dados.entrada.descricao}
             </td>
           </tr>
-        </table>` : ''}
+        </table>`
+             : ""
+         }
 
         <!-- IMAGENS -->
-        ${(fotosOrcamento.length > 0 || fotosServico.length > 0) ? `
+        ${
+          fotosOrcamento.length > 0 || fotosServico.length > 0
+            ? `
         <div class="section-header">REGISTRO FOTOGRÁFICO</div>
         <div class="images-section">
-           ${fotosOrcamento.length > 0 ? `
+           ${
+             fotosOrcamento.length > 0
+               ? `
              <p style="font-weight: bold; margin: 5px 0; font-size: 10px; text-align: left;">FOTOS DE ENTRADA / ORÇAMENTO:</p>
              <div class="images-grid">
-               ${fotosOrcamento.map(foto => `
+               ${fotosOrcamento
+                 .map(
+                   foto => `
                  <div class="image-container">
                    <img src="${foto.url}" alt="Foto Orçamento" loading="lazy" />
                  </div>
-               `).join('')}
+               `
+                 )
+                 .join("")}
              </div>
-           ` : ''}
+           `
+               : ""
+           }
 
-           ${fotosServico.length > 0 ? `
+           ${
+             fotosServico.length > 0
+               ? `
              <p style="font-weight: bold; margin: 10px 0 5px 0; font-size: 10px; text-align: left;">FOTOS DO SERVIÇO:</p>
              <div class="images-grid">
-               ${fotosServico.map(foto => `
+               ${fotosServico
+                 .map(
+                   foto => `
                  <div class="image-container">
                     <img src="${foto.url}" alt="Foto Serviço" loading="lazy" />
                  </div>
-               `).join('')}
+               `
+                 )
+                 .join("")}
              </div>
-           ` : ''}
+           `
+               : ""
+           }
         </div>
-        ` : ''}
+        `
+            : ""
+        }
 
         <!-- DADOS DA ENTREGA -->
         <div class="section-header">DADOS DA ENTREGA</div>
@@ -330,7 +358,7 @@ export async function gerarOSPDF(dados: DadosOS): Promise<Blob> {
             </td>
             <td width="33%">
               <span class="label">DATA</span>
-              <div style="height: 20px;">${dataConclusao ? new Date(dataConclusao).toLocaleDateString('pt-BR') : ''}</div>
+              <div style="height: 20px;">${dataConclusao ? new Date(dataConclusao).toLocaleDateString("pt-BR") : ""}</div>
             </td>
             <td width="34%">
               <span class="label">RECEBIDO/ENTREGUE POR</span>
@@ -361,7 +389,7 @@ export async function gerarOSPDF(dados: DadosOS): Promise<Blob> {
     </html>
   `;
 
-  const blob = new Blob([html], { type: 'text/html' });
+  const blob = new Blob([html], { type: "text/html" });
   return blob;
 }
 
@@ -374,7 +402,8 @@ function renderServicesTable(
   // Adicionar tipos de serviço padrão
   if (tiposServico && tiposServico.length > 0) {
     tiposServico.forEach(s => {
-      allServices.push(formatarServico(s));
+      const servicoFormatado = formatarServico(s);
+      allServices.push(servicoFormatado.nome);
     });
   }
 
@@ -408,34 +437,38 @@ function renderServicesTable(
     <table style="width: 100%; border: none;">
       <tr>
         <td style="width: 50%; vertical-align: top; border: none; border-right: 1px solid #000;">
-          ${col1.map(renderItem).join('')}
+          ${col1.map(renderItem).join("")}
         </td>
         <td style="width: 50%; vertical-align: top; border: none;">
-          ${col2.map(renderItem).join('')}
+          ${col2.map(renderItem).join("")}
         </td>
       </tr>
     </table>
   `;
 }
 
-function formatarServico(t: any): { nome: string, valor: number, quantidade: number } {
-  console.log('Serviço recebido:', JSON.stringify(t, null, 2));
-  
+function formatarServico(t: any): {
+  nome: string;
+  valor: number;
+  quantidade: number;
+} {
+  console.log("Serviço recebido:", JSON.stringify(t, null, 2));
+
   let nome = t.nome;
   if (t.categoria === "alinhamento") {
     nome += t.comOleo ? " (Com Óleo)" : " (Sem Óleo)";
   }
   const quantidade = t.quantidade || 1;
-  
+
   // O preço já vem calculado no GerarOSUseCase (multiplicado pela quantidade)
   const valor = t.preco || t.valor || 0;
-  
+
   console.log(`Serviço: ${nome}, Valor: ${valor}, Quantidade: ${quantidade}`);
-  
-  return { 
+
+  return {
     nome,
     valor: valor, // Já está multiplicado pela quantidade
-    quantidade
+    quantidade,
   };
 }
 
@@ -443,12 +476,13 @@ function renderServicosETotal(
   tiposServico?: Array<any>,
   servicosPersonalizados?: Array<any>,
   descricao?: string,
-  frete: number = 0,
+  frete: number | null = 0,
   valorTotal: number = 0
 ): string {
-  console.log('Tipos de serviço:', tiposServico);
-  console.log('Serviços personalizados:', servicosPersonalizados);
-  const servicos: Array<{ nome: string, valor: number, quantidade: number }> = [];
+  console.log("Tipos de serviço:", tiposServico);
+  console.log("Serviços personalizados:", servicosPersonalizados);
+  const servicos: Array<{ nome: string; valor: number; quantidade: number }> =
+    [];
 
   // Adicionar tipos de serviço padrão
   if (tiposServico?.length) {
@@ -463,18 +497,22 @@ function renderServicosETotal(
       servicos.push({
         nome: s.nome,
         valor: s.valor,
-        quantidade: s.quantidade || 1
+        quantidade: s.quantidade || 1,
       });
     });
   }
+
+  // Verifica se é retirada (frete null, undefined ou 0)
+  const isRetirada = frete === null || frete === undefined || frete === 0;
+  const freteValor = isRetirada ? 0 : frete;
 
   // Se não houver serviços, mostra apenas a descrição
   if (servicos.length === 0) {
     return `
       <tr>
         <td class="desc-col" style="height: 150px; vertical-align: top;">
-          ${descricao ? descricao.replace(/\n/g, '<br>') : ''}
-          ${frete > 0 ? `<br><br>Frete: R$ ${frete.toFixed(2)}` : ''}
+          ${descricao ? descricao.replace(/\n/g, "<br>") : ""}
+          ${!isRetirada && freteValor > 0 ? `<br><br>Frete: R$ ${freteValor.toFixed(2)}` : ""}
         </td>
         <td class="val-col">
           R$ 0,00
@@ -486,37 +524,43 @@ function renderServicosETotal(
   }
 
   // Renderiza cada serviço em uma linha
-  const linhas = servicos.map((servico, index) => {
-    const valorUnitario = servico.valor / (servico.quantidade || 1);
-    return `
+  const linhas = servicos
+    .map((servico, index) => {
+      const valorUnitario = servico.valor / (servico.quantidade || 1);
+      return `
       <tr>
-        <td class="desc-col" style="vertical-align: top; ${index === 0 ? 'padding-top: 8px;' : ''}">
-          • ${servico.nome}${servico.quantidade > 1 ? ` (${servico.quantidade}x)` : ''}
-          ${index === 0 && descricao ? `<br><br>${descricao.replace(/\n/g, '<br>')}` : ''}
+        <td class="desc-col" style="vertical-align: top; ${index === 0 ? "padding-top: 8px;" : ""}">
+          • ${servico.nome}${servico.quantidade > 1 ? ` (${servico.quantidade}x)` : ""}
+          ${index === 0 && descricao ? `<br><br>${descricao.replace(/\n/g, "<br>")}` : ""}
         </td>
-        <td class="val-col" style="vertical-align: top; ${index === 0 ? 'padding-top: 8px;' : ''}">
+        <td class="val-col" style="vertical-align: top; ${index === 0 ? "padding-top: 8px;" : ""}">
           R$ ${valorUnitario.toFixed(2)}
         </td>
-        <td class="total-col" style="vertical-align: top; font-size: 14px; ${index === 0 ? 'padding-top: 8px;' : ''}">
+        <td class="total-col" style="vertical-align: top; font-size: 14px; ${index === 0 ? "padding-top: 8px;" : ""}">
           R$ ${servico.valor.toFixed(2)}
         </td>
       </tr>`;
-  }).join('');
+    })
+    .join("");
 
   // Linha do frete e total
   return `${linhas}
-    ${frete > 0 ? `
+    ${
+      !isRetirada && freteValor > 0
+        ? `
       <tr>
         <td class="desc-col" style="vertical-align: top;">
           Frete
         </td>
         <td class="val-col">
-          R$ ${frete.toFixed(2)}
+          R$ ${freteValor.toFixed(2)}
         </td>
         <td class="total-col" style="font-size: 14px;">
-          R$ ${frete.toFixed(2)}
+          R$ ${freteValor.toFixed(2)}
         </td>
-      </tr>` : ''}
+      </tr>`
+        : ""
+    }
       <tr>
         <td class="desc-col" style="border-top: 1px solid #000; padding-top: 8px;">
           <strong>TOTAL</strong>
@@ -531,25 +575,25 @@ function renderServicosETotal(
 }
 
 export function imprimirOS(html: string) {
-  const printWindow = window.open('', '_blank');
+  const printWindow = window.open("", "_blank");
   if (printWindow) {
     printWindow.document.write(html);
     printWindow.document.close();
 
     // Função melhorada para esperar carregamento de imagens
     const waitForImagesAndPrint = async () => {
-      const images = Array.from(printWindow.document.querySelectorAll('img'));
+      const images = Array.from(printWindow.document.querySelectorAll("img"));
 
-      const imagePromises = images.map((img) => {
+      const imagePromises = images.map(img => {
         if (img.complete) return Promise.resolve();
-        return new Promise((resolve) => {
+        return new Promise(resolve => {
           img.onload = resolve;
           img.onerror = resolve; // Resolve mesmo com erro para não travar
         });
       });
 
       // Timeout de segurança de 3s
-      const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 3000));
+      const timeoutPromise = new Promise(resolve => setTimeout(resolve, 3000));
 
       await Promise.race([Promise.all(imagePromises), timeoutPromise]);
 
@@ -561,7 +605,7 @@ export function imprimirOS(html: string) {
     };
 
     // Aguarda o documento estar pronto se necessário, depois aguarda imagens
-    if (printWindow.document.readyState === 'complete') {
+    if (printWindow.document.readyState === "complete") {
       waitForImagesAndPrint();
     } else {
       printWindow.onload = waitForImagesAndPrint;

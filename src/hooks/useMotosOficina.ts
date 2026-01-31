@@ -32,18 +32,32 @@ export function useMotosOficina(
       // Busca apenas entradas do tipo "entrada" (não orçamentos) e que não estão entregues
       const entradas = await useCase.execute();
       const entradasFiltradas = entradas.filter(
-        (e) => e.tipo === "entrada" && e.statusEntrega !== "entregue" && e.statusEntrega !== "retirado"
+        e =>
+          e.tipo === "entrada" &&
+          e.statusEntrega !== "entregue" &&
+          e.statusEntrega !== "retirado"
       );
 
       // Busca dados completos (cliente e moto) para cada entrada
       const motosCompletas: MotoCompleta[] = await Promise.all(
-        entradasFiltradas.map(async (entrada) => {
-          const [cliente, moto, tiposServico, fotosMoto, servicosPersonalizados] = await Promise.all([
+        entradasFiltradas.map(async entrada => {
+          const [
+            cliente,
+            moto,
+            tiposServico,
+            fotosMoto,
+            servicosPersonalizados,
+          ] = await Promise.all([
             clienteRepo.buscarPorId(entrada.clienteId),
             motoRepo.buscarPorId(entrada.motoId),
-            tipoServicoRepo?.buscarPorEntradaId(entrada.id).catch(() => []) || Promise.resolve([]),
-            fotoRepo?.buscarPorEntradaIdETipo(entrada.id, "moto").catch(() => []) || Promise.resolve([]),
-            servicoPersonalizadoRepo?.buscarPorEntradaId(entrada.id).catch(() => []) || Promise.resolve([]),
+            tipoServicoRepo?.buscarPorEntradaId(entrada.id).catch(() => []) ||
+              Promise.resolve([]),
+            fotoRepo
+              ?.buscarPorEntradaIdETipo(entrada.id, "moto")
+              .catch(() => []) || Promise.resolve([]),
+            servicoPersonalizadoRepo
+              ?.buscarPorEntradaId(entrada.id)
+              .catch(() => []) || Promise.resolve([]),
           ]);
 
           return {
@@ -59,12 +73,13 @@ export function useMotosOficina(
             criadoEm: moto?.criadoEm || entrada.criadoEm,
             atualizadoEm: moto?.atualizadoEm || entrada.atualizadoEm,
             cliente: cliente?.nome || "Cliente não informado",
+            telefone: cliente?.telefone,
             status: entrada.status,
             progresso: entrada.progresso,
             dataConclusao: entrada.dataConclusao ?? null,
             formaPagamento: entrada.formaPagamento ?? null,
             fotosStatus: entrada.fotosStatus || [],
-            fotos: fotosMoto.map((foto) => foto.url), // URLs das fotos do tipo "moto"
+            fotos: fotosMoto.map(foto => foto.url), // URLs das fotos do tipo "moto"
             tiposServico: tiposServico || [],
             servicosPersonalizados: servicosPersonalizados || [],
           };
@@ -73,7 +88,8 @@ export function useMotosOficina(
 
       setMotos(motosCompletas);
     } catch (err) {
-      const mensagem = err instanceof Error ? err.message : "Erro ao carregar motos";
+      const mensagem =
+        err instanceof Error ? err.message : "Erro ao carregar motos";
       setError(mensagem);
     } finally {
       setLoading(false);
@@ -82,11 +98,21 @@ export function useMotosOficina(
 
   useEffect(() => {
     carregar();
-  }, [useCase, clienteRepo, motoRepo, fotoRepo, tipoServicoRepo, servicoPersonalizadoRepo]);
+  }, [
+    useCase,
+    clienteRepo,
+    motoRepo,
+    fotoRepo,
+    tipoServicoRepo,
+    servicoPersonalizadoRepo,
+  ]);
 
-  const atualizarMoto = (entradaId: string, atualizacoes: Partial<MotoCompleta>) => {
-    setMotos((prevMotos) =>
-      prevMotos.map((moto) =>
+  const atualizarMoto = (
+    entradaId: string,
+    atualizacoes: Partial<MotoCompleta>
+  ) => {
+    setMotos(prevMotos =>
+      prevMotos.map(moto =>
         moto.entradaId === entradaId ? { ...moto, ...atualizacoes } : moto
       )
     );
@@ -94,4 +120,3 @@ export function useMotosOficina(
 
   return { motos, loading, error, recarregar: carregar, atualizarMoto };
 }
-

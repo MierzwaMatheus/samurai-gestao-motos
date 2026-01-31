@@ -2,14 +2,20 @@ import { useState, useMemo, useEffect } from "react";
 import Header from "@/components/Header";
 import BottomNav from "@/components/BottomNav";
 import EntryTypeToggle from "@/components/EntryTypeToggle";
-import { EntryType, DadosCadastro, Cliente, ServicoSelecionado, ServicoPersonalizadoInput } from "@shared/types";
+import {
+  EntryType,
+  DadosCadastro,
+  Cliente,
+  ServicoSelecionado,
+  ServicoPersonalizadoInput,
+} from "@shared/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { ImagePlus, Truck, Search, MapPin } from "lucide-react";
+import { ImagePlus, Truck, Search, MapPin, Store } from "lucide-react";
 import { toast } from "sonner";
 import { ClienteSearch } from "@/components/ClienteSearch";
 import { GerenciarServicos } from "@/components/GerenciarServicos";
@@ -37,24 +43,37 @@ export default function Cadastro() {
     () => new BuscarEnderecoPorCepUseCase(cepService),
     [cepService]
   );
-  const { buscar, loading: loadingCep, error: errorCep, endereco: enderecoEncontrado } =
-    useBuscarCep(buscarCepUseCase);
+  const {
+    buscar,
+    loading: loadingCep,
+    error: errorCep,
+    endereco: enderecoEncontrado,
+  } = useBuscarCep(buscarCepUseCase);
 
   const freteApi = useMemo(() => new SupabaseFreteApi(), []);
   const calcularFreteUseCase = useMemo(
     () => new CalcularFreteUseCase(freteApi),
     [freteApi]
   );
-  const { calcular: calcularFrete, loading: loadingFrete, error: errorFrete } =
-    useCalcularFrete(calcularFreteUseCase);
+  const {
+    calcular: calcularFrete,
+    loading: loadingFrete,
+    error: errorFrete,
+  } = useCalcularFrete(calcularFreteUseCase);
 
   // Repositórios para criar entrada
   const clienteRepo = useMemo(() => new SupabaseClienteRepository(), []);
   const motoRepo = useMemo(() => new SupabaseMotoRepository(), []);
   const entradaRepo = useMemo(() => new SupabaseEntradaRepository(), []);
   const orcamentoRepo = useMemo(() => new SupabaseOrcamentoRepository(), []);
-  const tipoServicoRepo = useMemo(() => new SupabaseTipoServicoRepository(), []);
-  const servicoPersonalizadoRepo = useMemo(() => new SupabaseServicoPersonalizadoRepository(), []);
+  const tipoServicoRepo = useMemo(
+    () => new SupabaseTipoServicoRepository(),
+    []
+  );
+  const servicoPersonalizadoRepo = useMemo(
+    () => new SupabaseServicoPersonalizadoRepository(),
+    []
+  );
   const { criar: criarEntrada, loading: loadingCriar } = useCriarEntrada(
     clienteRepo,
     motoRepo,
@@ -67,14 +86,23 @@ export default function Cadastro() {
   // Storage para upload de fotos
   const storageApi = useMemo(() => new SupabaseStorageApi(), []);
   const fotoRepo = useMemo(() => new SupabaseFotoRepository(), []);
-  const { upload: uploadFoto, loading: loadingUpload } = useUploadFoto(storageApi, fotoRepo);
+  const { upload: uploadFoto, loading: loadingUpload } = useUploadFoto(
+    storageApi,
+    fotoRepo
+  );
 
   const [tipo, setTipo] = useState<EntryType>("entrada");
   const [usarClienteExistente, setUsarClienteExistente] = useState(false);
-  const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(null);
-  const [tipoPreco, setTipoPreco] = useState<"oficina" | "particular">("oficina");
+  const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(
+    null
+  );
+  const [tipoPreco, setTipoPreco] = useState<"oficina" | "particular">(
+    "oficina"
+  );
   const [servicos, setServicos] = useState<ServicoSelecionado[]>([]);
-  const [servicosPersonalizados, setServicosPersonalizados] = useState<ServicoPersonalizadoInput[]>([]);
+  const [servicosPersonalizados, setServicosPersonalizados] = useState<
+    ServicoPersonalizadoInput[]
+  >([]);
   const [valorTotalCalculado, setValorTotalCalculado] = useState<number>(0);
   const [formData, setFormData] = useState<DadosCadastro>({
     tipo: "entrada",
@@ -93,12 +121,14 @@ export default function Cadastro() {
     observacoes: "",
     fotos: [],
     frete: 0,
+    isRetirada: false,
     dataOrcamento: undefined,
     dataEntrada: undefined,
     dataEntrega: undefined,
     servicos: [],
     servicosPersonalizados: [],
   });
+  const [isRetirada, setIsRetirada] = useState(false);
   const [fotos, setFotos] = useState<string[]>([]); // URLs para preview
   const [fotosArquivos, setFotosArquivos] = useState<File[]>([]); // Arquivos reais para upload
 
@@ -112,9 +142,11 @@ export default function Cadastro() {
       // Só atualiza se a data de entrega atual for diferente da calculada
       // Isso evita loops infinitos e atualizações desnecessárias
       const dataEntregaAtual = formData.dataEntrega;
-      if (!dataEntregaAtual ||
-        dataEntregaAtual.getTime() !== dataEntregaCalculada.getTime()) {
-        setFormData((prev) => ({
+      if (
+        !dataEntregaAtual ||
+        dataEntregaAtual.getTime() !== dataEntregaCalculada.getTime()
+      ) {
+        setFormData(prev => ({
           ...prev,
           dataEntrega: dataEntregaCalculada,
         }));
@@ -122,7 +154,7 @@ export default function Cadastro() {
     } else {
       // Se não há data de entrada, limpa a data de entrega apenas se ela existir
       if (formData.dataEntrega) {
-        setFormData((prev) => ({
+        setFormData(prev => ({
           ...prev,
           dataEntrega: undefined,
         }));
@@ -137,9 +169,9 @@ export default function Cadastro() {
 
       // Calcular valor dos tipos de serviço
       if (servicos.length > 0) {
-        const tiposIds = servicos.map((s) => s.tipoServicoId);
+        const tiposIds = servicos.map(s => s.tipoServicoId);
         const tipos = await Promise.all(
-          tiposIds.map((id) => tipoServicoRepo.buscarPorId(id))
+          tiposIds.map(id => tipoServicoRepo.buscarPorId(id))
         );
 
         tipos.forEach((tipo, index) => {
@@ -148,17 +180,22 @@ export default function Cadastro() {
             if (tipo.categoria === "alinhamento") {
               // Para alinhamento, verifica se tem ou não óleo
               if (servicos[index].comOleo) {
-                preco = tipoPreco === "particular" 
-                  ? (tipo.precoParticularComOleo ?? tipo.precoParticular)
-                  : (tipo.precoOficinaComOleo ?? tipo.precoOficina);
+                preco =
+                  tipoPreco === "particular"
+                    ? (tipo.precoParticularComOleo ?? tipo.precoParticular)
+                    : (tipo.precoOficinaComOleo ?? tipo.precoOficina);
               } else {
-                preco = tipoPreco === "particular" 
-                  ? (tipo.precoParticularSemOleo ?? tipo.precoParticular)
-                  : (tipo.precoOficinaSemOleo ?? tipo.precoOficina);
+                preco =
+                  tipoPreco === "particular"
+                    ? (tipo.precoParticularSemOleo ?? tipo.precoParticular)
+                    : (tipo.precoOficinaSemOleo ?? tipo.precoOficina);
               }
             } else {
               // Para outros serviços, usa o preço padrão
-              preco = tipoPreco === "particular" ? tipo.precoParticular : tipo.precoOficina;
+              preco =
+                tipoPreco === "particular"
+                  ? tipo.precoParticular
+                  : tipo.precoOficina;
             }
             total += preco * servicos[index].quantidade;
           }
@@ -166,12 +203,12 @@ export default function Cadastro() {
       }
 
       // Calcular valor dos serviços personalizados
-      servicosPersonalizados.forEach((servico) => {
+      servicosPersonalizados.forEach(servico => {
         total += servico.valor * servico.quantidade;
       });
 
       setValorTotalCalculado(total);
-      setFormData((prev) => ({ ...prev, valorCobrado: total }));
+      setFormData(prev => ({ ...prev, valorCobrado: total }));
     };
 
     calcularValorTotal();
@@ -198,43 +235,80 @@ export default function Cadastro() {
           valorCobrado: dadosParsed.valorCobrado,
           tipoPreco: dadosParsed.tipoPreco || "oficina",
           // Campos opcionais - só preenche se tiverem valores
-          telefone: dadosParsed.telefone && dadosParsed.telefone.trim() !== "" ? dadosParsed.telefone : "",
-          endereco: dadosParsed.endereco && dadosParsed.endereco.trim() !== "" ? dadosParsed.endereco : "",
-          cep: dadosParsed.cep && dadosParsed.cep.trim() !== "" ? dadosParsed.cep : "",
-          placa: dadosParsed.placa && dadosParsed.placa.trim() !== "" ? dadosParsed.placa : "",
-          finalNumeroQuadro: dadosParsed.finalNumeroQuadro && dadosParsed.finalNumeroQuadro.trim() !== "" ? dadosParsed.finalNumeroQuadro : "",
-          descricao: dadosParsed.descricao && dadosParsed.descricao.trim() !== "" ? dadosParsed.descricao : "",
+          telefone:
+            dadosParsed.telefone && dadosParsed.telefone.trim() !== ""
+              ? dadosParsed.telefone
+              : "",
+          endereco:
+            dadosParsed.endereco && dadosParsed.endereco.trim() !== ""
+              ? dadosParsed.endereco
+              : "",
+          cep:
+            dadosParsed.cep && dadosParsed.cep.trim() !== ""
+              ? dadosParsed.cep
+              : "",
+          placa:
+            dadosParsed.placa && dadosParsed.placa.trim() !== ""
+              ? dadosParsed.placa
+              : "",
+          finalNumeroQuadro:
+            dadosParsed.finalNumeroQuadro &&
+            dadosParsed.finalNumeroQuadro.trim() !== ""
+              ? dadosParsed.finalNumeroQuadro
+              : "",
+          descricao:
+            dadosParsed.descricao && dadosParsed.descricao.trim() !== ""
+              ? dadosParsed.descricao
+              : "",
           observacoes: "", // NÃO preenche observações/detalhes
-          fotos: dadosParsed.fotos && Array.isArray(dadosParsed.fotos) && dadosParsed.fotos.length > 0 ? dadosParsed.fotos : [],
-          frete: dadosParsed.frete || 0,
+          fotos:
+            dadosParsed.fotos &&
+            Array.isArray(dadosParsed.fotos) &&
+            dadosParsed.fotos.length > 0
+              ? dadosParsed.fotos
+              : [],
+          frete: dadosParsed.isRetirada ? null : dadosParsed.frete || 0,
+          isRetirada: dadosParsed.isRetirada || false,
           dataOrcamento: dadosParsed.dataOrcamento
-            ? (dadosParsed.dataOrcamento instanceof Date
+            ? dadosParsed.dataOrcamento instanceof Date
               ? dadosParsed.dataOrcamento
-              : new Date(dadosParsed.dataOrcamento))
+              : new Date(dadosParsed.dataOrcamento)
             : undefined,
           dataEntrada: dadosParsed.dataEntrada
-            ? (dadosParsed.dataEntrada instanceof Date
+            ? dadosParsed.dataEntrada instanceof Date
               ? dadosParsed.dataEntrada
-              : new Date(dadosParsed.dataEntrada))
+              : new Date(dadosParsed.dataEntrada)
             : undefined,
           dataEntrega: dadosParsed.dataEntrega
-            ? (dadosParsed.dataEntrega instanceof Date
+            ? dadosParsed.dataEntrega instanceof Date
               ? dadosParsed.dataEntrega
-              : new Date(dadosParsed.dataEntrega))
+              : new Date(dadosParsed.dataEntrega)
             : undefined,
-          servicos: dadosParsed.servicos && Array.isArray(dadosParsed.servicos) && dadosParsed.servicos.length > 0
-            ? dadosParsed.servicos
-            : (dadosParsed.tiposServico && Array.isArray(dadosParsed.tiposServico) && dadosParsed.tiposServico.length > 0
-              ? dadosParsed.tiposServico.map((id: string) => ({ tipoServicoId: id, quantidade: 1 }))
-              : []),
-          servicosPersonalizados: dadosParsed.servicosPersonalizados && Array.isArray(dadosParsed.servicosPersonalizados) && dadosParsed.servicosPersonalizados.length > 0
-            ? dadosParsed.servicosPersonalizados
-            : [],
+          servicos:
+            dadosParsed.servicos &&
+            Array.isArray(dadosParsed.servicos) &&
+            dadosParsed.servicos.length > 0
+              ? dadosParsed.servicos
+              : dadosParsed.tiposServico &&
+                  Array.isArray(dadosParsed.tiposServico) &&
+                  dadosParsed.tiposServico.length > 0
+                ? dadosParsed.tiposServico.map((id: string) => ({
+                    tipoServicoId: id,
+                    quantidade: 1,
+                  }))
+                : [],
+          servicosPersonalizados:
+            dadosParsed.servicosPersonalizados &&
+            Array.isArray(dadosParsed.servicosPersonalizados) &&
+            dadosParsed.servicosPersonalizados.length > 0
+              ? dadosParsed.servicosPersonalizados
+              : [],
         };
 
         // Preenche o formulário com os dados
         setFormData(dadosCadastro);
         setTipo(dadosCadastro.tipo);
+        setIsRetirada(dadosCadastro.isRetirada || false);
 
         // Carrega o tipoPreco se existir nos dados
         if (dadosCadastro.tipoPreco) {
@@ -245,13 +319,16 @@ export default function Cadastro() {
         if (dadosCadastro.clienteId) {
           setUsarClienteExistente(true);
           // Busca o cliente para preencher o clienteSelecionado
-          clienteRepo.buscarPorId(dadosCadastro.clienteId).then((cliente) => {
-            if (cliente) {
-              setClienteSelecionado(cliente);
-            }
-          }).catch((err) => {
-            console.error("Erro ao buscar cliente:", err);
-          });
+          clienteRepo
+            .buscarPorId(dadosCadastro.clienteId)
+            .then(cliente => {
+              if (cliente) {
+                setClienteSelecionado(cliente);
+              }
+            })
+            .catch(err => {
+              console.error("Erro ao buscar cliente:", err);
+            });
         }
 
         // Preenche serviços selecionados
@@ -259,7 +336,10 @@ export default function Cadastro() {
           setServicos(dadosCadastro.servicos);
         }
 
-        if (dadosCadastro.servicosPersonalizados && dadosCadastro.servicosPersonalizados.length > 0) {
+        if (
+          dadosCadastro.servicosPersonalizados &&
+          dadosCadastro.servicosPersonalizados.length > 0
+        ) {
           setServicosPersonalizados(dadosCadastro.servicosPersonalizados);
         }
 
@@ -361,7 +441,8 @@ export default function Cadastro() {
       });
       toast.success("Endereço encontrado!");
     } catch (err) {
-      const mensagem = err instanceof Error ? err.message : "Erro ao buscar CEP";
+      const mensagem =
+        err instanceof Error ? err.message : "Erro ao buscar CEP";
       toast.error(mensagem);
     }
   };
@@ -371,7 +452,7 @@ export default function Cadastro() {
 
     // Valida tamanho (5MB por arquivo)
     const maxSize = 5 * 1024 * 1024;
-    const arquivosValidos = files.filter((file) => {
+    const arquivosValidos = files.filter(file => {
       if (file.size > maxSize) {
         toast.error(`Arquivo ${file.name} muito grande. Tamanho máximo: 5MB.`);
         return false;
@@ -380,13 +461,13 @@ export default function Cadastro() {
     });
 
     // Adiciona arquivos
-    setFotosArquivos((prev) => [...prev, ...arquivosValidos]);
+    setFotosArquivos(prev => [...prev, ...arquivosValidos]);
 
     // Cria preview
-    arquivosValidos.forEach((file) => {
+    arquivosValidos.forEach(file => {
       const reader = new FileReader();
-      reader.onload = (event) => {
-        setFotos((prev) => [...prev, event.target?.result as string]);
+      reader.onload = event => {
+        setFotos(prev => [...prev, event.target?.result as string]);
       };
       reader.readAsDataURL(file);
     });
@@ -438,43 +519,52 @@ export default function Cadastro() {
       return;
     }
 
-    if (tipo === "orcamento") {
+    if (tipo === "orcamento" && !isRetirada) {
       if (!formData.cep || formData.cep.replace(/\D/g, "").length !== 8) {
-        toast.error("CEP é obrigatório para orçamentos (para cálculo de frete)");
+        toast.error("CEP é obrigatório para orçamentos com frete");
         return;
       }
     }
 
     try {
-      // 1. Criar entrada
-      const { entradaId } = await criarEntrada({
+      // 1. Preparar dados para envio
+      const dadosParaEnviar: DadosCadastro = {
         ...formData,
+        frete: isRetirada ? null : formData.frete || 0,
+        isRetirada,
         fotos: fotos,
         servicos: servicos,
         servicosPersonalizados: servicosPersonalizados,
-      });
+      };
+
+      // 1. Criar entrada
+      const { entradaId } = await criarEntrada(dadosParaEnviar);
 
       // 2. Fazer upload das fotos
       if (fotosArquivos.length > 0) {
         toast.info("Fazendo upload das fotos...");
         const resultados = await Promise.allSettled(
-          fotosArquivos.map((file) => uploadFoto(file, entradaId, "moto"))
+          fotosArquivos.map(file => uploadFoto(file, entradaId, "moto"))
         );
 
         // Verifica se houve erros
-        const erros = resultados.filter((r) => r.status === "rejected");
+        const erros = resultados.filter(r => r.status === "rejected");
         if (erros.length > 0) {
           console.error("Erros no upload de fotos:", erros);
           toast.error(`${erros.length} foto(s) falharam no upload`);
         }
 
-        const sucessos = resultados.filter((r) => r.status === "fulfilled");
+        const sucessos = resultados.filter(r => r.status === "fulfilled");
         if (sucessos.length > 0) {
-          console.log(`${sucessos.length} foto(s) salvas com sucesso na tabela`);
+          console.log(
+            `${sucessos.length} foto(s) salvas com sucesso na tabela`
+          );
         }
       }
 
-      toast.success(`${tipo === "entrada" ? "Entrada" : "Orçamento"} registrado com sucesso!`);
+      toast.success(
+        `${tipo === "entrada" ? "Entrada" : "Orçamento"} registrado com sucesso!`
+      );
 
       // Reset form
       setFormData({
@@ -495,6 +585,7 @@ export default function Cadastro() {
         observacoes: "",
         fotos: [],
         frete: 0,
+        isRetirada: false,
         dataOrcamento: undefined,
         dataEntrada: undefined,
         dataEntrega: undefined,
@@ -508,6 +599,7 @@ export default function Cadastro() {
       setServicos([]);
       setServicosPersonalizados([]);
       setValorTotalCalculado(0);
+      setIsRetirada(false);
     } catch (err) {
       const mensagem = err instanceof Error ? err.message : "Erro ao registrar";
       toast.error(mensagem);
@@ -527,7 +619,10 @@ export default function Cadastro() {
             {/* Toggle para usar cliente existente */}
             <div className="flex items-center justify-between p-4 bg-card border border-foreground/10 rounded-lg">
               <div className="space-y-0.5">
-                <Label htmlFor="usar-cliente-existente" className="text-sm font-medium">
+                <Label
+                  htmlFor="usar-cliente-existente"
+                  className="text-sm font-medium"
+                >
                   Usar cliente existente
                 </Label>
                 <p className="text-xs text-foreground/60">
@@ -559,7 +654,10 @@ export default function Cadastro() {
               /* Campos de cadastro de novo cliente */
               <>
                 <div className="space-y-2">
-                  <Label htmlFor="cliente" className="text-xs uppercase tracking-widest">
+                  <Label
+                    htmlFor="cliente"
+                    className="text-xs uppercase tracking-widest"
+                  >
                     Nome do Cliente *
                   </Label>
                   <Input
@@ -573,7 +671,10 @@ export default function Cadastro() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="telefone" className="text-xs uppercase tracking-widest">
+                  <Label
+                    htmlFor="telefone"
+                    className="text-xs uppercase tracking-widest"
+                  >
                     Telefone *
                   </Label>
                   <Input
@@ -582,10 +683,16 @@ export default function Cadastro() {
                     type="tel"
                     placeholder="(11) 99999-9999"
                     value={formData.telefone}
-                    onChange={(e) => {
+                    onChange={e => {
                       const value = e.target.value.replace(/\D/g, "");
-                      const formatted = value.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
-                      setFormData({ ...formData, telefone: formatted || value });
+                      const formatted = value.replace(
+                        /(\d{2})(\d{5})(\d{4})/,
+                        "($1) $2-$3"
+                      );
+                      setFormData({
+                        ...formData,
+                        telefone: formatted || value,
+                      });
                     }}
                     className="bg-card border-foreground/10"
                     required
@@ -598,7 +705,10 @@ export default function Cadastro() {
           {/* Seção Moto */}
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="moto" className="text-xs uppercase tracking-widest">
+              <Label
+                htmlFor="moto"
+                className="text-xs uppercase tracking-widest"
+              >
                 Modelo da Moto *
               </Label>
               <Input
@@ -639,7 +749,10 @@ export default function Cadastro() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="cilindrada" className="text-xs text-foreground/70">
+                <Label
+                  htmlFor="cilindrada"
+                  className="text-xs text-foreground/70"
+                >
                   Cilindrada
                 </Label>
                 <Input
@@ -665,7 +778,10 @@ export default function Cadastro() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="finalNumeroQuadro" className="text-xs text-foreground/70">
+                <Label
+                  htmlFor="finalNumeroQuadro"
+                  className="text-xs text-foreground/70"
+                >
                   Final Nº Quadro
                 </Label>
                 <Input
@@ -726,13 +842,16 @@ export default function Cadastro() {
               servicos={servicos}
               servicosPersonalizados={servicosPersonalizados}
               tipoPreco={tipoPreco}
-              onServicosChange={(novosServicos) => {
+              onServicosChange={novosServicos => {
                 setServicos(novosServicos);
                 setFormData({ ...formData, servicos: novosServicos });
               }}
-              onServicosPersonalizadosChange={(novosPersonalizados) => {
+              onServicosPersonalizadosChange={novosPersonalizados => {
                 setServicosPersonalizados(novosPersonalizados);
-                setFormData({ ...formData, servicosPersonalizados: novosPersonalizados });
+                setFormData({
+                  ...formData,
+                  servicosPersonalizados: novosPersonalizados,
+                });
               }}
             />
           </div>
@@ -741,103 +860,169 @@ export default function Cadastro() {
           {(tipo === "entrada" || tipo === "orcamento") && (
             <div className="space-y-4">
               <Label className="text-xs uppercase tracking-widest">
-                Endereço para Entrega {tipo === "orcamento" && "*"}
+                Endereço para Entrega{" "}
+                {tipo === "orcamento" && !isRetirada && "*"}
               </Label>
 
-              {/* Campo CEP */}
-              <div className="space-y-2">
-                <Label htmlFor="cep" className="text-xs text-foreground/70">
-                  CEP
-                </Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="cep"
-                    name="cep"
-                    placeholder="00000-000"
-                    value={formData.cep}
-                    onChange={handleCepChange}
-                    maxLength={9}
-                    className="bg-card border-foreground/10 flex-1"
-                  />
+              {/* Toggle Frete/Retirada */}
+              <div className="p-4 bg-card border border-foreground/10 rounded-lg space-y-4">
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium">Tipo de Entrega</Label>
+                  <p className="text-xs text-foreground/60">
+                    Selecione se o cliente retira na loja ou precisa de frete
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 w-full">
                   <Button
-                    onClick={handleBuscarCep}
-                    variant="outline"
-                    disabled={loadingCep || !formData.cep}
-                    className="whitespace-nowrap"
+                    variant={!isRetirada ? "default" : "outline"}
+                    size="sm"
+                    className="w-full"
+                    onClick={() => {
+                      setIsRetirada(false);
+                      setFormData({
+                        ...formData,
+                        isRetirada: false,
+                        frete: formData.frete || 0,
+                      });
+                    }}
                   >
-                    <Search size={16} className="mr-2" />
-                    {loadingCep ? "Buscando..." : "Buscar"}
+                    <Truck size={16} className="mr-2" />
+                    Frete
+                  </Button>
+                  <Button
+                    variant={isRetirada ? "default" : "outline"}
+                    size="sm"
+                    className="w-full"
+                    onClick={() => {
+                      setIsRetirada(true);
+                      setFormData({
+                        ...formData,
+                        cep: "",
+                        endereco: "",
+                        enderecoCompleto: undefined,
+                        isRetirada: true,
+                        frete: null,
+                      });
+                    }}
+                  >
+                    <Store size={16} className="mr-2" />
+                    Retirada
                   </Button>
                 </div>
-                {errorCep && (
-                  <p className="text-xs text-red-500">{errorCep}</p>
-                )}
               </div>
 
-              {/* Endereço Encontrado */}
-              {enderecoEncontrado && (
-                <Card className="bg-card border-accent/20 p-4 space-y-2">
-                  <div className="flex items-start gap-2">
-                    <MapPin size={16} className="text-accent mt-0.5" />
-                    <div className="flex-1">
-                      <p className="font-sans text-sm font-semibold text-foreground">
-                        {enderecoEncontrado.rua}
-                      </p>
-                      <p className="font-sans text-xs text-foreground/60">
-                        {enderecoEncontrado.bairro}, {enderecoEncontrado.cidade} - {enderecoEncontrado.estado}
-                      </p>
-                      <p className="font-sans text-xs text-foreground/50 mt-1">
-                        CEP: {enderecoEncontrado.cep}
-                      </p>
-                      {enderecoEncontrado.coordenadas && (
-                        <p className="font-sans text-xs text-foreground/40 mt-1">
-                          📍 Coordenadas: {enderecoEncontrado.coordenadas.latitude}, {enderecoEncontrado.coordenadas.longitude}
-                        </p>
-                      )}
+              {/* Campos de CEP e Endereço - só aparecem quando NÃO é retirada */}
+              {!isRetirada && (
+                <>
+                  {/* Campo CEP */}
+                  <div className="space-y-2">
+                    <Label htmlFor="cep" className="text-xs text-foreground/70">
+                      CEP
+                    </Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="cep"
+                        name="cep"
+                        placeholder="00000-000"
+                        value={formData.cep}
+                        onChange={handleCepChange}
+                        maxLength={9}
+                        className="bg-card border-foreground/10 flex-1"
+                      />
+                      <Button
+                        onClick={handleBuscarCep}
+                        variant="outline"
+                        disabled={loadingCep || !formData.cep}
+                        className="whitespace-nowrap"
+                      >
+                        <Search size={16} className="mr-2" />
+                        {loadingCep ? "Buscando..." : "Buscar"}
+                      </Button>
                     </div>
+                    {errorCep && (
+                      <p className="text-xs text-red-500">{errorCep}</p>
+                    )}
                   </div>
-                </Card>
-              )}
 
-              {/* Campo Endereço Manual */}
-              <div className="space-y-2">
-                <Label htmlFor="endereco" className="text-xs text-foreground/70">
-                  Endereço Completo (ou complemento)
-                </Label>
-                <Input
-                  id="endereco"
-                  name="endereco"
-                  placeholder="Ex: Rua das Flores, 123 - Complemento"
-                  value={formData.endereco}
-                  onChange={handleInputChange}
-                  className="bg-card border-foreground/10"
-                />
-              </div>
+                  {/* Endereço Encontrado */}
+                  {enderecoEncontrado && (
+                    <Card className="bg-card border-accent/20 p-4 space-y-2">
+                      <div className="flex items-start gap-2">
+                        <MapPin size={16} className="text-accent mt-0.5" />
+                        <div className="flex-1">
+                          <p className="font-sans text-sm font-semibold text-foreground">
+                            {enderecoEncontrado.rua}
+                          </p>
+                          <p className="font-sans text-xs text-foreground/60">
+                            {enderecoEncontrado.bairro},{" "}
+                            {enderecoEncontrado.cidade} -{" "}
+                            {enderecoEncontrado.estado}
+                          </p>
+                          <p className="font-sans text-xs text-foreground/50 mt-1">
+                            CEP: {enderecoEncontrado.cep}
+                          </p>
+                          {enderecoEncontrado.coordenadas && (
+                            <p className="font-sans text-xs text-foreground/40 mt-1">
+                              📍 Coordenadas:{" "}
+                              {enderecoEncontrado.coordenadas.latitude},{" "}
+                              {enderecoEncontrado.coordenadas.longitude}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </Card>
+                  )}
 
-              {/* Botão Calcular Frete */}
-              <div className="flex gap-2">
-                <Button
-                  onClick={handleCalcularFrete}
-                  variant="outline"
-                  className="flex-1"
-                  disabled={loadingFrete || !formData.cep || formData.cep.replace(/\D/g, "").length !== 8}
-                >
-                  <Truck size={16} className="mr-2" />
-                  {loadingFrete ? "Calculando..." : "Calcular Frete"}
-                </Button>
-              </div>
-              {errorFrete && (
-                <p className="text-xs text-red-500">{errorFrete}</p>
-              )}
+                  {/* Campo Endereço Manual */}
+                  <div className="space-y-2">
+                    <Label
+                      htmlFor="endereco"
+                      className="text-xs text-foreground/70"
+                    >
+                      Endereço Completo (ou complemento)
+                    </Label>
+                    <Input
+                      id="endereco"
+                      name="endereco"
+                      placeholder="Ex: Rua das Flores, 123 - Complemento"
+                      value={formData.endereco}
+                      onChange={handleInputChange}
+                      className="bg-card border-foreground/10"
+                    />
+                  </div>
 
-              {/* Frete Calculado */}
-              {(formData.frete ?? 0) > 0 && (
-                <Card className="bg-card border-accent/20 p-4">
-                  <p className="font-sans text-sm text-foreground/60">Frete Estimado</p>
-                  <p className="font-serif text-2xl text-accent">
-                    R$ {(formData.frete ?? 0).toFixed(2)}
-                  </p>
-                </Card>
+                  {/* Botão Calcular Frete */}
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={handleCalcularFrete}
+                      variant="outline"
+                      className="flex-1"
+                      disabled={
+                        loadingFrete ||
+                        !formData.cep ||
+                        formData.cep.replace(/\D/g, "").length !== 8
+                      }
+                    >
+                      <Truck size={16} className="mr-2" />
+                      {loadingFrete ? "Calculando..." : "Calcular Frete"}
+                    </Button>
+                  </div>
+                  {errorFrete && (
+                    <p className="text-xs text-red-500">{errorFrete}</p>
+                  )}
+
+                  {/* Frete Calculado */}
+                  {(formData.frete ?? 0) > 0 && (
+                    <Card className="bg-card border-accent/20 p-4">
+                      <p className="font-sans text-sm text-foreground/60">
+                        Frete Estimado
+                      </p>
+                      <p className="font-serif text-2xl text-accent">
+                        R$ {(formData.frete ?? 0).toFixed(2)}
+                      </p>
+                    </Card>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -858,10 +1043,12 @@ export default function Cadastro() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="font-sans text-sm text-foreground/60">
-                  Frete
+                  {isRetirada ? "Retirada" : "Frete"}
                 </span>
                 <span className="font-serif text-lg">
-                  R$ {(formData.frete ?? 0).toFixed(2)}
+                  {isRetirada
+                    ? "Grátis"
+                    : `R$ ${(formData.frete ?? 0).toFixed(2)}`}
                 </span>
               </div>
               <div className="flex items-center justify-between pt-2 border-t border-accent/20">
@@ -869,12 +1056,17 @@ export default function Cadastro() {
                   Total
                 </span>
                 <span className="font-serif text-2xl font-bold text-accent">
-                  R$ {(valorTotalCalculado + (formData.frete ?? 0)).toFixed(2)}
+                  R${" "}
+                  {(
+                    valorTotalCalculado +
+                    (isRetirada ? 0 : (formData.frete ?? 0))
+                  ).toFixed(2)}
                 </span>
               </div>
             </Card>
             <p className="text-xs text-foreground/40">
-              O valor é calculado automaticamente com base nos serviços selecionados
+              O valor é calculado automaticamente com base nos serviços
+              selecionados
             </p>
           </div>
 
@@ -882,7 +1074,10 @@ export default function Cadastro() {
           <div className="space-y-4">
             {tipo === "orcamento" && (
               <div className="space-y-2">
-                <Label htmlFor="descricao" className="text-xs uppercase tracking-widest">
+                <Label
+                  htmlFor="descricao"
+                  className="text-xs uppercase tracking-widest"
+                >
                   Descrição do Serviço
                 </Label>
                 <Textarea
@@ -896,7 +1091,10 @@ export default function Cadastro() {
               </div>
             )}
             <div className="space-y-2">
-              <Label htmlFor="observacoes" className="text-xs uppercase tracking-widest">
+              <Label
+                htmlFor="observacoes"
+                className="text-xs uppercase tracking-widest"
+              >
                 Detalhes ou Observações
               </Label>
               <Textarea
@@ -914,16 +1112,27 @@ export default function Cadastro() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {tipo === "orcamento" && (
               <div className="space-y-2">
-                <Label htmlFor="dataOrcamento" className="text-xs uppercase tracking-widest">
+                <Label
+                  htmlFor="dataOrcamento"
+                  className="text-xs uppercase tracking-widest"
+                >
                   Data Orçamento
                 </Label>
                 <Input
                   id="dataOrcamento"
                   name="dataOrcamento"
                   type="date"
-                  value={formData.dataOrcamento ? new Date(formData.dataOrcamento).toISOString().split('T')[0] : ""}
-                  onChange={(e) => {
-                    const date = e.target.value ? new Date(e.target.value) : undefined;
+                  value={
+                    formData.dataOrcamento
+                      ? new Date(formData.dataOrcamento)
+                          .toISOString()
+                          .split("T")[0]
+                      : ""
+                  }
+                  onChange={e => {
+                    const date = e.target.value
+                      ? new Date(e.target.value)
+                      : undefined;
                     setFormData({ ...formData, dataOrcamento: date });
                   }}
                   className="bg-card border-foreground/10"
@@ -931,30 +1140,46 @@ export default function Cadastro() {
               </div>
             )}
             <div className="space-y-2">
-              <Label htmlFor="dataEntrada" className="text-xs uppercase tracking-widest">
+              <Label
+                htmlFor="dataEntrada"
+                className="text-xs uppercase tracking-widest"
+              >
                 Data Entrada
               </Label>
               <Input
                 id="dataEntrada"
                 name="dataEntrada"
                 type="date"
-                value={formData.dataEntrada ? new Date(formData.dataEntrada).toISOString().split('T')[0] : ""}
-                onChange={(e) => {
-                  const date = e.target.value ? new Date(e.target.value) : undefined;
+                value={
+                  formData.dataEntrada
+                    ? new Date(formData.dataEntrada).toISOString().split("T")[0]
+                    : ""
+                }
+                onChange={e => {
+                  const date = e.target.value
+                    ? new Date(e.target.value)
+                    : undefined;
                   setFormData({ ...formData, dataEntrada: date });
                 }}
                 className="bg-card border-foreground/10"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="dataEntrega" className="text-xs uppercase tracking-widest">
+              <Label
+                htmlFor="dataEntrega"
+                className="text-xs uppercase tracking-widest"
+              >
                 Previsão Entrega
               </Label>
               <Input
                 id="dataEntrega"
                 name="dataEntrega"
                 type="date"
-                value={formData.dataEntrega ? new Date(formData.dataEntrega).toISOString().split('T')[0] : ""}
+                value={
+                  formData.dataEntrega
+                    ? new Date(formData.dataEntrega).toISOString().split("T")[0]
+                    : ""
+                }
                 readOnly
                 disabled
                 className="bg-card border-foreground/10 opacity-60 cursor-not-allowed"
@@ -965,7 +1190,9 @@ export default function Cadastro() {
 
           {/* Seção Fotos */}
           <div className="space-y-4">
-            <Label className="text-xs uppercase tracking-widest">Fotos da Moto</Label>
+            <Label className="text-xs uppercase tracking-widest">
+              Fotos da Moto
+            </Label>
             <div className="border-2 border-dashed border-foreground/20 rounded-lg p-6 text-center">
               <label className="cursor-pointer flex flex-col items-center gap-2">
                 <ImagePlus size={32} className="text-accent" />
@@ -986,7 +1213,10 @@ export default function Cadastro() {
             {fotos.length > 0 && (
               <div className="grid grid-cols-2 gap-4">
                 {fotos.map((foto, idx) => (
-                  <div key={idx} className="relative overflow-hidden rounded-lg">
+                  <div
+                    key={idx}
+                    className="relative overflow-hidden rounded-lg"
+                  >
                     <img
                       src={foto}
                       alt={`Foto ${idx + 1}`}
