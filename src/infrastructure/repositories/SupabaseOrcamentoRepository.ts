@@ -11,7 +11,9 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
   constructor(private tipoServicoRepo?: TipoServicoRepository) {
     // Permite instanciação sem parâmetros
   }
-  async criar(orcamento: Omit<Orcamento, "id" | "criadoEm" | "atualizadoEm">): Promise<Orcamento> {
+  async criar(
+    orcamento: Omit<Orcamento, "id" | "criadoEm" | "atualizadoEm">
+  ): Promise<Orcamento> {
     const { data, error } = await supabase
       .from("orcamentos")
       .insert({
@@ -64,7 +66,9 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
     return data ? this.mapToOrcamento(data) : null;
   }
 
-  async buscarCompletosPorStatus(status: Orcamento["status"]): Promise<OrcamentoCompleto[]> {
+  async buscarCompletosPorStatus(
+    status: Orcamento["status"]
+  ): Promise<OrcamentoCompleto[]> {
     try {
       // Primeiro, atualiza orçamentos expirados
       await this.atualizarOrcamentosExpirados();
@@ -77,7 +81,9 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
         .order("criado_em", { ascending: false });
 
       if (orcamentosError) {
-        throw new Error(`Erro ao buscar orçamentos: ${orcamentosError.message}`);
+        throw new Error(
+          `Erro ao buscar orçamentos: ${orcamentosError.message}`
+        );
       }
 
       if (!orcamentos || orcamentos.length === 0) {
@@ -88,7 +94,9 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
       const entradaIds = orcamentos.map((o: any) => o.entrada_id);
       const { data: entradas, error: entradasError } = await supabase
         .from("entradas")
-        .select("id, descricao, frete, valor_cobrado, endereco, cep, data_orcamento, cliente_id, moto_id")
+        .select(
+          "id, descricao, frete, valor_cobrado, endereco, cep, data_orcamento, cliente_id, moto_id"
+        )
         .in("id", entradaIds);
 
       if (entradasError) {
@@ -96,12 +104,24 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
       }
 
       // Busca clientes e motos em paralelo
-      const clienteIds = Array.from(new Set(entradas?.map((e: any) => e.cliente_id).filter(Boolean) || []));
-      const motoIds = Array.from(new Set(entradas?.map((e: any) => e.moto_id).filter(Boolean) || []));
+      const clienteIds = Array.from(
+        new Set(entradas?.map((e: any) => e.cliente_id).filter(Boolean) || [])
+      );
+      const motoIds = Array.from(
+        new Set(entradas?.map((e: any) => e.moto_id).filter(Boolean) || [])
+      );
 
       // Valida que os IDs são UUIDs válidos
-      const clienteIdsValidos = clienteIds.filter((id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
-      const motoIdsValidos = motoIds.filter((id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
+      const clienteIdsValidos = clienteIds.filter(id =>
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          id
+        )
+      );
+      const motoIdsValidos = motoIds.filter(id =>
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          id
+        )
+      );
 
       const [clientesResult, motosResult] = await Promise.all([
         clienteIdsValidos.length > 0
@@ -120,7 +140,9 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
 
       if (clientesResult.error) {
         console.error("Erro ao buscar clientes:", clientesResult.error);
-        throw new Error(`Erro ao buscar clientes: ${clientesResult.error.message}`);
+        throw new Error(
+          `Erro ao buscar clientes: ${clientesResult.error.message}`
+        );
       }
       if (motosResult.error) {
         console.error("Erro ao buscar motos:", motosResult.error);
@@ -160,7 +182,7 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
             const { data: signedUrlData } = await supabase.storage
               .from("fotos")
               .createSignedUrl(url, 3600);
-            
+
             if (signedUrlData) {
               return [entradaId, signedUrlData.signedUrl];
             }
@@ -179,12 +201,16 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
       // Busca tipos de serviço para todas as entradas
       let tiposServicoMap: Record<string, any[]> = {};
       if (this.tipoServicoRepo && entradaIds.length > 0) {
-        const tiposServicoPromises = entradaIds.map(async (entradaId) => {
+        const tiposServicoPromises = entradaIds.map(async entradaId => {
           try {
-            const tipos = await this.tipoServicoRepo!.buscarPorEntradaId(entradaId);
+            const tipos =
+              await this.tipoServicoRepo!.buscarPorEntradaId(entradaId);
             return [entradaId, tipos];
           } catch (error) {
-            console.error(`Erro ao buscar tipos de serviço para entrada ${entradaId}:`, error);
+            console.error(
+              `Erro ao buscar tipos de serviço para entrada ${entradaId}:`,
+              error
+            );
             return [entradaId, []];
           }
         });
@@ -209,12 +235,19 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
           placa: moto?.placa,
           finalNumeroQuadro: (moto as any)?.final_numero_quadro,
           descricao: entrada?.descricao,
-          frete: entrada?.frete ? parseFloat(entrada.frete) : 0,
-          valorCobrado: entrada?.valor_cobrado ? parseFloat(entrada.valor_cobrado) : undefined,
+          frete:
+            entrada?.frete !== null && entrada?.frete !== undefined
+              ? parseFloat(entrada.frete)
+              : null,
+          valorCobrado: entrada?.valor_cobrado
+            ? parseFloat(entrada.valor_cobrado)
+            : undefined,
           endereco: entrada?.endereco,
           cep: entrada?.cep,
           fotoMoto: entrada?.id ? fotosMapFinal[entrada.id] : undefined,
-          dataOrcamento: entrada?.data_orcamento ? new Date(entrada.data_orcamento) : undefined,
+          dataOrcamento: entrada?.data_orcamento
+            ? new Date(entrada.data_orcamento)
+            : undefined,
           tiposServico: entrada?.id ? tiposServicoMap[entrada.id] || [] : [],
         };
       });
@@ -239,7 +272,8 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
   async atualizar(id: string, dados: Partial<Orcamento>): Promise<Orcamento> {
     const updateData: any = {};
     if (dados.valor !== undefined) updateData.valor = dados.valor;
-    if (dados.dataExpiracao !== undefined) updateData.data_expiracao = dados.dataExpiracao.toISOString();
+    if (dados.dataExpiracao !== undefined)
+      updateData.data_expiracao = dados.dataExpiracao.toISOString();
     if (dados.status !== undefined) updateData.status = dados.status;
 
     const { data, error } = await supabase
@@ -257,10 +291,7 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
   }
 
   async deletar(id: string): Promise<void> {
-    const { error } = await supabase
-      .from("orcamentos")
-      .delete()
-      .eq("id", id);
+    const { error } = await supabase.from("orcamentos").delete().eq("id", id);
 
     if (error) {
       throw new Error(`Erro ao deletar orçamento: ${error.message}`);
@@ -278,9 +309,12 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
             .update({ status: "expirado" })
             .eq("status", "ativo")
             .lt("data_expiracao", new Date().toISOString());
-          
+
           if (updateError) {
-            console.error("Erro ao atualizar orçamentos expirados:", updateError);
+            console.error(
+              "Erro ao atualizar orçamentos expirados:",
+              updateError
+            );
           }
         } else {
           console.error("Erro ao chamar função de atualização:", error);
@@ -303,4 +337,3 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
     };
   }
 }
-

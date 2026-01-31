@@ -20,7 +20,9 @@ export class CriarEntradaUseCase {
     private servicoPersonalizadoRepo: ServicoPersonalizadoRepository
   ) {}
 
-  async execute(dados: DadosCadastro): Promise<{ entradaId: string; orcamentoId?: string }> {
+  async execute(
+    dados: DadosCadastro
+  ): Promise<{ entradaId: string; orcamentoId?: string }> {
     // Validações de negócio
     if (!dados.cliente || !dados.moto) {
       throw new Error("Cliente e moto são obrigatórios");
@@ -28,28 +30,38 @@ export class CriarEntradaUseCase {
 
     // 1. Buscar ou criar cliente
     let clienteId: string;
-    
+
     // Se clienteId foi fornecido, usar cliente existente
     if (dados.clienteId) {
-      const clienteExistente = await this.clienteRepo.buscarPorId(dados.clienteId);
+      const clienteExistente = await this.clienteRepo.buscarPorId(
+        dados.clienteId
+      );
       if (!clienteExistente) {
         throw new Error("Cliente não encontrado");
       }
       clienteId = clienteExistente.id;
       // Atualiza telefone se fornecido
       if (dados.telefone && clienteExistente.telefone !== dados.telefone) {
-        await this.clienteRepo.atualizar(clienteId, { telefone: dados.telefone });
+        await this.clienteRepo.atualizar(clienteId, {
+          telefone: dados.telefone,
+        });
       }
     } else {
       // Buscar cliente existente por nome ou criar novo
-      const clientesExistentes = await this.clienteRepo.buscarPorNome(dados.cliente);
-      const clienteExistente = clientesExistentes.find((c) => c.nome === dados.cliente);
+      const clientesExistentes = await this.clienteRepo.buscarPorNome(
+        dados.cliente
+      );
+      const clienteExistente = clientesExistentes.find(
+        c => c.nome === dados.cliente
+      );
 
       if (clienteExistente) {
         clienteId = clienteExistente.id;
         // Atualiza telefone se fornecido
         if (dados.telefone && clienteExistente.telefone !== dados.telefone) {
-          await this.clienteRepo.atualizar(clienteId, { telefone: dados.telefone });
+          await this.clienteRepo.atualizar(clienteId, {
+            telefone: dados.telefone,
+          });
         }
       } else {
         const novoCliente = await this.clienteRepo.criar({
@@ -77,8 +89,9 @@ export class CriarEntradaUseCase {
     // 3. Calcular data de entrega se data de entrada foi fornecida
     // Data de entrega = 2 semanas (14 dias) após a data de entrada
     let dataEntrega = dados.dataEntrega;
-    const dataEntrada = dados.dataEntrada || (dados.tipo === "entrada" ? new Date() : undefined);
-    
+    const dataEntrada =
+      dados.dataEntrada || (dados.tipo === "entrada" ? new Date() : undefined);
+
     if (dataEntrada && !dataEntrega) {
       dataEntrega = new Date(dataEntrada);
       dataEntrega.setDate(dataEntrega.getDate() + 14); // 2 semanas = 14 dias
@@ -92,7 +105,7 @@ export class CriarEntradaUseCase {
       endereco: dados.endereco,
       cep: dados.cep?.replace(/\D/g, ""),
       telefone: dados.telefone,
-      frete: dados.frete || 0,
+      frete: dados.frete,
       valorCobrado: 0, // Será calculado automaticamente pelos triggers
       descricao: dados.descricao,
       observacoes: dados.observacoes,
@@ -116,9 +129,12 @@ export class CriarEntradaUseCase {
     }
 
     // 6. Criar serviços personalizados (se houver)
-    if (dados.servicosPersonalizados && dados.servicosPersonalizados.length > 0) {
+    if (
+      dados.servicosPersonalizados &&
+      dados.servicosPersonalizados.length > 0
+    ) {
       await Promise.all(
-        dados.servicosPersonalizados.map((servico) =>
+        dados.servicosPersonalizados.map(servico =>
           this.servicoPersonalizadoRepo.criar(entrada.id, servico)
         )
       );
@@ -131,7 +147,7 @@ export class CriarEntradaUseCase {
     // 8. Se for orçamento, criar orçamento
     let orcamentoId: string | undefined;
     if (dados.tipo === "orcamento" && valorCobrado > 0) {
-      const dataExpiracao = dados.dataOrcamento 
+      const dataExpiracao = dados.dataOrcamento
         ? new Date(dados.dataOrcamento.getTime() + 7 * 24 * 60 * 60 * 1000) // 7 dias após data do orçamento
         : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 dias a partir de agora
 
@@ -147,4 +163,3 @@ export class CriarEntradaUseCase {
     return { entradaId: entrada.id, orcamentoId };
   }
 }
-
