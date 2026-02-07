@@ -147,6 +147,12 @@ export class SupabaseEntradaRepository implements EntradaRepository {
     if (dados.tipoPreco !== undefined) updateData.tipo_preco = dados.tipoPreco;
     if (dados.formaPagamento !== undefined)
       updateData.forma_pagamento = dados.formaPagamento;
+    if (dados.statusPagamento !== undefined)
+      updateData.status_pagamento = dados.statusPagamento;
+    if (dados.dataPagamento !== undefined)
+      updateData.data_pagamento = dados.dataPagamento
+        ? dados.dataPagamento.toISOString()
+        : null;
     if (dados.fotosStatus !== undefined) {
       // Converte array de FotoStatus para JSONB
       updateData.fotos_status = JSON.stringify(
@@ -228,6 +234,10 @@ export class SupabaseEntradaRepository implements EntradaRepository {
       finalNumeroQuadro: data.final_numero_quadro,
       osAssinadaUrl: data.os_assinada_url,
       formaPagamento: data.forma_pagamento || undefined,
+      statusPagamento: data.status_pagamento || undefined,
+      dataPagamento: data.data_pagamento
+        ? new Date(data.data_pagamento)
+        : undefined,
       tipoPreco: data.tipo_preco,
       fotosStatus: fotosStatus.map((foto: any) => ({
         url: foto.url,

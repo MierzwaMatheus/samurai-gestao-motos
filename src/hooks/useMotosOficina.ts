@@ -78,6 +78,7 @@ export function useMotosOficina(
             progresso: entrada.progresso,
             dataConclusao: entrada.dataConclusao ?? null,
             formaPagamento: entrada.formaPagamento ?? null,
+            statusPagamento: entrada.statusPagamento ?? null,
             fotosStatus: entrada.fotosStatus || [],
             fotos: fotosMoto.map(foto => foto.url), // URLs das fotos do tipo "moto"
             tiposServico: tiposServico || [],
