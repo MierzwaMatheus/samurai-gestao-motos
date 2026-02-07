@@ -24,6 +24,7 @@ import {
   Settings,
   Search,
   History,
+  DollarSign,
 } from "lucide-react";
 import { toast } from "sonner";
 import { SupabaseEntradaRepository } from "@/infrastructure/repositories/SupabaseEntradaRepository";
@@ -47,6 +48,7 @@ import { HistoryModal } from "@/components/HistoryModal";
 import { useGerarOS } from "@/hooks/useGerarOS";
 import { FileText } from "lucide-react";
 import { FormaPagamento } from "@shared/types";
+import { usePagamento } from "@/hooks/usePagamento";
 
 export default function Oficina() {
   const entradaRepo = useMemo(() => new SupabaseEntradaRepository(), []);
@@ -70,6 +72,8 @@ export default function Oficina() {
     fotoRepo,
     servicoPersonalizadoRepo
   );
+
+  const { atualizarStatusPagamento, atualizarFormaPagamento } = usePagamento();
 
   const [entradaSelecionada, setEntradaSelecionada] = useState<string | null>(
     null
@@ -98,6 +102,10 @@ export default function Oficina() {
   );
   const [formaPagamentoSelecionada, setFormaPagamentoSelecionada] =
     useState<FormaPagamento | null>(null);
+  const [statusPagamentoSelecionado, setStatusPagamentoSelecionado] = useState<
+    "pendente" | "pago" | null
+  >(null);
+  const [isEdicaoPagamento, setIsEdicaoPagamento] = useState(false);
 
   // Ler parâmetro 'cliente' da URL e preencher a busca
   useEffect(() => {
@@ -251,11 +259,48 @@ export default function Oficina() {
     setMostrarModalPagamento(false);
     setEntradaPagamentoId(null);
     setFormaPagamentoSelecionada(null);
+    setStatusPagamentoSelecionado(null);
+    setIsEdicaoPagamento(false);
+  };
+
+  const handleAbrirModalPagamento = (
+    entradaId: string,
+    formaPagamentoExistente?: string | null,
+    statusPagamentoExistente?: string | null,
+    ehEdicao = false
+  ) => {
+    setEntradaPagamentoId(entradaId);
+    setFormaPagamentoSelecionada(
+      formaPagamentoExistente as FormaPagamento | null
+    );
+    setStatusPagamentoSelecionado(
+      statusPagamentoExistente as "pendente" | "pago" | null
+    );
+    setIsEdicaoPagamento(ehEdicao);
+    setMostrarModalPagamento(true);
   };
 
   const handleConfirmarPagamento = async () => {
     if (!entradaPagamentoId || !formaPagamentoSelecionada) {
       toast.error("Selecione a forma de pagamento");
+      return;
+    }
+
+    if (isEdicaoPagamento) {
+      await atualizarFormaPagamento(
+        entradaPagamentoId,
+        formaPagamentoSelecionada
+      );
+      await atualizarStatusPagamento(
+        entradaPagamentoId,
+        statusPagamentoSelecionado || "pago"
+      );
+      atualizarMoto(entradaPagamentoId, {
+        formaPagamento: formaPagamentoSelecionada,
+        statusPagamento: statusPagamentoSelecionado || "pago",
+      });
+      toast.success("Pagamento atualizado!");
+      handleCancelarPagamento();
       return;
     }
 
@@ -266,10 +311,12 @@ export default function Oficina() {
     });
 
     if (sucesso) {
+      await atualizarStatusPagamento(entradaPagamentoId, "pago");
       atualizarMoto(entradaPagamentoId, {
         status: "concluido",
         dataConclusao: new Date(),
         formaPagamento: formaPagamentoSelecionada,
+        statusPagamento: "pago",
       });
       toast.success("Entrada concluída com sucesso!");
       handleCancelarPagamento();
@@ -410,6 +457,22 @@ export default function Oficina() {
             >
               <History size={16} />
             </button>
+            {moto.status === "concluido" && (
+              <button
+                onClick={() =>
+                  handleAbrirModalPagamento(
+                    moto.entradaId,
+                    moto.formaPagamento,
+                    moto.statusPagamento,
+                    true
+                  )
+                }
+                className="text-foreground/40 hover:text-green-600 transition-colors p-1"
+                title="Editar pagamento"
+              >
+                <DollarSign size={16} />
+              </button>
+            )}
           </div>
           {(moto.marca || moto.ano || moto.cilindrada) && (
             <p className="font-sans text-xs text-foreground/50 mt-1">
@@ -423,6 +486,23 @@ export default function Oficina() {
               Concluído em{" "}
               {new Date(moto.dataConclusao).toLocaleDateString("pt-BR")}
             </p>
+          )}
+          {moto.status === "concluido" && (
+            <div className="flex items-center gap-2 mt-2">
+              <Badge
+                variant={
+                  moto.statusPagamento === "pago" ? "default" : "secondary"
+                }
+                className="flex items-center gap-1"
+              >
+                {moto.statusPagamento === "pago" ? "💰 Pago" : "⏳ Pendente"}
+              </Badge>
+              {moto.formaPagamento && (
+                <Badge variant="outline" className="text-xs">
+                  {formatarFormaPagamento(moto.formaPagamento)}
+                </Badge>
+              )}
+            </div>
           )}
           {/* Tipos de Serviço */}
           {moto.tiposServico && moto.tiposServico.length > 0 && (
@@ -821,9 +901,51 @@ export default function Oficina() {
             </div>
 
             <div className="space-y-3">
+              {isEdicaoPagamento && (
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase tracking-widest">
+                    Status do Pagamento
+                  </Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      variant={
+                        statusPagamentoSelecionado === "pendente"
+                          ? "default"
+                          : "outline"
+                      }
+                      onClick={() => setStatusPagamentoSelecionado("pendente")}
+                      className={
+                        statusPagamentoSelecionado === "pendente"
+                          ? "bg-yellow-500 hover:bg-yellow-600"
+                          : ""
+                      }
+                    >
+                      ⏳ Pendente
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={
+                        statusPagamentoSelecionado === "pago"
+                          ? "default"
+                          : "outline"
+                      }
+                      onClick={() => setStatusPagamentoSelecionado("pago")}
+                      className={
+                        statusPagamentoSelecionado === "pago"
+                          ? "bg-green-500 hover:bg-green-600"
+                          : ""
+                      }
+                    >
+                      💰 Pago
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label className="text-xs uppercase tracking-widest">
-                  Selecione
+                  Forma de Pagamento
                 </Label>
                 <div className="grid grid-cols-2 gap-2">
                   <Button
@@ -886,7 +1008,7 @@ export default function Oficina() {
                   className="flex-1 bg-accent hover:brightness-110"
                   disabled={!formaPagamentoSelecionada}
                 >
-                  Confirmar
+                  {isEdicaoPagamento ? "Salvar" : "Confirmar"}
                 </Button>
               </div>
             </div>
@@ -909,4 +1031,15 @@ export default function Oficina() {
       )}
     </div>
   );
+}
+
+function formatarFormaPagamento(forma: string | null | undefined): string {
+  if (!forma) return "";
+  const mapeamento: Record<string, string> = {
+    pix: "Pix",
+    credito: "Cartão Crédito",
+    debito: "Cartão Débito",
+    boleto: "Boleto",
+  };
+  return mapeamento[forma] || forma;
 }

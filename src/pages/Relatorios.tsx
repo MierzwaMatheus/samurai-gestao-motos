@@ -54,6 +54,9 @@ import {
   useConversaoOrcamentos,
   useResumoDiario,
 } from "@/hooks/useRelatorios";
+import { useRelatorioExcel, exportToExcel } from "@/hooks/useRelatorioExcel";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import type { FiltrosRelatorio } from "@/domain/interfaces/relatorios";
 
 const COLORS = [
@@ -85,6 +88,26 @@ export function Relatorios() {
     useConversaoOrcamentos(periodo);
   const { data: resumoDiario, isLoading: loadingResumo } =
     useResumoDiario(periodo);
+
+  const {
+    data: dadosExcel,
+    isLoading: loadingExcel,
+    fetchRelatorio,
+  } = useRelatorioExcel();
+  const [dataInicio, setDataInicio] = React.useState("");
+  const [dataFim, setDataFim] = React.useState("");
+
+  const handleExportExcel = () => {
+    if (dadosExcel && dadosExcel.length > 0) {
+      exportToExcel(dadosExcel, "relatorio_servicos");
+    }
+  };
+
+  const handleLoadRelatorio = () => {
+    const inicio = dataInicio ? new Date(dataInicio) : undefined;
+    const fim = dataFim ? new Date(dataFim) : undefined;
+    fetchRelatorio(inicio, fim);
+  };
 
   const formatarMoeda = (valor: number | null | undefined) => {
     if (valor === null || valor === undefined) return "R$ 0,00";
@@ -234,6 +257,7 @@ export function Relatorios() {
             <TabsTrigger value="servicos">Serviços</TabsTrigger>
             <TabsTrigger value="clientes">Clientes</TabsTrigger>
             <TabsTrigger value="status">Status</TabsTrigger>
+            <TabsTrigger value="excel">Exportar Excel</TabsTrigger>
           </TabsList>
 
           <TabsContent value="faturamento" className="space-y-4">
@@ -610,9 +634,151 @@ export function Relatorios() {
               </Card>
             </div>
           </TabsContent>
+
+          <TabsContent value="excel" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Exportar Relatório para Excel</CardTitle>
+                <CardDescription>
+                  Gere um relatório detalhado de serviços concluídos por período
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div>
+                    <label className="text-sm font-medium">Data Início</label>
+                    <Input
+                      type="date"
+                      value={dataInicio}
+                      onChange={e => setDataInicio(e.target.value)}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Data Fim</label>
+                    <Input
+                      type="date"
+                      value={dataFim}
+                      onChange={e => setDataFim(e.target.value)}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <Button
+                      onClick={handleLoadRelatorio}
+                      disabled={loadingExcel}
+                      className="w-full"
+                    >
+                      {loadingExcel ? "Carregando..." : "Buscar Dados"}
+                    </Button>
+                  </div>
+                </div>
+
+                {dadosExcel && dadosExcel.length > 0 && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+                      <div>
+                        <div className="font-medium">
+                          {dadosExcel.length} registros encontrados
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          Total:{" "}
+                          {formatarMoeda(
+                            dadosExcel.reduce(
+                              (acc, row) => acc + row["Total"],
+                              0
+                            )
+                          )}
+                        </div>
+                      </div>
+                      <Button onClick={handleExportExcel} variant="default">
+                        Baixar Excel (.CSV)
+                      </Button>
+                    </div>
+
+                    <div className="border rounded-lg overflow-hidden">
+                      <ScrollArea className="h-[400px]">
+                        <table className="w-full text-sm">
+                          <thead className="bg-muted">
+                            <tr>
+                              <th className="p-3 text-left">Data Entrada</th>
+                              <th className="p-3 text-left">Data Saída</th>
+                              <th className="p-3 text-left">Cliente</th>
+                              <th className="p-3 text-left">Moto</th>
+                              <th className="p-3 text-left">Placa</th>
+                              <th className="p-3 text-left">Forma Pgto</th>
+                              <th className="p-3 text-left">Status Pgto</th>
+                              <th className="p-3 text-right">Valor</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dadosExcel.slice(0, 100).map((row, index) => (
+                              <tr key={index} className="border-t">
+                                <td className="p-3">
+                                  {row["Data Entrada"]
+                                    ? new Date(
+                                        row["Data Entrada"]
+                                      ).toLocaleDateString("pt-BR")
+                                    : "-"}
+                                </td>
+                                <td className="p-3">
+                                  {row["Data Saída"]
+                                    ? new Date(
+                                        row["Data Saída"]
+                                      ).toLocaleDateString("pt-BR")
+                                    : "-"}
+                                </td>
+                                <td className="p-3">{row["Nome Cliente"]}</td>
+                                <td className="p-3">{row["Modelo Moto"]}</td>
+                                <td className="p-3">{row["Placa"] || "-"}</td>
+                                <td className="p-3">
+                                  {formatarFormaPagamento(
+                                    row["Forma Pagamento"]
+                                  )}
+                                </td>
+                                <td className="p-3">
+                                  <Badge
+                                    variant={
+                                      row["Status Pagamento"] === "pago"
+                                        ? "default"
+                                        : "secondary"
+                                    }
+                                  >
+                                    {formatarStatusPagamento(
+                                      row["Status Pagamento"]
+                                    )}
+                                  </Badge>
+                                </td>
+                                <td className="p-3 text-right font-medium">
+                                  {formatarMoeda(row["Total"])}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </ScrollArea>
+                    </div>
+                    {dadosExcel.length > 100 && (
+                      <p className="text-sm text-muted-foreground">
+                        Mostrando 100 de {dadosExcel.length} registros. O
+                        arquivo Excel conterá todos os dados.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {dadosExcel && dadosExcel.length === 0 && !loadingExcel && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    Nenhum registro encontrado. Selecione um período e clique em
+                    "Buscar Dados".
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
       </div>
-      <BottomNav />
+      <BottomNav active="relatorios" />
     </div>
   );
 }
@@ -668,4 +834,20 @@ function getEntregaIcon(status: string) {
     default:
       return <AlertCircle className="h-4 w-4 text-gray-500" />;
   }
+}
+
+function formatarFormaPagamento(forma: string | null): string {
+  if (!forma) return "-";
+  const mapeamento: Record<string, string> = {
+    pix: "Pix",
+    credito: "Cartão Crédito",
+    debito: "Cartão Débito",
+    boleto: "Boleto",
+  };
+  return mapeamento[forma] || forma;
+}
+
+function formatarStatusPagamento(status: string | null): string {
+  if (!status) return "Pendente";
+  return status === "pago" ? "Pago" : "Pendente";
 }

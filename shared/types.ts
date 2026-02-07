@@ -82,6 +82,21 @@ export interface Moto {
 }
 
 export type FormaPagamento = "pix" | "credito" | "debito" | "boleto";
+export type StatusPagamento = "pendente" | "pago";
+
+export interface RelatorioExcelRow {
+  "Data Entrada": string | null;
+  "Data Saída": string | null;
+  "Nome Cliente": string;
+  Telefone: string | null;
+  "Modelo Moto": string;
+  Placa: string | null;
+  "Forma Pagamento": string | null;
+  "Status Pagamento": string | null;
+  "Valor Serviço": number;
+  Frete: number;
+  Total: number;
+}
 
 export interface Entrada {
   id: string;
@@ -107,6 +122,8 @@ export interface Entrada {
   tipoPreco?: TipoPreco;
   dataConclusao?: Date | null;
   formaPagamento?: FormaPagamento | null;
+  statusPagamento?: StatusPagamento | null;
+  dataPagamento?: Date | null;
   criadoEm: Date;
   atualizadoEm: Date;
 }
@@ -165,6 +182,7 @@ export interface MotoCompleta extends Moto {
   progresso: number;
   dataConclusao?: Date | null;
   formaPagamento?: FormaPagamento | null;
+  statusPagamento?: StatusPagamento | null;
   fotosStatus?: FotoStatus[];
   fotos: string[]; // Legado - fotos do tipo "moto"
   tiposServico?: TipoServicoComQuantidade[];
