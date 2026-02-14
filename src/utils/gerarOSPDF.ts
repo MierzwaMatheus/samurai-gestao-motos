@@ -460,14 +460,17 @@ function formatarServico(t: any): {
   }
   const quantidade = t.quantidade || 1;
 
-  // O preço já vem calculado no GerarOSUseCase (multiplicado pela quantidade)
-  const valor = t.preco || t.valor || 0;
+  // O preco é o valor unitário, precisa multiplicar pela quantidade
+  const precoUnitario = t.preco || t.valor || 0;
+  const valor = precoUnitario * quantidade;
 
-  console.log(`Serviço: ${nome}, Valor: ${valor}, Quantidade: ${quantidade}`);
+  console.log(
+    `Serviço: ${nome}, Preço Unitário: ${precoUnitario}, Quantidade: ${quantidade}, Valor Total: ${valor}`
+  );
 
   return {
     nome,
-    valor: valor, // Já está multiplicado pela quantidade
+    valor: valor,
     quantidade,
   };
 }
