@@ -57,6 +57,19 @@ export class SupabaseClienteRepository implements ClienteRepository {
     return (data || []).map(this.mapToCliente);
   }
 
+  async buscarPorNomeOuTelefone(termo: string): Promise<Cliente[]> {
+    const { data, error } = await supabase
+      .from("clientes")
+      .select("*")
+      .or(`nome.ilike.%${termo}%,telefone.ilike.%${termo}%`);
+
+    if (error) {
+      throw new Error(`Erro ao buscar clientes: ${error.message}`);
+    }
+
+    return (data || []).map(this.mapToCliente);
+  }
+
   async listar(): Promise<Cliente[]> {
     const { data, error } = await supabase
       .from("clientes")

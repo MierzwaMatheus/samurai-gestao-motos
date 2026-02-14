@@ -45,12 +45,24 @@ export function ClienteSearch({
       setLoading(true);
       try {
         let resultados: Cliente[];
+        console.log("[ClienteSearch] Buscando com query:", searchQuery);
         if (searchQuery.trim()) {
-          resultados = await clienteRepo.buscarPorNome(searchQuery);
+          resultados = await clienteRepo.buscarPorNomeOuTelefone(searchQuery);
+          console.log("[ClienteSearch] Resultados da busca:", resultados);
         } else {
           resultados = await clienteRepo.listar();
+          console.log("[ClienteSearch] Listando todos os clientes:", resultados);
         }
-        setClientes(resultados);
+        // Remover duplicatas baseado em nome + telefone
+        const vistos = new Set<string>();
+        const resultadosUnicos = resultados.filter((c) => {
+          const chave = `${c.nome}|${c.telefone || ''}`;
+          if (vistos.has(chave)) return false;
+          vistos.add(chave);
+          return true;
+        });
+        console.log("[ClienteSearch] Após remover duplicatas:", resultadosUnicos);
+        setClientes(resultadosUnicos);
       } catch (error) {
         console.error("Erro ao buscar clientes:", error);
         setClientes([]);
@@ -97,7 +109,7 @@ export function ClienteSearch({
                 {clientes.map((cliente) => (
                   <CommandItem
                     key={cliente.id}
-                    value={cliente.nome}
+                    value={`${cliente.nome} ${cliente.telefone || ''}`}
                     onSelect={() => {
                       onSelect(cliente);
                       setOpen(false);
