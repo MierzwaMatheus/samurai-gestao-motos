@@ -32,6 +32,8 @@ export interface DadosCadastro {
   tipo: EntryType;
   cliente: string;
   clienteId?: string; // ID do cliente existente quando usar cliente existente
+  entradaId?: string; // ID da entrada existente quando em modo de edição
+  orcamentoId?: string; // ID do orçamento quando editando a partir de um orçamento
   telefone?: string;
   endereco?: string;
   cep?: string;

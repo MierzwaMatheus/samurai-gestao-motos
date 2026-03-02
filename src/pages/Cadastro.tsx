@@ -32,9 +32,11 @@ import { SupabaseOrcamentoRepository } from "@/infrastructure/repositories/Supab
 import { SupabaseTipoServicoRepository } from "@/infrastructure/repositories/SupabaseTipoServicoRepository";
 import { SupabaseServicoPersonalizadoRepository } from "@/infrastructure/repositories/SupabaseServicoPersonalizadoRepository";
 import { useCriarEntrada } from "@/hooks/useCriarEntrada";
+import { useAtualizarEntrada } from "@/hooks/useAtualizarEntrada";
 import { SupabaseStorageApi } from "@/infrastructure/storage/SupabaseStorageApi";
 import { SupabaseFotoRepository } from "@/infrastructure/repositories/SupabaseFotoRepository";
 import { useUploadFoto } from "@/hooks/useUploadFoto";
+import { SupabaseHistoricoRepository } from "@/infrastructure/repositories/SupabaseHistoricoRepository";
 
 export default function Cadastro() {
   // Inicialização das dependências seguindo DIP
@@ -83,9 +85,26 @@ export default function Cadastro() {
     servicoPersonalizadoRepo
   );
 
+  const [modoEdicao, setModoEdicao] = useState(false);
+  const [entradaIdEdicao, setEntradaIdEdicao] = useState<string | undefined>(
+    undefined
+  );
+
   // Storage para upload de fotos
   const storageApi = useMemo(() => new SupabaseStorageApi(), []);
   const fotoRepo = useMemo(() => new SupabaseFotoRepository(), []);
+  const historicoRepo = useMemo(() => new SupabaseHistoricoRepository(), []);
+
+  const { atualizar: atualizarEntrada, loading: loadingAtualizar } =
+    useAtualizarEntrada(
+      clienteRepo,
+      motoRepo,
+      entradaRepo,
+      orcamentoRepo,
+      tipoServicoRepo,
+      servicoPersonalizadoRepo,
+      historicoRepo
+    );
   const { upload: uploadFoto, loading: loadingUpload } = useUploadFoto(
     storageApi,
     fotoRepo
@@ -226,6 +245,7 @@ export default function Cadastro() {
         const dadosCadastro: DadosCadastro = {
           // Campos obrigatórios
           tipo: dadosParsed.tipo || "entrada",
+          entradaId: dadosParsed.entradaId,
           cliente: dadosParsed.cliente || "",
           clienteId: dadosParsed.clienteId,
           moto: dadosParsed.moto || "",
@@ -304,6 +324,12 @@ export default function Cadastro() {
               ? dadosParsed.servicosPersonalizados
               : [],
         };
+
+        // Se há entradaId, ativa modo de edição
+        if (dadosParsed.entradaId) {
+          setModoEdicao(true);
+          setEntradaIdEdicao(dadosParsed.entradaId);
+        }
 
         // Preenche o formulário com os dados
         setFormData(dadosCadastro);
@@ -537,34 +563,41 @@ export default function Cadastro() {
         servicosPersonalizados: servicosPersonalizados,
       };
 
-      // 1. Criar entrada
-      const { entradaId } = await criarEntrada(dadosParaEnviar);
+      // Verifica se é modo de edição ou criação
+      if (modoEdicao && entradaIdEdicao) {
+        // Atualizar entrada existente
+        await atualizarEntrada(entradaIdEdicao, dadosParaEnviar);
+        toast.success("Entrada atualizada com sucesso!");
+      } else {
+        // Criar nova entrada
+        const { entradaId } = await criarEntrada(dadosParaEnviar);
 
-      // 2. Fazer upload das fotos
-      if (fotosArquivos.length > 0) {
-        toast.info("Fazendo upload das fotos...");
-        const resultados = await Promise.allSettled(
-          fotosArquivos.map(file => uploadFoto(file, entradaId, "moto"))
-        );
-
-        // Verifica se houve erros
-        const erros = resultados.filter(r => r.status === "rejected");
-        if (erros.length > 0) {
-          console.error("Erros no upload de fotos:", erros);
-          toast.error(`${erros.length} foto(s) falharam no upload`);
-        }
-
-        const sucessos = resultados.filter(r => r.status === "fulfilled");
-        if (sucessos.length > 0) {
-          console.log(
-            `${sucessos.length} foto(s) salvas com sucesso na tabela`
+        // 2. Fazer upload das fotos
+        if (fotosArquivos.length > 0) {
+          toast.info("Fazendo upload das fotos...");
+          const resultados = await Promise.allSettled(
+            fotosArquivos.map(file => uploadFoto(file, entradaId, "moto"))
           );
-        }
-      }
 
-      toast.success(
-        `${tipo === "entrada" ? "Entrada" : "Orçamento"} registrado com sucesso!`
-      );
+          // Verifica se houve erros
+          const erros = resultados.filter(r => r.status === "rejected");
+          if (erros.length > 0) {
+            console.error("Erros no upload de fotos:", erros);
+            toast.error(`${erros.length} foto(s) falharam no upload`);
+          }
+
+          const sucessos = resultados.filter(r => r.status === "fulfilled");
+          if (sucessos.length > 0) {
+            console.log(
+              `${sucessos.length} foto(s) salvas com sucesso na tabela`
+            );
+          }
+        }
+
+        toast.success(
+          `${tipo === "entrada" ? "Entrada" : "Orçamento"} registrado com sucesso!`
+        );
+      }
 
       // Reset form
       setFormData({
@@ -600,6 +633,8 @@ export default function Cadastro() {
       setServicosPersonalizados([]);
       setValorTotalCalculado(0);
       setIsRetirada(false);
+      setModoEdicao(false);
+      setEntradaIdEdicao(undefined);
     } catch (err) {
       const mensagem = err instanceof Error ? err.message : "Erro ao registrar";
       toast.error(mensagem);

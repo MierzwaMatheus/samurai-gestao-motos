@@ -38,6 +38,9 @@ export class PrepararDadosOrcamentoParaOSUseCase {
       throw new Error("Entrada não encontrada");
     }
 
+    // Busca o ID do orçamento para registro no histórico
+    const orcamentoIdParaHistorico = orcamento.id;
+
     // Busca cliente e moto
     const [cliente, moto] = await Promise.all([
       this.clienteRepo.buscarPorId(entrada.clienteId),
@@ -83,6 +86,8 @@ export class PrepararDadosOrcamentoParaOSUseCase {
 
     const dadosCadastro: DadosCadastro = {
       tipo: entrada.tipo,
+      entradaId: entrada.id,
+      orcamentoId: orcamentoIdParaHistorico,
       // Campos obrigatórios
       cliente: cliente.nome,
       clienteId: cliente.id,
