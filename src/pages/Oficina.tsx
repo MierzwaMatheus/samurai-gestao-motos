@@ -25,8 +25,10 @@ import {
   Search,
   History,
   DollarSign,
+  Edit,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useLocation } from "wouter";
 import { SupabaseEntradaRepository } from "@/infrastructure/repositories/SupabaseEntradaRepository";
 import { SupabaseClienteRepository } from "@/infrastructure/repositories/SupabaseClienteRepository";
 import { SupabaseMotoRepository } from "@/infrastructure/repositories/SupabaseMotoRepository";
@@ -49,8 +51,11 @@ import { useGerarOS } from "@/hooks/useGerarOS";
 import { FileText } from "lucide-react";
 import { FormaPagamento } from "@shared/types";
 import { usePagamento } from "@/hooks/usePagamento";
+import { PrepararDadosEntradaParaEdicaoUseCase } from "@/domain/usecases/PrepararDadosEntradaParaEdicaoUseCase";
+import { sortMotosEmAndamento, sortMotosConcluidas } from "@/utils/sorting";
 
 export default function Oficina() {
+  const [, setLocation] = useLocation();
   const entradaRepo = useMemo(() => new SupabaseEntradaRepository(), []);
   const clienteRepo = useMemo(() => new SupabaseClienteRepository(), []);
   const motoRepo = useMemo(() => new SupabaseMotoRepository(), []);
@@ -145,6 +150,26 @@ export default function Oficina() {
     tipoServicoRepo,
     servicoPersonalizadoRepo,
     storageApi
+  );
+
+  const prepararDadosEdicaoUseCase = useMemo(
+    () =>
+      new PrepararDadosEntradaParaEdicaoUseCase(
+        entradaRepo,
+        clienteRepo,
+        motoRepo,
+        fotoRepo,
+        tipoServicoRepo,
+        servicoPersonalizadoRepo
+      ),
+    [
+      entradaRepo,
+      clienteRepo,
+      motoRepo,
+      fotoRepo,
+      tipoServicoRepo,
+      servicoPersonalizadoRepo,
+    ]
   );
 
   const getStatusLabel = (status: string) => {
@@ -311,14 +336,14 @@ export default function Oficina() {
     });
 
     if (sucesso) {
-      await atualizarStatusPagamento(entradaPagamentoId, "pago");
+      await atualizarStatusPagamento(entradaPagamentoId, "pendente");
       atualizarMoto(entradaPagamentoId, {
         status: "concluido",
         dataConclusao: new Date(),
         formaPagamento: formaPagamentoSelecionada,
-        statusPagamento: "pago",
+        statusPagamento: "pendente",
       });
-      toast.success("Entrada concluída com sucesso!");
+      toast.success("Serviço concluído! Pagamento pendente.");
       handleCancelarPagamento();
     } else {
       toast.error("Erro ao concluir entrada");
@@ -353,6 +378,19 @@ export default function Oficina() {
     }
   };
 
+  const handleEditarEntrada = async (entradaId: string) => {
+    try {
+      const dados = await prepararDadosEdicaoUseCase.execute(entradaId);
+      sessionStorage.setItem("dadosOrcamentoParaOS", JSON.stringify(dados));
+      setLocation("/");
+      toast.success("Dados carregados para edição!");
+    } catch (err) {
+      const mensagem =
+        err instanceof Error ? err.message : "Erro ao carregar dados";
+      toast.error(mensagem);
+    }
+  };
+
   const toggleGaleria = (entradaId: string) => {
     setMostrarGaleria(prev => ({
       ...prev,
@@ -373,10 +411,14 @@ export default function Oficina() {
   };
 
   // Separar motos por status
-  const motosEmAndamento = motos.filter(
-    moto => moto.status === "pendente" || moto.status === "alinhando"
+  const motosEmAndamento = sortMotosEmAndamento(
+    motos.filter(
+      moto => moto.status === "pendente" || moto.status === "alinhando"
+    )
   );
-  const motosConcluidas = motos.filter(moto => moto.status === "concluido");
+  const motosConcluidas = sortMotosConcluidas(
+    motos.filter(moto => moto.status === "concluido")
+  );
 
   // Filtrar motos por busca
   const filtrarMotos = (motosParaFiltrar: MotoCompleta[], busca: string) => {
@@ -413,7 +455,7 @@ export default function Oficina() {
     buscaConcluidos
   );
 
-  const renderMotoCard = (moto: MotoCompleta) => (
+  const renderMotoCard = (moto: MotoCompleta, posicao?: number) => (
     <Card
       key={moto.entradaId}
       className="card-samurai hover:shadow-lg transition-shadow"
@@ -421,17 +463,35 @@ export default function Oficina() {
       <div className="flex justify-between items-start mb-4">
         <div className="flex-1">
           <div className="flex justify-between items-start">
-            <h3 className="font-serif text-xl text-foreground">
-              {moto.modelo}
-            </h3>
-            <button
-              onClick={() => handleDeletarEntrada(moto.entradaId)}
-              disabled={loadingDeletar}
-              className="text-foreground/40 hover:text-red-600 transition-colors p-1"
-              title="Excluir entrada"
-            >
-              <Trash2 size={18} />
-            </button>
+            <div className="flex items-center gap-2">
+              {posicao !== undefined && (
+                <Badge className="bg-accent text-white font-serif">
+                  {posicao}º
+                </Badge>
+              )}
+              <h3 className="font-serif text-xl text-foreground">
+                {moto.modelo}
+              </h3>
+            </div>
+            <div className="flex items-center gap-1">
+              {posicao !== undefined && (
+                <button
+                  onClick={() => handleEditarEntrada(moto.entradaId)}
+                  className="text-foreground/40 hover:text-accent transition-colors p-1"
+                  title="Editar entrada"
+                >
+                  <Edit size={18} />
+                </button>
+              )}
+              <button
+                onClick={() => handleDeletarEntrada(moto.entradaId)}
+                disabled={loadingDeletar}
+                className="text-foreground/40 hover:text-red-600 transition-colors p-1"
+                title="Excluir entrada"
+              >
+                <Trash2 size={18} />
+              </button>
+            </div>
           </div>
           <div className="flex justify-between items-center">
             <p className="font-sans text-sm text-foreground/60">
@@ -761,8 +821,9 @@ export default function Oficina() {
                     </p>
                   </Card>
                 ) : (
-                  motosEmAndamentoFiltradas.map((moto: MotoCompleta) =>
-                    renderMotoCard(moto)
+                  motosEmAndamentoFiltradas.map(
+                    (moto: MotoCompleta, index: number) =>
+                      renderMotoCard(moto, index + 1)
                   )
                 )}
               </TabsContent>

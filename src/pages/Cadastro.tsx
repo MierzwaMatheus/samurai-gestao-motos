@@ -567,6 +567,26 @@ export default function Cadastro() {
       if (modoEdicao && entradaIdEdicao) {
         // Atualizar entrada existente
         await atualizarEntrada(entradaIdEdicao, dadosParaEnviar);
+
+        // Upload de novas fotos (se houver)
+        if (fotosArquivos.length > 0) {
+          toast.info("Fazendo upload das novas fotos...");
+          const resultados = await Promise.allSettled(
+            fotosArquivos.map(file => uploadFoto(file, entradaIdEdicao, "moto"))
+          );
+
+          const erros = resultados.filter(r => r.status === "rejected");
+          if (erros.length > 0) {
+            console.error("Erros no upload de fotos:", erros);
+            toast.error(`${erros.length} foto(s) falharam no upload`);
+          }
+
+          const sucessos = resultados.filter(r => r.status === "fulfilled");
+          if (sucessos.length > 0) {
+            toast.success(`${sucessos.length} foto(s) salva(s) com sucesso`);
+          }
+        }
+
         toast.success("Entrada atualizada com sucesso!");
       } else {
         // Criar nova entrada

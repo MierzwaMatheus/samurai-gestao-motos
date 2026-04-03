@@ -61,7 +61,7 @@ export function useMotosOficina(
           ]);
 
           return {
-            id: entrada.id, // ID da entrada para ações
+            id: entrada.id,
             entradaId: entrada.id,
             motoId: moto?.id || entrada.motoId,
             clienteId: entrada.clienteId,
@@ -70,8 +70,8 @@ export function useMotosOficina(
             ano: moto?.ano,
             cilindrada: moto?.cilindrada,
             placa: moto?.placa,
-            criadoEm: moto?.criadoEm || entrada.criadoEm,
-            atualizadoEm: moto?.atualizadoEm || entrada.atualizadoEm,
+            criadoEm: entrada.criadoEm,
+            atualizadoEm: entrada.atualizadoEm,
             cliente: cliente?.nome || "Cliente não informado",
             telefone: cliente?.telefone,
             status: entrada.status,
@@ -80,7 +80,7 @@ export function useMotosOficina(
             formaPagamento: entrada.formaPagamento ?? null,
             statusPagamento: entrada.statusPagamento ?? null,
             fotosStatus: entrada.fotosStatus || [],
-            fotos: fotosMoto.map(foto => foto.url), // URLs das fotos do tipo "moto"
+            fotos: fotosMoto.map(foto => foto.url),
             tiposServico: tiposServico || [],
             servicosPersonalizados: servicosPersonalizados || [],
           };
