@@ -5,7 +5,7 @@ import { OrcamentoRepository } from "@/domain/interfaces/OrcamentoRepository";
 import { TipoServicoRepository } from "@/domain/interfaces/TipoServicoRepository";
 import { ServicoPersonalizadoRepository } from "@/domain/interfaces/ServicoPersonalizadoRepository";
 import { DadosCadastro } from "@shared/types";
-import { HistoricoRepository } from "@/infrastructure/repositories/SupabaseHistoricoRepository";
+import { HistoricoRepository } from "@/domain/interfaces/HistoricoRepository";
 
 /**
  * Caso de uso: Atualizar entrada existente

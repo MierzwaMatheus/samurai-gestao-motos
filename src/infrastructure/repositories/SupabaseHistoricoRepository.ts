@@ -1,13 +1,5 @@
 import { supabase } from "@/infrastructure/supabase/client";
-
-export interface HistoricoRepository {
-  registrarAtividade(params: {
-    entidadeTipo: "entrada" | "orcamento";
-    entidadeId: string;
-    acao: string;
-    detalhes?: Record<string, any>;
-  }): Promise<void>;
-}
+import { HistoricoRepository } from "@/domain/interfaces/HistoricoRepository";
 
 export class SupabaseHistoricoRepository implements HistoricoRepository {
   async registrarAtividade(params: {

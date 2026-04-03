@@ -20,7 +20,7 @@ export class GerarOSUseCase {
     private tipoServicoRepo: TipoServicoRepository,
     private servicoPersonalizadoRepo: ServicoPersonalizadoRepository,
     private storageApi: StorageApi
-  ) { }
+  ) {}
 
   async execute(entradaId: string): Promise<{
     entrada: Entrada;
@@ -38,7 +38,7 @@ export class GerarOSUseCase {
       nome: string;
       categoria?: "padrao" | "alinhamento";
       comOleo?: boolean;
-      quantidade?: number
+      quantidade?: number;
     }>;
     servicosPersonalizados: Array<{
       nome: string;
@@ -53,17 +53,19 @@ export class GerarOSUseCase {
     }
 
     // Busca cliente, moto, fotos, tipos de serviço e serviços personalizados em paralelo
-    const [cliente, moto, fotos, tiposServico, servicosPersonalizados] = await Promise.all([
-      this.clienteRepo.buscarPorId(entrada.clienteId),
-      this.motoRepo.buscarPorId(entrada.motoId),
-      this.fotoRepo.buscarPorEntradaId(entradaId),
-      this.tipoServicoRepo.buscarPorEntradaId(entradaId),
-      this.servicoPersonalizadoRepo.buscarPorEntradaId(entradaId),
-    ]);
+    const [cliente, moto, fotos, tiposServico, servicosPersonalizados] =
+      await Promise.all([
+        this.clienteRepo.buscarPorId(entrada.clienteId),
+        this.motoRepo.buscarPorId(entrada.motoId),
+        this.fotoRepo.buscarPorEntradaId(entradaId),
+        this.tipoServicoRepo.buscarPorEntradaId(entradaId),
+        this.servicoPersonalizadoRepo.buscarPorEntradaId(entradaId),
+      ]);
 
-    console.log('Tipos de serviço encontrados:', JSON.stringify(tiposServico, null, 2));
-
-
+    console.log(
+      "Tipos de serviço encontrados:",
+      JSON.stringify(tiposServico, null, 2)
+    );
 
     if (!cliente || !moto) {
       throw new Error("Cliente ou moto não encontrados");
@@ -71,7 +73,7 @@ export class GerarOSUseCase {
 
     // Resolver URLs assinadas para fotos de status
     const fotosStatusFinal = await Promise.all(
-      (entrada.fotosStatus || []).map(async (f) => {
+      (entrada.fotosStatus || []).map(async f => {
         let url = f.url;
         // Se não for URL completa (http...), gera assinada
         if (!url.startsWith("http")) {
@@ -84,7 +86,7 @@ export class GerarOSUseCase {
         }
         return {
           url: url,
-          tipo: "status"
+          tipo: "status",
         };
       })
     );
@@ -106,43 +108,49 @@ export class GerarOSUseCase {
         finalNumeroQuadro: moto.finalNumeroQuadro,
         ano: moto.ano,
         marca: moto.marca,
-        cilindrada: moto.cilindrada
+        cilindrada: moto.cilindrada,
       },
       fotos: [
-        ...fotos.map((f) => ({ url: f.url, tipo: f.tipo })),
-        ...fotosStatusFinal
+        ...fotos.map(f => ({ url: f.url, tipo: f.tipo })),
+        ...fotosStatusFinal,
       ],
-      tiposServico: tiposServico.map((t) => {
-        // Calcula o preço com base na categoria e se tem óleo
+      tiposServico: tiposServico.map(t => {
+        const isParticular = entrada.tipoPreco === "particular";
         let preco = 0;
-        
+
         if (t.categoria === "alinhamento") {
           if (t.comOleo) {
-            preco = t.precoOficinaComOleo || t.precoOficina || 0;
+            preco = isParticular
+              ? (t.precoParticularComOleo ?? t.precoParticular ?? 0)
+              : (t.precoOficinaComOleo ?? t.precoOficina ?? 0);
           } else {
-            preco = t.precoOficinaSemOleo || t.precoOficina || 0;
+            preco = isParticular
+              ? (t.precoParticularSemOleo ?? t.precoParticular ?? 0)
+              : (t.precoOficinaSemOleo ?? t.precoOficina ?? 0);
           }
         } else {
-          // Serviço padrão
-          preco = t.precoOficina || 0;
+          preco = isParticular
+            ? (t.precoParticular ?? 0)
+            : (t.precoOficina ?? 0);
         }
-        
-        console.log(`Tipo de serviço: ${t.nome}, Categoria: ${t.categoria}, Com Óleo: ${t.comOleo}, Preço Unitário: ${preco}, Quantidade: ${t.quantidade}`);
-        
+
+        console.log(
+          `Tipo de serviço: ${t.nome}, Categoria: ${t.categoria}, Tipo Preço: ${entrada.tipoPreco || "oficina"}, Com Óleo: ${t.comOleo}, Preço Unitário: ${preco}, Quantidade: ${t.quantidade}`
+        );
+
         return {
           nome: t.nome,
           categoria: t.categoria,
           comOleo: t.comOleo,
           quantidade: t.quantidade,
-          preco: preco // Preço unitário
+          preco: preco,
         };
       }),
-      servicosPersonalizados: servicosPersonalizados.map((s) => ({
+      servicosPersonalizados: servicosPersonalizados.map(s => ({
         nome: s.nome,
         valor: s.valor,
-        quantidade: s.quantidade
+        quantidade: s.quantidade,
       })),
     };
   }
 }
-
