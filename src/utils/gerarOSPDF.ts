@@ -495,12 +495,15 @@ function renderServicosETotal(
   }
 
   // Adicionar serviços personalizados
+  // s.valor é o valor UNITÁRIO — multiplica pela quantidade para obter o total,
+  // mantendo consistência com formatarServico que retorna valor como total
   if (servicosPersonalizados?.length) {
     servicosPersonalizados.forEach(s => {
+      const quantidade = s.quantidade || 1;
       servicos.push({
         nome: s.nome,
-        valor: s.valor,
-        quantidade: s.quantidade || 1,
+        valor: s.valor * quantidade,
+        quantidade,
       });
     });
   }
