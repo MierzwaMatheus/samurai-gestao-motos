@@ -2,6 +2,7 @@ import {
   StorageApi,
   EspacoBucketInfo,
   ArquivoStorage,
+  ImageTransformOptions,
 } from "@/domain/interfaces/StorageApi";
 import { supabase } from "@/infrastructure/supabase/client";
 
@@ -99,14 +100,22 @@ export class SupabaseStorageApi implements StorageApi {
 
   /**
    * Obtém URL assinada (para bucket privado)
+   *
+   * Quando `transform` é informado, o Supabase serve a imagem já
+   * redimensionada/recomprimida, o que reduz drasticamente o egress. Sem
+   * `transform`, o comportamento original é preservado: nenhum objeto de
+   * opções é enviado.
    */
   async obterUrlAssinada(
     path: string,
-    expiresIn: number = 3600
+    expiresIn: number = 3600,
+    transform?: ImageTransformOptions
   ): Promise<string> {
-    const { data, error } = await supabase.storage
-      .from(this.bucketName)
-      .createSignedUrl(path, expiresIn);
+    const bucket = supabase.storage.from(this.bucketName);
+
+    const { data, error } = transform
+      ? await bucket.createSignedUrl(path, expiresIn, { transform })
+      : await bucket.createSignedUrl(path, expiresIn);
 
     if (error) {
       throw new Error(`Erro ao gerar URL assinada: ${error.message}`);

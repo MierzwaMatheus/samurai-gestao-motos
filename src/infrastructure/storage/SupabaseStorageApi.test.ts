@@ -4,10 +4,10 @@ import { SupabaseStorageApi } from "@/infrastructure/storage/SupabaseStorageApi"
 
 // Mock do cliente Supabase: precisamos controlar o retorno de
 // `auth.getUser` (para passar pela checagem de autenticação) e do
-// `storage.from("fotos").upload` (para observar os `opts` passados).
+// `storage.from("fotos")` (para observar os argumentos de `upload` e
+// `createSignedUrl`).
 vi.mock("@/infrastructure/supabase/client", () => {
-  const upload = vi.fn().mockResolvedValue({ data: { path: "stub" }, error: null });
-  const from = vi.fn().mockReturnValue({ upload });
+  const from = vi.fn();
   const getUser = vi.fn().mockResolvedValue({
     data: { user: { id: "user-test" } },
     error: null,
@@ -24,31 +24,54 @@ vi.mock("@/infrastructure/supabase/client", () => {
 import { supabase } from "@/infrastructure/supabase/client";
 
 const mockedFrom = vi.mocked(supabase.storage.from);
-const mockedUpload = vi.fn().mockResolvedValue({ data: { path: "stub" }, error: null });
 
 const buildFile = (): File =>
   new File(["conteudo-de-teste"], "foto.jpg", { type: "image/jpeg" });
 
+/**
+ * Monta o duplo de teste do bucket. Retorna os spies para que cada teste
+ * observe exatamente os argumentos recebidos, sem estado compartilhado.
+ */
+const buildBucket = (
+  overrides: {
+    signedUrlResult?: { data: unknown; error: unknown };
+  } = {}
+) => {
+  const upload = vi
+    .fn()
+    .mockResolvedValue({ data: { path: "stub" }, error: null });
+  const createSignedUrl = vi.fn().mockResolvedValue(
+    overrides.signedUrlResult ?? {
+      data: { signedUrl: "https://signed.example/foto.jpg" },
+      error: null,
+    }
+  );
+
+  mockedFrom.mockReturnValue({ upload, createSignedUrl } as never);
+
+  return { upload, createSignedUrl, api: new SupabaseStorageApi() };
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
 describe("SupabaseStorageApi.uploadFoto", () => {
-  let api: SupabaseStorageApi;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockedFrom.mockReturnValue({ upload: mockedUpload } as never);
-    api = new SupabaseStorageApi();
-  });
-
   it('faz upload apontando para o bucket "fotos"', async () => {
+    const { api } = buildBucket();
+
     await api.uploadFoto(buildFile(), "entrada-1", "moto");
 
     expect(mockedFrom).toHaveBeenCalledWith("fotos");
   });
 
   it('envia opts com cacheControl "2592000" (30 dias) e upsert true', async () => {
+    const { api, upload } = buildBucket();
+
     await api.uploadFoto(buildFile(), "entrada-1", "moto");
 
-    expect(mockedUpload).toHaveBeenCalledTimes(1);
-    const [, , opts] = mockedUpload.mock.calls[0] as [
+    expect(upload).toHaveBeenCalledTimes(1);
+    const [, , opts] = upload.mock.calls[0] as [
       string,
       File,
       { cacheControl?: string; upsert?: boolean },
@@ -56,5 +79,105 @@ describe("SupabaseStorageApi.uploadFoto", () => {
 
     expect(opts.cacheControl).toBe("2592000");
     expect(opts.upsert).toBe(true);
+  });
+});
+
+describe("SupabaseStorageApi.obterUrlAssinada", () => {
+  it('gera a URL assinada no bucket "fotos"', async () => {
+    const { api } = buildBucket();
+
+    await api.obterUrlAssinada("user/entrada/moto/foto.jpg");
+
+    expect(mockedFrom).toHaveBeenCalledWith("fotos");
+  });
+
+  it("retorna a signedUrl devolvida pelo Supabase", async () => {
+    const { api } = buildBucket();
+
+    const url = await api.obterUrlAssinada("user/entrada/moto/foto.jpg");
+
+    expect(url).toBe("https://signed.example/foto.jpg");
+  });
+
+  it("usa expiresIn padrão de 3600 segundos quando não informado", async () => {
+    const { api, createSignedUrl } = buildBucket();
+
+    await api.obterUrlAssinada("user/entrada/moto/foto.jpg");
+
+    expect(createSignedUrl).toHaveBeenCalledWith(
+      "user/entrada/moto/foto.jpg",
+      3600
+    );
+  });
+
+  it("repassa o expiresIn informado", async () => {
+    const { api, createSignedUrl } = buildBucket();
+
+    await api.obterUrlAssinada("user/entrada/moto/foto.jpg", 7200);
+
+    expect(createSignedUrl).toHaveBeenCalledWith(
+      "user/entrada/moto/foto.jpg",
+      7200
+    );
+  });
+
+  it("não envia o 3º argumento de opções quando transform não é informado", async () => {
+    const { api, createSignedUrl } = buildBucket();
+
+    await api.obterUrlAssinada("user/entrada/moto/foto.jpg");
+
+    // Comportamento atual preservado: sem transform, a chamada tem
+    // exatamente 2 argumentos — nem mesmo `{ transform: undefined }`.
+    expect(createSignedUrl.mock.calls[0]).toHaveLength(2);
+  });
+
+  it("repassa o transform dentro de options quando informado", async () => {
+    const { api, createSignedUrl } = buildBucket();
+
+    // `format` é omitido de propósito: é assim que o Supabase serve WebP
+    // automaticamente. Passar `format: "webp"` não existe na API.
+    await api.obterUrlAssinada("user/entrada/moto/foto.jpg", 3600, {
+      width: 400,
+      height: 400,
+      resize: "cover",
+      quality: 70,
+    });
+
+    expect(createSignedUrl).toHaveBeenCalledWith(
+      "user/entrada/moto/foto.jpg",
+      3600,
+      {
+        transform: {
+          width: 400,
+          height: 400,
+          resize: "cover",
+          quality: 70,
+        },
+      }
+    );
+  });
+
+  it('repassa format "origin" quando se quer desligar a otimização', async () => {
+    const { api, createSignedUrl } = buildBucket();
+
+    await api.obterUrlAssinada("user/entrada/documento/doc.jpg", 3600, {
+      format: "origin",
+    });
+
+    expect(createSignedUrl).toHaveBeenCalledWith(
+      "user/entrada/documento/doc.jpg",
+      3600,
+      { transform: { format: "origin" } }
+    );
+  });
+
+  it("lança erro quando o Supabase falha ao gerar a URL", async () => {
+    const { api } = buildBucket({
+      signedUrlResult: { data: null, error: { message: "objeto não existe" } },
+    });
+
+    await expect(
+      api.obterUrlAssinada("user/entrada/moto/inexistente.jpg")
+    ).rejects.toThrow("Erro ao gerar URL assinada: objeto não existe");
   });
 });
