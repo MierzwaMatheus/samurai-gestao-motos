@@ -12,6 +12,9 @@ import { supabase } from "@/infrastructure/supabase/client";
 export class SupabaseStorageApi implements StorageApi {
   private readonly bucketName = "fotos";
 
+  /** Cache de 30 dias no edge do Supabase (em segundos). */
+  private static readonly FOTO_CACHE_CONTROL_SECONDS = "2592000";
+
   /**
    * Faz upload de uma foto para o bucket de fotos
    * O arquivo é salvo em: {userId}/{entradaId}/{tipo}/{timestamp}-{filename}
@@ -48,12 +51,15 @@ export class SupabaseStorageApi implements StorageApi {
     const fileName = `${timestamp}-${file.name}`;
     const filePath = `${user.id}/${entradaId}/${tipo}/${fileName}`;
 
-    // Faz upload
+    // Faz upload com cache de 30 dias para casar com a janela de cache dos
+    // consumidores (signed URLs têm `expiresIn` curto, mas o objeto no
+    // Storage pode ficar cacheado por mais tempo no edge do Supabase).
+    // `upsert: true` permite reenviar o mesmo `filePath` sem 409.
     const { data, error } = await supabase.storage
       .from(this.bucketName)
       .upload(filePath, file, {
-        cacheControl: "3600",
-        upsert: false,
+        cacheControl: SupabaseStorageApi.FOTO_CACHE_CONTROL_SECONDS,
+        upsert: true,
       });
 
     if (error) {
