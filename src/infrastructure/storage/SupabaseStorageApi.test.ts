@@ -20,13 +20,32 @@ vi.mock("@/infrastructure/supabase/client", () => {
   };
 });
 
+// Mock da compressão no browser: `browser-image-compression` depende de
+// Canvas/Web Worker, indisponíveis no ambiente de teste. Observamos apenas
+// os argumentos recebidos e devolvemos um `File` distinto do original.
+vi.mock("browser-image-compression", () => ({
+  default: vi.fn(),
+}));
+
 // Importações após o mock para garantir que o módulo mockado seja usado.
 import { supabase } from "@/infrastructure/supabase/client";
+import imageCompression from "browser-image-compression";
 
 const mockedFrom = vi.mocked(supabase.storage.from);
+const mockedCompression = vi.mocked(imageCompression);
 
 const buildFile = (): File =>
   new File(["conteudo-de-teste"], "foto.jpg", { type: "image/jpeg" });
+
+/** Arquivo acima do limite de 5 MB, usado para exercitar o sanity check. */
+const buildFileGrande = (): File =>
+  new File([new ArrayBuffer(6 * 1024 * 1024)], "grande.jpg", {
+    type: "image/jpeg",
+  });
+
+/** `File` devolvido pelo mock de compressão — identidade distinta do original. */
+const buildFileComprimido = (): File =>
+  new File(["comprimido"], "foto.webp", { type: "image/webp" });
 
 /**
  * Monta o duplo de teste do bucket. Retorna os spies para que cada teste
@@ -47,9 +66,11 @@ const buildBucket = (
     }
   );
 
+  const comprimido = buildFileComprimido();
+  mockedCompression.mockResolvedValue(comprimido);
   mockedFrom.mockReturnValue({ upload, createSignedUrl } as never);
 
-  return { upload, createSignedUrl, api: new SupabaseStorageApi() };
+  return { upload, createSignedUrl, comprimido, api: new SupabaseStorageApi() };
 };
 
 beforeEach(() => {
@@ -79,6 +100,78 @@ describe("SupabaseStorageApi.uploadFoto", () => {
 
     expect(opts.cacheControl).toBe("2592000");
     expect(opts.upsert).toBe(true);
+  });
+});
+
+describe("SupabaseStorageApi.uploadFoto — compressão no browser", () => {
+  it('comprime a foto de tipo "moto" antes de enviar', async () => {
+    const { api } = buildBucket();
+    const original = buildFile();
+
+    await api.uploadFoto(original, "entrada-1", "moto");
+
+    expect(mockedCompression).toHaveBeenCalledTimes(1);
+    expect(mockedCompression).toHaveBeenCalledWith(original, {
+      maxSizeMB: 0.5,
+      maxWidthOrHeight: 1600,
+      useWebWorker: true,
+      fileType: "image/webp",
+    });
+  });
+
+  it('comprime a foto de tipo "status" com as mesmas opções', async () => {
+    const { api } = buildBucket();
+    const original = buildFile();
+
+    await api.uploadFoto(original, "entrada-1", "status");
+
+    expect(mockedCompression).toHaveBeenCalledTimes(1);
+    expect(mockedCompression).toHaveBeenCalledWith(original, {
+      maxSizeMB: 0.5,
+      maxWidthOrHeight: 1600,
+      useWebWorker: true,
+      fileType: "image/webp",
+    });
+  });
+
+  it('não comprime arquivos de tipo "documento"', async () => {
+    const { api } = buildBucket();
+
+    await api.uploadFoto(buildFile(), "entrada-1", "documento");
+
+    expect(mockedCompression).not.toHaveBeenCalled();
+  });
+
+  it("envia ao Supabase o arquivo comprimido, não o original", async () => {
+    const { api, upload, comprimido } = buildBucket();
+    const original = buildFile();
+
+    await api.uploadFoto(original, "entrada-1", "moto");
+
+    const [, enviado] = upload.mock.calls[0] as [string, File];
+    expect(enviado).toBe(comprimido);
+    expect(enviado).not.toBe(original);
+  });
+
+  it('envia o arquivo original quando o tipo é "documento"', async () => {
+    const { api, upload } = buildBucket();
+    const original = buildFile();
+
+    await api.uploadFoto(original, "entrada-1", "documento");
+
+    const [, enviado] = upload.mock.calls[0] as [string, File];
+    expect(enviado).toBe(original);
+  });
+
+  it("valida o tamanho de 5 MB antes de comprimir (sanity check)", async () => {
+    const { api, upload } = buildBucket();
+
+    await expect(
+      api.uploadFoto(buildFileGrande(), "entrada-1", "moto")
+    ).rejects.toThrow("Arquivo muito grande. Tamanho máximo: 5MB.");
+
+    expect(mockedCompression).not.toHaveBeenCalled();
+    expect(upload).not.toHaveBeenCalled();
   });
 });
 

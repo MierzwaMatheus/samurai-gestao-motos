@@ -4,6 +4,7 @@ import {
   ArquivoStorage,
 } from "@/domain/interfaces/StorageApi";
 import { supabase } from "@/infrastructure/supabase/client";
+import imageCompression from "browser-image-compression";
 
 /**
  * Implementação do serviço de storage usando Supabase Storage
@@ -14,6 +15,21 @@ export class SupabaseStorageApi implements StorageApi {
 
   /** Cache de 30 dias no edge do Supabase (em segundos). */
   private static readonly FOTO_CACHE_CONTROL_SECONDS = "2592000";
+
+  /**
+   * Opções de compressão aplicadas no browser antes do upload.
+   *
+   * Image Transformations do Supabase é Pro-only, então a redução de
+   * egresso precisa acontecer *antes* do arquivo chegar ao bucket: o
+   * objeto armazenado já é o comprimido (~300-500 KB em vez de 3-5 MB),
+   * e toda leitura posterior trafega esse tamanho menor.
+   */
+  private static readonly OPCOES_COMPRESSAO = {
+    maxSizeMB: 0.5,
+    maxWidthOrHeight: 1600,
+    useWebWorker: true,
+    fileType: "image/webp",
+  };
 
   /**
    * Faz upload de uma foto para o bucket de fotos
@@ -46,6 +62,13 @@ export class SupabaseStorageApi implements StorageApi {
       throw new Error("Arquivo muito grande. Tamanho máximo: 5MB.");
     }
 
+    // Comprime imagens antes do upload. Documentos (scans/PDFs) mantêm o
+    // arquivo original: recomprimir degradaria a legibilidade.
+    const arquivoParaUpload =
+      tipo === "documento"
+        ? file
+        : await imageCompression(file, SupabaseStorageApi.OPCOES_COMPRESSAO);
+
     // Gera nome único para o arquivo
     const timestamp = Date.now();
     const fileName = `${timestamp}-${file.name}`;
@@ -57,7 +80,7 @@ export class SupabaseStorageApi implements StorageApi {
     // `upsert: true` permite reenviar o mesmo `filePath` sem 409.
     const { data, error } = await supabase.storage
       .from(this.bucketName)
-      .upload(filePath, file, {
+      .upload(filePath, arquivoParaUpload, {
         cacheControl: SupabaseStorageApi.FOTO_CACHE_CONTROL_SECONDS,
         upsert: true,
       });
