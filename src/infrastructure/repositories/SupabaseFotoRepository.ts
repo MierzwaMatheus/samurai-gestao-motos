@@ -1,6 +1,7 @@
 import { FotoRepository } from "@/domain/interfaces/FotoRepository";
 import { Foto } from "@shared/types";
 import { supabase } from "@/infrastructure/supabase/client";
+import { transformPorTipo } from "@/infrastructure/storage/imageTransforms";
 
 /**
  * Implementação do repositório de fotos usando Supabase
@@ -47,8 +48,10 @@ export class SupabaseFotoRepository implements FotoRepository {
     if (!foto.url.startsWith("http")) {
       const { data: signedUrlData } = await supabase.storage
         .from("fotos")
-        .createSignedUrl(foto.url, 3600); // 1 hora
-      
+        .createSignedUrl(foto.url, 3600, {
+          transform: transformPorTipo(foto.tipo),
+        }); // 1 hora, com transformação por tipo
+
       if (signedUrlData) {
         foto.url = signedUrlData.signedUrl;
       }
@@ -76,8 +79,10 @@ export class SupabaseFotoRepository implements FotoRepository {
         if (!foto.url.startsWith("http")) {
           const { data: signedUrlData } = await supabase.storage
             .from("fotos")
-            .createSignedUrl(foto.url, 3600); // 1 hora
-          
+            .createSignedUrl(foto.url, 3600, {
+              transform: transformPorTipo(foto.tipo),
+            }); // 1 hora, com transformação por tipo
+
           if (signedUrlData) {
             foto.url = signedUrlData.signedUrl;
           }
@@ -109,8 +114,10 @@ export class SupabaseFotoRepository implements FotoRepository {
         if (!foto.url.startsWith("http")) {
           const { data: signedUrlData } = await supabase.storage
             .from("fotos")
-            .createSignedUrl(foto.url, 3600); // 1 hora
-          
+            .createSignedUrl(foto.url, 3600, {
+              transform: transformPorTipo(foto.tipo),
+            }); // 1 hora, com transformação por tipo
+
           if (signedUrlData) {
             foto.url = signedUrlData.signedUrl;
           }

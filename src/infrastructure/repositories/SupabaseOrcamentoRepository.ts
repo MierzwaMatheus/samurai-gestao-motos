@@ -2,6 +2,7 @@ import { OrcamentoRepository } from "@/domain/interfaces/OrcamentoRepository";
 import { TipoServicoRepository } from "@/domain/interfaces/TipoServicoRepository";
 import { Orcamento, OrcamentoCompleto } from "@shared/types";
 import { supabase } from "@/infrastructure/supabase/client";
+import { transformPorTipo } from "@/infrastructure/storage/imageTransforms";
 
 /**
  * Implementação do repositório de orçamentos usando Supabase
@@ -181,7 +182,9 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
           if (!url.startsWith("http")) {
             const { data: signedUrlData } = await supabase.storage
               .from("fotos")
-              .createSignedUrl(url, 3600);
+              .createSignedUrl(url, 3600, {
+                transform: transformPorTipo("moto"),
+              }); // 1 hora, com transformação para foto de moto
 
             if (signedUrlData) {
               return [entradaId, signedUrlData.signedUrl];
