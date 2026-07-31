@@ -1,12 +1,14 @@
 import { FotoRepository } from "@/domain/interfaces/FotoRepository";
 import { Foto } from "@shared/types";
 import { supabase } from "@/infrastructure/supabase/client";
+import { SupabaseStorageApi } from "@/infrastructure/storage/SupabaseStorageApi";
 
 /**
  * Implementação do repositório de fotos usando Supabase
  * Esta é uma implementação de infraestrutura que conhece detalhes do Supabase
  */
 export class SupabaseFotoRepository implements FotoRepository {
+  private storageApi = new SupabaseStorageApi();
   async criar(foto: Omit<Foto, "id" | "criadoEm">): Promise<Foto> {
     const { data, error } = await supabase
       .from("fotos")
@@ -42,16 +44,10 @@ export class SupabaseFotoRepository implements FotoRepository {
     if (!data) return null;
 
     const foto = this.mapToFoto(data);
-    
+
     // Se a URL parece ser um filePath (não começa com http), gera URL assinada
     if (!foto.url.startsWith("http")) {
-      const { data: signedUrlData } = await supabase.storage
-        .from("fotos")
-        .createSignedUrl(foto.url, 3600); // 1 hora
-      
-      if (signedUrlData) {
-        foto.url = signedUrlData.signedUrl;
-      }
+      foto.url = await this.storageApi.obterUrlAssinada(foto.url);
     }
 
     return foto;
@@ -74,13 +70,7 @@ export class SupabaseFotoRepository implements FotoRepository {
         const foto = this.mapToFoto(item);
         // Se a URL parece ser um filePath (não começa com http), gera URL assinada
         if (!foto.url.startsWith("http")) {
-          const { data: signedUrlData } = await supabase.storage
-            .from("fotos")
-            .createSignedUrl(foto.url, 3600); // 1 hora
-          
-          if (signedUrlData) {
-            foto.url = signedUrlData.signedUrl;
-          }
+          foto.url = await this.storageApi.obterUrlAssinada(foto.url);
         }
         return foto;
       })
@@ -107,13 +97,7 @@ export class SupabaseFotoRepository implements FotoRepository {
         const foto = this.mapToFoto(item);
         // Se a URL parece ser um filePath (não começa com http), gera URL assinada
         if (!foto.url.startsWith("http")) {
-          const { data: signedUrlData } = await supabase.storage
-            .from("fotos")
-            .createSignedUrl(foto.url, 3600); // 1 hora
-          
-          if (signedUrlData) {
-            foto.url = signedUrlData.signedUrl;
-          }
+          foto.url = await this.storageApi.obterUrlAssinada(foto.url);
         }
         return foto;
       })

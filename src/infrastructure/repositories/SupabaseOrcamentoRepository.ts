@@ -2,12 +2,15 @@ import { OrcamentoRepository } from "@/domain/interfaces/OrcamentoRepository";
 import { TipoServicoRepository } from "@/domain/interfaces/TipoServicoRepository";
 import { Orcamento, OrcamentoCompleto } from "@shared/types";
 import { supabase } from "@/infrastructure/supabase/client";
+import { SupabaseStorageApi } from "@/infrastructure/storage/SupabaseStorageApi";
 
 /**
  * Implementação do repositório de orçamentos usando Supabase
  * Esta é uma implementação de infraestrutura que conhece detalhes do Supabase
  */
 export class SupabaseOrcamentoRepository implements OrcamentoRepository {
+  private storageApi = new SupabaseStorageApi();
+
   constructor(private tipoServicoRepo?: TipoServicoRepository) {
     // Permite instanciação sem parâmetros
   }
@@ -179,13 +182,8 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
         Object.entries(fotosMap).map(async ([entradaId, url]) => {
           // Se não é URL completa, gera URL assinada
           if (!url.startsWith("http")) {
-            const { data: signedUrlData } = await supabase.storage
-              .from("fotos")
-              .createSignedUrl(url, 3600);
-
-            if (signedUrlData) {
-              return [entradaId, signedUrlData.signedUrl];
-            }
+            const signedUrl = await this.storageApi.obterUrlAssinada(url);
+            return [entradaId, signedUrl];
           }
           return [entradaId, url];
         })

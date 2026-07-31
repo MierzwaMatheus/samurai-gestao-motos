@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { Image } from "lucide-react";
-import { supabase } from "@/infrastructure/supabase/client";
+import { SupabaseStorageApi } from "@/infrastructure/storage/SupabaseStorageApi";
 import ModalVisualizacaoFoto from "@/components/ModalVisualizacaoFoto";
 
 interface GaleriaFotosMotoProps {
   fotos: string[];
 }
+
+const storageApi = new SupabaseStorageApi();
 
 /**
  * Componente para exibir galeria de fotos do tipo "moto"
@@ -32,12 +34,8 @@ export default function GaleriaFotosMoto({ fotos }: GaleriaFotosMotoProps) {
           // Se não é URL completa (começa com http), precisa gerar URL assinada
           if (!url.startsWith("http")) {
             try {
-              const { data } = await supabase.storage
-                .from("fotos")
-                .createSignedUrl(url, 3600); // 1 hora de validade
-              if (data) {
-                urlsMap[index] = data.signedUrl;
-              }
+              const signedUrl = await storageApi.obterUrlAssinada(url);
+              urlsMap[index] = signedUrl;
             } catch (error) {
               console.error(`Erro ao carregar URL da foto ${index}:`, error);
             }
