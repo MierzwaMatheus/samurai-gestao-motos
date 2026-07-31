@@ -77,6 +77,12 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+/** Arquivo exatamente no limite (5 MB) — testa o boundary `>` vs `>=`. */
+const buildFileExato = (): File =>
+  new File([new ArrayBuffer(5 * 1024 * 1024)], "limite.jpg", {
+    type: "image/jpeg",
+  });
+
 describe("SupabaseStorageApi.uploadFoto", () => {
   it('faz upload apontando para o bucket "fotos"', async () => {
     const { api } = buildBucket();
@@ -100,6 +106,61 @@ describe("SupabaseStorageApi.uploadFoto", () => {
 
     expect(opts.cacheControl).toBe("2592000");
     expect(opts.upsert).toBe(true);
+  });
+
+  it("lança erro quando não há usuário autenticado", async () => {
+    const { api } = buildBucket();
+    vi.mocked(supabase.auth.getUser).mockResolvedValueOnce({
+      data: { user: null },
+      error: null,
+    } as never);
+
+    await expect(
+      api.uploadFoto(buildFile(), "entrada-1", "moto")
+    ).rejects.toThrow("Usuário não autenticado");
+  });
+
+  it("lança erro quando o tipo MIME não é permitido", async () => {
+    const { api, upload } = buildBucket();
+    const arquivoTexto = new File(["oi"], "nota.txt", { type: "text/plain" });
+
+    await expect(
+      api.uploadFoto(arquivoTexto, "entrada-1", "documento")
+    ).rejects.toThrow(
+      "Tipo de arquivo não permitido. Use JPEG, PNG, WEBP ou GIF."
+    );
+
+    expect(upload).not.toHaveBeenCalled();
+  });
+
+  it("aceita arquivo exatamente no limite de 5 MB (boundary `>`)", async () => {
+    // Stryker muta `file.size > maxSize` para `file.size >= maxSize`.
+    // Um arquivo de exatamente 5 MB passa no original (5 MB > 5 MB = false)
+    // mas falharia no mutante (5 MB >= 5 MB = true → rejeita).
+    const { api, upload } = buildBucket();
+
+    await expect(
+      api.uploadFoto(buildFileExato(), "entrada-1", "documento")
+    ).resolves.toBeDefined();
+
+    expect(upload).toHaveBeenCalledTimes(1);
+  });
+
+  it("lança erro quando o Supabase devolve erro no upload", async () => {
+    // Stryker muta `if (error)` para `if (false)` — sem esse teste o
+    // mutante sobrevive (testes existentes não observam falha).
+    mockedFrom.mockReturnValue({
+      upload: vi
+        .fn()
+        .mockResolvedValue({ data: null, error: { message: "quota excedida" } }),
+      createSignedUrl: vi.fn(),
+    } as never);
+
+    const api = new SupabaseStorageApi();
+
+    await expect(
+      api.uploadFoto(buildFile(), "entrada-1", "moto")
+    ).rejects.toThrow("Erro ao fazer upload: quota excedida");
   });
 });
 
