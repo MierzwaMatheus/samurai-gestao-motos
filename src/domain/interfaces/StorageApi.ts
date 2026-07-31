@@ -19,6 +19,14 @@ export interface ImageTransformOptions {
 }
 
 /**
+ * Tipos de foto que determinam onde o arquivo é salvo no bucket e quais
+ * transformações de imagem aplicar na exibição. Centralizamos o union aqui
+ * para que `StorageApi`, `imageTransforms` e quaisquer callers usem a
+ * mesma fonte da verdade.
+ */
+export type TipoFoto = "moto" | "status" | "documento";
+
+/**
  * Interface para serviços de storage/upload de arquivos
  * Segue o princípio de Inversão de Dependência (DIP)
  */
@@ -26,7 +34,7 @@ export interface StorageApi {
   uploadFoto(
     file: File,
     entradaId: string,
-    tipo: "moto" | "status" | "documento"
+    tipo: TipoFoto
   ): Promise<string>;
   deletarFoto(path: string): Promise<void>;
   obterUrlPublica(path: string): string;
