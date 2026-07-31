@@ -105,3 +105,10 @@ temp/
 *.db
 *.sqlite
 *.sqlite3
+
+# TDD planning artifacts (planos de .tdd/ não vão para o repo)
+.tdd/
+
+# Stryker mutation testing artifacts
+.stryker-tmp/
+reports/

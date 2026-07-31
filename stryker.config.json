@@ -1,0 +1,24 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "packageManager": "npm",
+  "testRunner": "vitest",
+  "reporters": ["html", "clear-text", "progress"],
+  "coverageAnalysis": "all",
+  "plugins": ["@stryker-mutator/vitest-runner"],
+  "mutate": [
+    "src/infrastructure/storage/**/*.ts",
+    "src/infrastructure/repositories/SupabaseFotoRepository.ts",
+    "src/infrastructure/repositories/SupabaseOrcamentoRepository.ts",
+    "src/components/GaleriaFotosMoto.tsx",
+    "src/components/GaleriaFotos.tsx",
+    "src/domain/interfaces/StorageApi.ts"
+  ],
+  "mutator": {
+    "excludedMutations": ["StringLiteral"]
+  },
+  "ignorePatterns": ["public", "dist", "attached_assets", ".git", ".tdd", "reports"],
+  "vitest": {
+    "configFile": "vitest.config.ts",
+    "related": false
+  }
+}
