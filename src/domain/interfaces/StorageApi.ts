@@ -43,6 +43,15 @@ export interface StorageApi {
     expiresIn?: number,
     transform?: ImageTransformOptions
   ): Promise<string>;
+  /**
+   * Atalho que combina `transformPorTipo(tipo)` + `expiresIn` de 30 dias
+   * (casando com `cacheControl: "2592000"` do upload para maximizar hit
+   * de cache no browser). Use este método nos componentes e repositórios
+   * em vez de chamar `createSignedUrl` diretamente — elimina a
+   * duplicação das 6 chamadas espalhadas e centraliza a política de
+   * expiração em um único lugar.
+   */
+  criarSignedUrlComTransform(path: string, tipo: TipoFoto): Promise<string>;
   consultarEspacoBucket(): Promise<EspacoBucketInfo>;
   listarArquivosPorPeriodo(
     dataInicio: Date,

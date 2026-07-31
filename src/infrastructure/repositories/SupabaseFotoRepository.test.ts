@@ -74,7 +74,7 @@ describe("SupabaseFotoRepository — application of image transformations", () =
       expect(createSignedUrl).toHaveBeenCalledTimes(1);
       expect(createSignedUrl).toHaveBeenCalledWith(
         "user/entrada/moto/x.jpg",
-        3600,
+        2592000,
         { transform: transformPorTipo("moto") }
       );
     });
@@ -98,7 +98,7 @@ describe("SupabaseFotoRepository — application of image transformations", () =
 
       expect(createSignedUrl).toHaveBeenCalledWith(
         "user/entrada/status/x.jpg",
-        3600,
+        2592000,
         { transform: transformPorTipo("status") }
       );
     });
@@ -120,13 +120,14 @@ describe("SupabaseFotoRepository — application of image transformations", () =
 
       await new SupabaseFotoRepository().buscarPorId("foto-1");
 
-      // Para `documento`, `transformPorTipo` devolve `undefined`. O Supabase
-      // aceita `transform: undefined` e simplesmente não aplica otimização.
+      // Para `documento`, `transformPorTipo` devolve `undefined`. O wrapper
+      // propaga isso ao `obterUrlAssinada`, que por sua vez **omite** o 3º
+      // argumento da chamada ao Supabase (não há `{ transform: undefined }`).
       expect(createSignedUrl).toHaveBeenCalledWith(
         "user/entrada/documento/x.jpg",
-        3600,
-        { transform: undefined }
+        2592000
       );
+      expect(createSignedUrl.mock.calls[0]).toHaveLength(2);
     });
 
     it("não chama createSignedUrl quando a URL já é completa (http)", async () => {
@@ -186,18 +187,20 @@ describe("SupabaseFotoRepository — application of image transformations", () =
       expect(createSignedUrl).toHaveBeenCalledTimes(3);
       expect(createSignedUrl).toHaveBeenCalledWith(
         "user/entrada/moto/x.jpg",
-        3600,
+        2592000,
         { transform: transformPorTipo("moto") }
       );
       expect(createSignedUrl).toHaveBeenCalledWith(
         "user/entrada/status/x.jpg",
-        3600,
+        2592000,
         { transform: transformPorTipo("status") }
       );
+      // Para `documento`, o 3º argumento é omitido (transformPorTipo
+      // devolve `undefined` e o wrapper propaga isso ao obterUrlAssinada,
+      // que suprime o objeto de opções inteiro).
       expect(createSignedUrl).toHaveBeenCalledWith(
         "user/entrada/documento/x.pdf",
-        3600,
-        { transform: transformPorTipo("documento") }
+        2592000
       );
     });
 
@@ -230,7 +233,7 @@ describe("SupabaseFotoRepository — application of image transformations", () =
       expect(createSignedUrl).toHaveBeenCalledTimes(1);
       expect(createSignedUrl).toHaveBeenCalledWith(
         "user/entrada/moto/x.jpg",
-        3600,
+        2592000,
         { transform: transformPorTipo("moto") }
       );
     });
@@ -271,12 +274,12 @@ describe("SupabaseFotoRepository — application of image transformations", () =
       expect(createSignedUrl).toHaveBeenCalledTimes(2);
       expect(createSignedUrl).toHaveBeenCalledWith(
         "user/entrada/status/a.jpg",
-        3600,
+        2592000,
         { transform: transformPorTipo("status") }
       );
       expect(createSignedUrl).toHaveBeenCalledWith(
         "user/entrada/status/b.jpg",
-        3600,
+        2592000,
         { transform: transformPorTipo("status") }
       );
     });

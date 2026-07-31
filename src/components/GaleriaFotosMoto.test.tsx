@@ -56,7 +56,7 @@ describe("GaleriaFotosMoto", () => {
 
     expect(createSignedUrl).toHaveBeenCalledWith(
       "user/entrada/moto/foto.jpg",
-      3600,
+      2592000,
       {
         transform: {
           width: 400,

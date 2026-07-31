@@ -3,8 +3,10 @@ import {
   EspacoBucketInfo,
   ArquivoStorage,
   ImageTransformOptions,
+  TipoFoto,
 } from "@/domain/interfaces/StorageApi";
 import { supabase } from "@/infrastructure/supabase/client";
+import { transformPorTipo } from "@/infrastructure/storage/imageTransforms";
 
 /**
  * Implementação do serviço de storage usando Supabase Storage
@@ -15,6 +17,9 @@ export class SupabaseStorageApi implements StorageApi {
 
   /** Cache de 30 dias no edge do Supabase (em segundos). */
   private static readonly FOTO_CACHE_CONTROL_SECONDS = "2592000";
+
+  /** Expiração padrão das signed URLs: 30 dias (em segundos). */
+  private static readonly FOTO_SIGNED_URL_EXPIRES_IN = 2592000;
 
   /**
    * Faz upload de uma foto para o bucket de fotos
@@ -122,6 +127,28 @@ export class SupabaseStorageApi implements StorageApi {
     }
 
     return data.signedUrl;
+  }
+
+  /**
+   * Wrapper único para gerar signed URL com transformação aplicada
+   * automaticamente por tipo. Combina `transformPorTipo(tipo)` +
+   * `expiresIn` de 30 dias (casando com `cacheControl: "2592000"` do
+   * upload) para maximizar hit de cache no browser.
+   *
+   * Este método existe para eliminar a duplicação das 6 chamadas a
+   * `createSignedUrl` espalhadas pelos componentes e repositórios —
+   * qualquer mudança de política (ex.: expiração, transform por tipo)
+   * passa a ser feita num único lugar.
+   */
+  async criarSignedUrlComTransform(
+    path: string,
+    tipo: TipoFoto
+  ): Promise<string> {
+    return this.obterUrlAssinada(
+      path,
+      SupabaseStorageApi.FOTO_SIGNED_URL_EXPIRES_IN,
+      transformPorTipo(tipo)
+    );
   }
 
   /**

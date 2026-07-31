@@ -153,7 +153,7 @@ describe("SupabaseOrcamentoRepository — application of image transformations",
       expect(createSignedUrl).toHaveBeenCalledTimes(1);
       expect(createSignedUrl).toHaveBeenCalledWith(
         "user/entrada/moto/foto.jpg",
-        3600,
+        2592000,
         { transform: transformPorTipo("moto") }
       );
     });
@@ -198,12 +198,12 @@ describe("SupabaseOrcamentoRepository — application of image transformations",
       expect(createSignedUrl).toHaveBeenCalledTimes(2);
       expect(createSignedUrl).toHaveBeenCalledWith(
         "user/entrada/moto/a.jpg",
-        3600,
+        2592000,
         { transform: transformPorTipo("moto") }
       );
       expect(createSignedUrl).toHaveBeenCalledWith(
         "user/entrada/moto/b.jpg",
-        3600,
+        2592000,
         { transform: transformPorTipo("moto") }
       );
     });

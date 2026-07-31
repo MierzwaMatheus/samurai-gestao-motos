@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { FotoStatus } from "@shared/types";
-import { supabase } from "@/infrastructure/supabase/client";
-import { transformPorTipo } from "@/infrastructure/storage/imageTransforms";
+import { SupabaseStorageApi } from "@/infrastructure/storage/SupabaseStorageApi";
 
 interface GaleriaFotosProps {
   fotos: FotoStatus[];
 }
+
+const storageApi = new SupabaseStorageApi();
 
 export default function GaleriaFotos({ fotos }: GaleriaFotosProps) {
   const [urls, setUrls] = useState<Record<number, string>>({});
@@ -16,13 +17,14 @@ export default function GaleriaFotos({ fotos }: GaleriaFotosProps) {
       await Promise.all(
         fotos.map(async (foto, index) => {
           if (!foto.url.startsWith("http")) {
-            const { data } = await supabase.storage
-              .from("fotos")
-              .createSignedUrl(foto.url, 3600, {
-                transform: transformPorTipo("status"),
-              });
-            if (data) {
-              urlsMap[index] = data.signedUrl;
+            try {
+              const signedUrl = await storageApi.criarSignedUrlComTransform(
+                foto.url,
+                "status"
+              );
+              urlsMap[index] = signedUrl;
+            } catch (error) {
+              console.error(`Erro ao carregar URL da foto ${index}:`, error);
             }
           } else {
             urlsMap[index] = foto.url;

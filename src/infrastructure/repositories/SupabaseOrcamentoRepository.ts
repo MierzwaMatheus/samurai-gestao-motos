@@ -2,13 +2,15 @@ import { OrcamentoRepository } from "@/domain/interfaces/OrcamentoRepository";
 import { TipoServicoRepository } from "@/domain/interfaces/TipoServicoRepository";
 import { Orcamento, OrcamentoCompleto } from "@shared/types";
 import { supabase } from "@/infrastructure/supabase/client";
-import { transformPorTipo } from "@/infrastructure/storage/imageTransforms";
+import { SupabaseStorageApi } from "@/infrastructure/storage/SupabaseStorageApi";
 
 /**
  * Implementação do repositório de orçamentos usando Supabase
  * Esta é uma implementação de infraestrutura que conhece detalhes do Supabase
  */
 export class SupabaseOrcamentoRepository implements OrcamentoRepository {
+  private storageApi = new SupabaseStorageApi();
+
   constructor(private tipoServicoRepo?: TipoServicoRepository) {
     // Permite instanciação sem parâmetros
   }
@@ -180,15 +182,11 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
         Object.entries(fotosMap).map(async ([entradaId, url]) => {
           // Se não é URL completa, gera URL assinada
           if (!url.startsWith("http")) {
-            const { data: signedUrlData } = await supabase.storage
-              .from("fotos")
-              .createSignedUrl(url, 3600, {
-                transform: transformPorTipo("moto"),
-              }); // 1 hora, com transformação para foto de moto
-
-            if (signedUrlData) {
-              return [entradaId, signedUrlData.signedUrl];
-            }
+            const signedUrl = await this.storageApi.criarSignedUrlComTransform(
+              url,
+              "moto"
+            );
+            return [entradaId, signedUrl];
           }
           return [entradaId, url];
         })
