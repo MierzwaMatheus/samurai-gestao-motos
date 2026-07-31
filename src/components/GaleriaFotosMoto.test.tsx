@@ -96,4 +96,21 @@ describe("GaleriaFotosMoto", () => {
     const options = call[2] as { transform: Record<string, unknown> };
     expect(options.transform).not.toHaveProperty("format");
   });
+
+  it("não chama createSignedUrl quando a URL já é completa (começa com http)", async () => {
+    const { createSignedUrl } = buildBucket();
+
+    render(
+      <GaleriaFotosMoto
+        fotos={["https://already-signed.example/foto.jpg"]}
+      />
+    );
+
+    // Aguarda o useEffect rodar. `createSignedUrl` não deve ser invocado
+    // para URLs que já começam com "http" — o `startsWith("http")` é a
+    // salvaguarda que evita tentar assinar uma URL já assinada.
+    await waitFor(() => {
+      expect(createSignedUrl).not.toHaveBeenCalled();
+    });
+  });
 });

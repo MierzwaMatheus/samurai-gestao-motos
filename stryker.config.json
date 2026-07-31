@@ -6,12 +6,16 @@
   "coverageAnalysis": "all",
   "plugins": ["@stryker-mutator/vitest-runner"],
   "mutate": [
-    "src/infrastructure/storage/**/*.ts",
+    "src/infrastructure/storage/SupabaseStorageApi.ts",
+    "src/infrastructure/storage/imageTransforms.ts",
     "src/infrastructure/repositories/SupabaseFotoRepository.ts",
     "src/infrastructure/repositories/SupabaseOrcamentoRepository.ts",
     "src/components/GaleriaFotosMoto.tsx",
     "src/components/GaleriaFotos.tsx",
-    "src/domain/interfaces/StorageApi.ts"
+    "src/domain/interfaces/StorageApi.ts",
+    "!src/**/*.test.{ts,tsx}",
+    "!src/**/*.spec.{ts,tsx}",
+    "!src/**/*.d.ts"
   ],
   "mutator": {
     "excludedMutations": ["StringLiteral"]
