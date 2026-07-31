@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 import { SupabaseFotoRepository } from "@/infrastructure/repositories/SupabaseFotoRepository";
-import { transformPorTipo } from "@/infrastructure/storage/imageTransforms";
 
 // Mock do cliente Supabase: precisamos controlar o retorno de
 // `from("fotos")` (queries no DB) e de `storage.from("fotos")` (signed URLs).
@@ -55,9 +54,9 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe("SupabaseFotoRepository — application of image transformations", () => {
+describe("SupabaseFotoRepository — geração de signed URLs", () => {
   describe("buscarPorId", () => {
-    it("chama createSignedUrl com transformPorTipo('moto') quando a foto é tipo 'moto'", async () => {
+    it("chama createSignedUrl com (path, 3600) quando a foto é tipo 'moto'", async () => {
       const { createSignedUrl } = buildBucket();
       const row = buildFotoRow({ tipo: "moto", url: "user/entrada/moto/x.jpg" });
 
@@ -74,12 +73,11 @@ describe("SupabaseFotoRepository — application of image transformations", () =
       expect(createSignedUrl).toHaveBeenCalledTimes(1);
       expect(createSignedUrl).toHaveBeenCalledWith(
         "user/entrada/moto/x.jpg",
-        2592000,
-        { transform: transformPorTipo("moto") }
+        3600
       );
     });
 
-    it("chama createSignedUrl com transformPorTipo('status') quando a foto é tipo 'status'", async () => {
+    it("chama createSignedUrl com (path, 3600) quando a foto é tipo 'status'", async () => {
       const { createSignedUrl } = buildBucket();
       const row = buildFotoRow({
         tipo: "status",
@@ -98,12 +96,11 @@ describe("SupabaseFotoRepository — application of image transformations", () =
 
       expect(createSignedUrl).toHaveBeenCalledWith(
         "user/entrada/status/x.jpg",
-        2592000,
-        { transform: transformPorTipo("status") }
+        3600
       );
     });
 
-    it("chama createSignedUrl com transform undefined quando a foto é tipo 'documento'", async () => {
+    it("chama createSignedUrl com (path, 3600) quando a foto é tipo 'documento'", async () => {
       const { createSignedUrl } = buildBucket();
       const row = buildFotoRow({
         tipo: "documento",
@@ -120,12 +117,11 @@ describe("SupabaseFotoRepository — application of image transformations", () =
 
       await new SupabaseFotoRepository().buscarPorId("foto-1");
 
-      // Para `documento`, `transformPorTipo` devolve `undefined`. O wrapper
-      // propaga isso ao `obterUrlAssinada`, que por sua vez **omite** o 3º
-      // argumento da chamada ao Supabase (não há `{ transform: undefined }`).
+      // Após a reversão: independentemente do tipo, a chamada ao Supabase
+      // é sempre `(path, 3600)` — sem 3º argumento de opções.
       expect(createSignedUrl).toHaveBeenCalledWith(
         "user/entrada/documento/x.jpg",
-        2592000
+        3600
       );
       expect(createSignedUrl.mock.calls[0]).toHaveLength(2);
     });
@@ -152,7 +148,7 @@ describe("SupabaseFotoRepository — application of image transformations", () =
   });
 
   describe("buscarPorEntradaId", () => {
-    it("chama createSignedUrl com transformPorTipo por foto, respeitando o tipo de cada registro", async () => {
+    it("chama createSignedUrl com (path, 3600) para cada foto, independente do tipo", async () => {
       const { createSignedUrl } = buildBucket();
       const rows = [
         buildFotoRow({
@@ -187,20 +183,15 @@ describe("SupabaseFotoRepository — application of image transformations", () =
       expect(createSignedUrl).toHaveBeenCalledTimes(3);
       expect(createSignedUrl).toHaveBeenCalledWith(
         "user/entrada/moto/x.jpg",
-        2592000,
-        { transform: transformPorTipo("moto") }
+        3600
       );
       expect(createSignedUrl).toHaveBeenCalledWith(
         "user/entrada/status/x.jpg",
-        2592000,
-        { transform: transformPorTipo("status") }
+        3600
       );
-      // Para `documento`, o 3º argumento é omitido (transformPorTipo
-      // devolve `undefined` e o wrapper propaga isso ao obterUrlAssinada,
-      // que suprime o objeto de opções inteiro).
       expect(createSignedUrl).toHaveBeenCalledWith(
         "user/entrada/documento/x.pdf",
-        2592000
+        3600
       );
     });
 
@@ -233,14 +224,13 @@ describe("SupabaseFotoRepository — application of image transformations", () =
       expect(createSignedUrl).toHaveBeenCalledTimes(1);
       expect(createSignedUrl).toHaveBeenCalledWith(
         "user/entrada/moto/x.jpg",
-        2592000,
-        { transform: transformPorTipo("moto") }
+        3600
       );
     });
   });
 
   describe("buscarPorEntradaIdETipo", () => {
-    it("chama createSignedUrl com transformPorTipo('status') para cada foto retornada", async () => {
+    it("chama createSignedUrl com (path, 3600) para cada foto retornada", async () => {
       const { createSignedUrl } = buildBucket();
       const rows = [
         buildFotoRow({
@@ -274,13 +264,11 @@ describe("SupabaseFotoRepository — application of image transformations", () =
       expect(createSignedUrl).toHaveBeenCalledTimes(2);
       expect(createSignedUrl).toHaveBeenCalledWith(
         "user/entrada/status/a.jpg",
-        2592000,
-        { transform: transformPorTipo("status") }
+        3600
       );
       expect(createSignedUrl).toHaveBeenCalledWith(
         "user/entrada/status/b.jpg",
-        2592000,
-        { transform: transformPorTipo("status") }
+        3600
       );
     });
   });

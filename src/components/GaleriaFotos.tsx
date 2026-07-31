@@ -18,10 +18,7 @@ export default function GaleriaFotos({ fotos }: GaleriaFotosProps) {
         fotos.map(async (foto, index) => {
           if (!foto.url.startsWith("http")) {
             try {
-              const signedUrl = await storageApi.criarSignedUrlComTransform(
-                foto.url,
-                "status"
-              );
+              const signedUrl = await storageApi.obterUrlAssinada(foto.url);
               urlsMap[index] = signedUrl;
             } catch (error) {
               console.error(`Erro ao carregar URL da foto ${index}:`, error);

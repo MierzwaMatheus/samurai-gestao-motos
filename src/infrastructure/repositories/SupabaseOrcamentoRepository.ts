@@ -182,10 +182,7 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
         Object.entries(fotosMap).map(async ([entradaId, url]) => {
           // Se não é URL completa, gera URL assinada
           if (!url.startsWith("http")) {
-            const signedUrl = await this.storageApi.criarSignedUrlComTransform(
-              url,
-              "moto"
-            );
+            const signedUrl = await this.storageApi.obterUrlAssinada(url);
             return [entradaId, signedUrl];
           }
           return [entradaId, url];

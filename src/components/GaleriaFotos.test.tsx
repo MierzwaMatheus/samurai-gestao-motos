@@ -50,7 +50,7 @@ const buildFoto = (url: string, observacao?: string): FotoStatus => ({
 });
 
 describe("GaleriaFotos", () => {
-  it("chama createSignedUrl com transformPorTipo('status') no bucket 'fotos'", async () => {
+  it("chama createSignedUrl com (path, 3600) — sem opções de transform", async () => {
     const { createSignedUrl } = buildBucket();
 
     const fotos: FotoStatus[] = [buildFoto("user/entrada/status/status.jpg")];
@@ -62,45 +62,9 @@ describe("GaleriaFotos", () => {
 
     expect(createSignedUrl).toHaveBeenCalledWith(
       "user/entrada/status/status.jpg",
-      2592000,
-      {
-        transform: {
-          width: 400,
-          quality: 70,
-        },
-      }
+      3600
     );
-  });
-
-  it("não inclui resize nem height no transform (card aceita a forma original)", async () => {
-    const { createSignedUrl } = buildBucket();
-
-    const fotos: FotoStatus[] = [buildFoto("user/entrada/status/status.jpg")];
-    render(<GaleriaFotos fotos={fotos} />);
-
-    await waitFor(() => {
-      expect(createSignedUrl).toHaveBeenCalledTimes(1);
-    });
-
-    const call = createSignedUrl.mock.calls[0];
-    const options = call[2] as { transform: Record<string, unknown> };
-    expect(options.transform).not.toHaveProperty("resize");
-    expect(options.transform).not.toHaveProperty("height");
-  });
-
-  it("não inclui o campo format no transform (WebP é servido automaticamente)", async () => {
-    const { createSignedUrl } = buildBucket();
-
-    const fotos: FotoStatus[] = [buildFoto("user/entrada/status/status.jpg")];
-    render(<GaleriaFotos fotos={fotos} />);
-
-    await waitFor(() => {
-      expect(createSignedUrl).toHaveBeenCalledTimes(1);
-    });
-
-    const call = createSignedUrl.mock.calls[0];
-    const options = call[2] as { transform: Record<string, unknown> };
-    expect(options.transform).not.toHaveProperty("format");
+    expect(createSignedUrl.mock.calls[0]).toHaveLength(2);
   });
 
   it("não chama createSignedUrl quando a URL já é completa (começa com http)", async () => {

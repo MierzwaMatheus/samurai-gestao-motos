@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 import { SupabaseOrcamentoRepository } from "@/infrastructure/repositories/SupabaseOrcamentoRepository";
-import { transformPorTipo } from "@/infrastructure/storage/imageTransforms";
 
 // Mock do cliente Supabase: precisamos encadear várias chamadas `.from(...)`
 // (orcamentos, entradas, clientes, motos, fotos) e `.rpc(...)` para a
@@ -134,9 +133,9 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe("SupabaseOrcamentoRepository — application of image transformations", () => {
+describe("SupabaseOrcamentoRepository — geração de signed URLs", () => {
   describe("buscarCompletosPorStatus", () => {
-    it("chama createSignedUrl com transformPorTipo('moto') na listagem (query de fotos filtra tipo=moto)", async () => {
+    it("chama createSignedUrl com (path, 3600) na listagem (query de fotos filtra tipo=moto)", async () => {
       const { createSignedUrl } = buildBucket();
 
       setupBuscarCompletosPorStatus([
@@ -153,8 +152,7 @@ describe("SupabaseOrcamentoRepository — application of image transformations",
       expect(createSignedUrl).toHaveBeenCalledTimes(1);
       expect(createSignedUrl).toHaveBeenCalledWith(
         "user/entrada/moto/foto.jpg",
-        2592000,
-        { transform: transformPorTipo("moto") }
+        3600
       );
     });
 
@@ -175,7 +173,7 @@ describe("SupabaseOrcamentoRepository — application of image transformations",
       expect(createSignedUrl).not.toHaveBeenCalled();
     });
 
-    it("chama createSignedUrl uma vez por entrada_id distinto, sempre com transformPorTipo('moto')", async () => {
+    it("chama createSignedUrl uma vez por entrada_id distinto, sempre com (path, 3600)", async () => {
       const { createSignedUrl } = buildBucket();
 
       // Deduplicação por entrada_id é o comportamento real da query —
@@ -198,13 +196,11 @@ describe("SupabaseOrcamentoRepository — application of image transformations",
       expect(createSignedUrl).toHaveBeenCalledTimes(2);
       expect(createSignedUrl).toHaveBeenCalledWith(
         "user/entrada/moto/a.jpg",
-        2592000,
-        { transform: transformPorTipo("moto") }
+        3600
       );
       expect(createSignedUrl).toHaveBeenCalledWith(
         "user/entrada/moto/b.jpg",
-        2592000,
-        { transform: transformPorTipo("moto") }
+        3600
       );
     });
   });

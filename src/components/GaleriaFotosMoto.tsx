@@ -34,10 +34,7 @@ export default function GaleriaFotosMoto({ fotos }: GaleriaFotosMotoProps) {
           // Se não é URL completa (começa com http), precisa gerar URL assinada
           if (!url.startsWith("http")) {
             try {
-              const signedUrl = await storageApi.criarSignedUrlComTransform(
-                url,
-                "moto"
-              );
+              const signedUrl = await storageApi.obterUrlAssinada(url);
               urlsMap[index] = signedUrl;
             } catch (error) {
               console.error(`Erro ao carregar URL da foto ${index}:`, error);

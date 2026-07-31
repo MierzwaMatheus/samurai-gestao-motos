@@ -2,11 +2,8 @@ import {
   StorageApi,
   EspacoBucketInfo,
   ArquivoStorage,
-  ImageTransformOptions,
-  TipoFoto,
 } from "@/domain/interfaces/StorageApi";
 import { supabase } from "@/infrastructure/supabase/client";
-import { transformPorTipo } from "@/infrastructure/storage/imageTransforms";
 
 /**
  * Implementação do serviço de storage usando Supabase Storage
@@ -17,9 +14,6 @@ export class SupabaseStorageApi implements StorageApi {
 
   /** Cache de 30 dias no edge do Supabase (em segundos). */
   private static readonly FOTO_CACHE_CONTROL_SECONDS = "2592000";
-
-  /** Expiração padrão das signed URLs: 30 dias (em segundos). */
-  private static readonly FOTO_SIGNED_URL_EXPIRES_IN = 2592000;
 
   /**
    * Faz upload de uma foto para o bucket de fotos
@@ -106,49 +100,26 @@ export class SupabaseStorageApi implements StorageApi {
   /**
    * Obtém URL assinada (para bucket privado)
    *
-   * Quando `transform` é informado, o Supabase serve a imagem já
-   * redimensionada/recomprimida, o que reduz drasticamente o egress. Sem
-   * `transform`, o comportamento original é preservado: nenhum objeto de
-   * opções é enviado.
+   * Gera uma signed URL com `expiresIn` em segundos (default 1h).
+   * Parâmetros de Image Transformations do Supabase **não** são
+   * aplicados: essa feature é Pro-only e no Free Plan o servidor
+   * ignora o argumento `transform`, então a economia esperada de
+   * egresso não se materializa. A redução real de egresso é feita
+   * antes do upload (compressão no browser — ver `uploadFoto`).
    */
   async obterUrlAssinada(
     path: string,
-    expiresIn: number = 3600,
-    transform?: ImageTransformOptions
+    expiresIn: number = 3600
   ): Promise<string> {
-    const bucket = supabase.storage.from(this.bucketName);
-
-    const { data, error } = transform
-      ? await bucket.createSignedUrl(path, expiresIn, { transform })
-      : await bucket.createSignedUrl(path, expiresIn);
+    const { data, error } = await supabase.storage
+      .from(this.bucketName)
+      .createSignedUrl(path, expiresIn);
 
     if (error) {
       throw new Error(`Erro ao gerar URL assinada: ${error.message}`);
     }
 
     return data.signedUrl;
-  }
-
-  /**
-   * Wrapper único para gerar signed URL com transformação aplicada
-   * automaticamente por tipo. Combina `transformPorTipo(tipo)` +
-   * `expiresIn` de 30 dias (casando com `cacheControl: "2592000"` do
-   * upload) para maximizar hit de cache no browser.
-   *
-   * Este método existe para eliminar a duplicação das 6 chamadas a
-   * `createSignedUrl` espalhadas pelos componentes e repositórios —
-   * qualquer mudança de política (ex.: expiração, transform por tipo)
-   * passa a ser feita num único lugar.
-   */
-  async criarSignedUrlComTransform(
-    path: string,
-    tipo: TipoFoto
-  ): Promise<string> {
-    return this.obterUrlAssinada(
-      path,
-      SupabaseStorageApi.FOTO_SIGNED_URL_EXPIRES_IN,
-      transformPorTipo(tipo)
-    );
   }
 
   /**

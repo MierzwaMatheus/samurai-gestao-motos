@@ -47,10 +47,7 @@ export class SupabaseFotoRepository implements FotoRepository {
 
     // Se a URL parece ser um filePath (não começa com http), gera URL assinada
     if (!foto.url.startsWith("http")) {
-      foto.url = await this.storageApi.criarSignedUrlComTransform(
-        foto.url,
-        foto.tipo
-      );
+      foto.url = await this.storageApi.obterUrlAssinada(foto.url);
     }
 
     return foto;
@@ -73,10 +70,7 @@ export class SupabaseFotoRepository implements FotoRepository {
         const foto = this.mapToFoto(item);
         // Se a URL parece ser um filePath (não começa com http), gera URL assinada
         if (!foto.url.startsWith("http")) {
-          foto.url = await this.storageApi.criarSignedUrlComTransform(
-            foto.url,
-            foto.tipo
-          );
+          foto.url = await this.storageApi.obterUrlAssinada(foto.url);
         }
         return foto;
       })
@@ -103,10 +97,7 @@ export class SupabaseFotoRepository implements FotoRepository {
         const foto = this.mapToFoto(item);
         // Se a URL parece ser um filePath (não começa com http), gera URL assinada
         if (!foto.url.startsWith("http")) {
-          foto.url = await this.storageApi.criarSignedUrlComTransform(
-            foto.url,
-            foto.tipo
-          );
+          foto.url = await this.storageApi.obterUrlAssinada(foto.url);
         }
         return foto;
       })

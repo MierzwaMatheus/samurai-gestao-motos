@@ -121,54 +121,14 @@ describe("SupabaseStorageApi.obterUrlAssinada", () => {
     );
   });
 
-  it("não envia o 3º argumento de opções quando transform não é informado", async () => {
+  it("não envia o 3º argumento de opções (Image Transformations é Pro-only)", async () => {
     const { api, createSignedUrl } = buildBucket();
 
     await api.obterUrlAssinada("user/entrada/moto/foto.jpg");
 
-    // Comportamento atual preservado: sem transform, a chamada tem
-    // exatamente 2 argumentos — nem mesmo `{ transform: undefined }`.
+    // Após a reversão: nenhuma opção é enviada. O 3º arg não existe
+    // mesmo na assinatura da interface.
     expect(createSignedUrl.mock.calls[0]).toHaveLength(2);
-  });
-
-  it("repassa o transform dentro de options quando informado", async () => {
-    const { api, createSignedUrl } = buildBucket();
-
-    // `format` é omitido de propósito: é assim que o Supabase serve WebP
-    // automaticamente. Passar `format: "webp"` não existe na API.
-    await api.obterUrlAssinada("user/entrada/moto/foto.jpg", 3600, {
-      width: 400,
-      height: 400,
-      resize: "cover",
-      quality: 70,
-    });
-
-    expect(createSignedUrl).toHaveBeenCalledWith(
-      "user/entrada/moto/foto.jpg",
-      3600,
-      {
-        transform: {
-          width: 400,
-          height: 400,
-          resize: "cover",
-          quality: 70,
-        },
-      }
-    );
-  });
-
-  it('repassa format "origin" quando se quer desligar a otimização', async () => {
-    const { api, createSignedUrl } = buildBucket();
-
-    await api.obterUrlAssinada("user/entrada/documento/doc.jpg", 3600, {
-      format: "origin",
-    });
-
-    expect(createSignedUrl).toHaveBeenCalledWith(
-      "user/entrada/documento/doc.jpg",
-      3600,
-      { transform: { format: "origin" } }
-    );
   });
 
   it("lança erro quando o Supabase falha ao gerar a URL", async () => {
@@ -178,92 +138,6 @@ describe("SupabaseStorageApi.obterUrlAssinada", () => {
 
     await expect(
       api.obterUrlAssinada("user/entrada/moto/inexistente.jpg")
-    ).rejects.toThrow("Erro ao gerar URL assinada: objeto não existe");
-  });
-});
-
-describe("SupabaseStorageApi.criarSignedUrlComTransform", () => {
-  it("aplica transformPorTipo('moto') e expiresIn de 30 dias (2592000s)", async () => {
-    const { api, createSignedUrl } = buildBucket();
-
-    await api.criarSignedUrlComTransform(
-      "user/entrada/moto/foto.jpg",
-      "moto"
-    );
-
-    expect(createSignedUrl).toHaveBeenCalledWith(
-      "user/entrada/moto/foto.jpg",
-      2592000,
-      {
-        transform: {
-          width: 400,
-          height: 400,
-          resize: "cover",
-          quality: 70,
-        },
-      }
-    );
-  });
-
-  it("aplica transformPorTipo('status') e expiresIn de 30 dias", async () => {
-    const { api, createSignedUrl } = buildBucket();
-
-    await api.criarSignedUrlComTransform(
-      "user/entrada/status/status.jpg",
-      "status"
-    );
-
-    expect(createSignedUrl).toHaveBeenCalledWith(
-      "user/entrada/status/status.jpg",
-      2592000,
-      {
-        transform: {
-          width: 400,
-          quality: 70,
-        },
-      }
-    );
-  });
-
-  it("omite o 3º argumento de opções para 'documento' (transform undefined)", async () => {
-    const { api, createSignedUrl } = buildBucket();
-
-    await api.criarSignedUrlComTransform(
-      "user/entrada/documento/doc.pdf",
-      "documento"
-    );
-
-    // `transformPorTipo('documento')` devolve `undefined`, e o wrapper
-    // propaga isso ao `obterUrlAssinada`, que por sua vez omite o 3º
-    // argumento da chamada ao Supabase — sem `transform: undefined`.
-    expect(createSignedUrl).toHaveBeenCalledWith(
-      "user/entrada/documento/doc.pdf",
-      2592000
-    );
-    expect(createSignedUrl.mock.calls[0]).toHaveLength(2);
-  });
-
-  it("retorna a signedUrl devolvida pelo Supabase", async () => {
-    const { api } = buildBucket();
-
-    const url = await api.criarSignedUrlComTransform(
-      "user/entrada/moto/foto.jpg",
-      "moto"
-    );
-
-    expect(url).toBe("https://signed.example/foto.jpg");
-  });
-
-  it("propaga erros do Supabase ao gerar a URL", async () => {
-    const { api } = buildBucket({
-      signedUrlResult: {
-        data: null,
-        error: { message: "objeto não existe" },
-      },
-    });
-
-    await expect(
-      api.criarSignedUrlComTransform("user/entrada/moto/x.jpg", "moto")
     ).rejects.toThrow("Erro ao gerar URL assinada: objeto não existe");
   });
 });

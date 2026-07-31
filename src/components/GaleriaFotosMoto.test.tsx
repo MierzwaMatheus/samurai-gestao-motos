@@ -45,7 +45,7 @@ beforeEach(() => {
 });
 
 describe("GaleriaFotosMoto", () => {
-  it("chama createSignedUrl com transformPorTipo('moto') no bucket 'fotos'", async () => {
+  it("chama createSignedUrl com (path, 3600) — sem opções de transform", async () => {
     const { createSignedUrl } = buildBucket();
 
     render(<GaleriaFotosMoto fotos={["user/entrada/moto/foto.jpg"]} />);
@@ -56,16 +56,9 @@ describe("GaleriaFotosMoto", () => {
 
     expect(createSignedUrl).toHaveBeenCalledWith(
       "user/entrada/moto/foto.jpg",
-      2592000,
-      {
-        transform: {
-          width: 400,
-          height: 400,
-          resize: "cover",
-          quality: 70,
-        },
-      }
+      3600
     );
+    expect(createSignedUrl.mock.calls[0]).toHaveLength(2);
   });
 
   it("aponta para o bucket 'fotos' do Supabase", async () => {
@@ -78,23 +71,6 @@ describe("GaleriaFotosMoto", () => {
     });
 
     expect(mockedFrom).toHaveBeenCalledWith("fotos");
-  });
-
-  it("não inclui o campo format no transform (WebP é servido automaticamente)", async () => {
-    const { createSignedUrl } = buildBucket();
-
-    render(<GaleriaFotosMoto fotos={["user/entrada/moto/foto.jpg"]} />);
-
-    await waitFor(() => {
-      expect(createSignedUrl).toHaveBeenCalledTimes(1);
-    });
-
-    // Captura explícita: garantir que `format: "webp"` (não existe na API)
-    // nem `format: "origin"` (desligaria a otimização) jamais sejam
-    // acrescentados.
-    const call = createSignedUrl.mock.calls[0];
-    const options = call[2] as { transform: Record<string, unknown> };
-    expect(options.transform).not.toHaveProperty("format");
   });
 
   it("não chama createSignedUrl quando a URL já é completa (começa com http)", async () => {
