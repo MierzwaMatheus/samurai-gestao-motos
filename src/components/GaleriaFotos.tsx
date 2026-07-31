@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { FotoStatus } from "@shared/types";
 import { supabase } from "@/infrastructure/supabase/client";
+import { transformPorTipo } from "@/infrastructure/storage/imageTransforms";
 
 interface GaleriaFotosProps {
   fotos: FotoStatus[];
@@ -17,7 +18,9 @@ export default function GaleriaFotos({ fotos }: GaleriaFotosProps) {
           if (!foto.url.startsWith("http")) {
             const { data } = await supabase.storage
               .from("fotos")
-              .createSignedUrl(foto.url, 3600);
+              .createSignedUrl(foto.url, 3600, {
+                transform: transformPorTipo("status"),
+              });
             if (data) {
               urlsMap[index] = data.signedUrl;
             }

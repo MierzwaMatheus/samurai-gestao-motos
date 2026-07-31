@@ -1,0 +1,105 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, waitFor } from "@testing-library/react";
+
+import GaleriaFotos from "@/components/GaleriaFotos";
+import type { FotoStatus } from "@shared/types";
+
+// Mock do cliente Supabase: precisamos controlar o retorno de
+// `storage.from("fotos")` para observar os argumentos de `createSignedUrl`.
+vi.mock("@/infrastructure/supabase/client", () => {
+  const from = vi.fn();
+  return {
+    supabase: {
+      auth: { getUser: vi.fn() },
+      storage: { from },
+    },
+  };
+});
+
+import { supabase } from "@/infrastructure/supabase/client";
+
+const mockedFrom = vi.mocked(supabase.storage.from);
+
+/**
+ * Monta o duplo de teste do bucket. Retorna o spy de `createSignedUrl` para
+ * que cada teste observe exatamente os argumentos recebidos.
+ */
+const buildBucket = () => {
+  const createSignedUrl = vi.fn().mockResolvedValue({
+    data: { signedUrl: "https://signed.example/status.jpg" },
+    error: null,
+  });
+
+  mockedFrom.mockReturnValue({ createSignedUrl } as never);
+
+  return { createSignedUrl };
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+/**
+ * Constrói uma FotoStatus mínima para uso nos testes.
+ */
+const buildFoto = (url: string, observacao?: string): FotoStatus => ({
+  url,
+  data: new Date("2025-01-01T12:00:00Z"),
+  progresso: 50,
+  ...(observacao ? { observacao } : {}),
+});
+
+describe("GaleriaFotos", () => {
+  it("chama createSignedUrl com transformPorTipo('status') no bucket 'fotos'", async () => {
+    const { createSignedUrl } = buildBucket();
+
+    const fotos: FotoStatus[] = [buildFoto("user/entrada/status/status.jpg")];
+    render(<GaleriaFotos fotos={fotos} />);
+
+    await waitFor(() => {
+      expect(createSignedUrl).toHaveBeenCalledTimes(1);
+    });
+
+    expect(createSignedUrl).toHaveBeenCalledWith(
+      "user/entrada/status/status.jpg",
+      3600,
+      {
+        transform: {
+          width: 400,
+          quality: 70,
+        },
+      }
+    );
+  });
+
+  it("não inclui resize nem height no transform (card aceita a forma original)", async () => {
+    const { createSignedUrl } = buildBucket();
+
+    const fotos: FotoStatus[] = [buildFoto("user/entrada/status/status.jpg")];
+    render(<GaleriaFotos fotos={fotos} />);
+
+    await waitFor(() => {
+      expect(createSignedUrl).toHaveBeenCalledTimes(1);
+    });
+
+    const call = createSignedUrl.mock.calls[0];
+    const options = call[2] as { transform: Record<string, unknown> };
+    expect(options.transform).not.toHaveProperty("resize");
+    expect(options.transform).not.toHaveProperty("height");
+  });
+
+  it("não inclui o campo format no transform (WebP é servido automaticamente)", async () => {
+    const { createSignedUrl } = buildBucket();
+
+    const fotos: FotoStatus[] = [buildFoto("user/entrada/status/status.jpg")];
+    render(<GaleriaFotos fotos={fotos} />);
+
+    await waitFor(() => {
+      expect(createSignedUrl).toHaveBeenCalledTimes(1);
+    });
+
+    const call = createSignedUrl.mock.calls[0];
+    const options = call[2] as { transform: Record<string, unknown> };
+    expect(options.transform).not.toHaveProperty("format");
+  });
+});

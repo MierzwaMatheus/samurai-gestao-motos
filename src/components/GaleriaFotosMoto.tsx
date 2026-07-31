@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Image } from "lucide-react";
 import { supabase } from "@/infrastructure/supabase/client";
 import ModalVisualizacaoFoto from "@/components/ModalVisualizacaoFoto";
+import { transformPorTipo } from "@/infrastructure/storage/imageTransforms";
 
 interface GaleriaFotosMotoProps {
   fotos: string[];
@@ -34,7 +35,9 @@ export default function GaleriaFotosMoto({ fotos }: GaleriaFotosMotoProps) {
             try {
               const { data } = await supabase.storage
                 .from("fotos")
-                .createSignedUrl(url, 3600); // 1 hora de validade
+                .createSignedUrl(url, 3600, {
+                  transform: transformPorTipo("moto"),
+                }); // 1 hora de validade
               if (data) {
                 urlsMap[index] = data.signedUrl;
               }
