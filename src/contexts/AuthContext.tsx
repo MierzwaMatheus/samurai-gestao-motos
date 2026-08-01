@@ -55,12 +55,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    // `scope: 'local'` limpa apenas a sessão deste client (localStorage)
-    // sem chamar o endpoint `/auth/v1/logout` do servidor. Evita o 403
-    // que o `scope: 'global'` (default) dispara quando o refresh
-    // token já está expirado/revogado. O usuário fica efetivamente
-    // deslogado (próximo page load trata como não-autenticado).
-    await supabase.auth.signOut({ scope: "local" });
+    // Estratégia manual em vez de `supabase.auth.signOut()`:
+    //
+    // O `_signOut` do supabase-js v2.89.0 (node_modules/.../GoTrueClient.ts
+    // linhas 2148-2174) SEMPRE chama `admin.signOut(accessToken, scope)`
+    // no servidor se tem accessToken — o `scope` só define o que o
+    // servidor invalida, não se a chamada é feita. Quando o refresh
+    // token está expirado, o servidor devolve 403 que o supabase-js
+    // IGNORA internamente (linhas 2157-2164) mas a chamada de rede
+    // aparece no DevTools.
+    //
+    // Pra SUMIR com a requisição:
+    // 1. Remover manualmente as chaves de auth do localStorage
+    // 2. `window.location.href = '/login'` força reload — recria o
+    //    supabase client do zero (sem sessão em memória) e suprime
+    //    também o `autoRefreshToken` que tentaria refresh com token
+    //    expirado no background.
+    if (typeof window !== "undefined" && window.localStorage) {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && key.includes("auth-token")) {
+          localStorage.removeItem(key);
+        }
+      }
+    }
+    window.location.href = "/login";
   };
 
   return (
