@@ -4,6 +4,7 @@ import {
   ArquivoStorage,
 } from "@/domain/interfaces/StorageApi";
 import { supabase } from "@/infrastructure/supabase/client";
+import { obterSignedUrl as obterSignedUrlCacheada } from "@/infrastructure/storage/urlCache";
 import imageCompression from "browser-image-compression";
 
 /**
@@ -134,15 +135,7 @@ export class SupabaseStorageApi implements StorageApi {
     path: string,
     expiresIn: number = 3600
   ): Promise<string> {
-    const { data, error } = await supabase.storage
-      .from(this.bucketName)
-      .createSignedUrl(path, expiresIn);
-
-    if (error) {
-      throw new Error(`Erro ao gerar URL assinada: ${error.message}`);
-    }
-
-    return data.signedUrl;
+    return obterSignedUrlCacheada(path, expiresIn);
   }
 
   /**

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 import { SupabaseOrcamentoRepository } from "@/infrastructure/repositories/SupabaseOrcamentoRepository";
+import { _clearUrlCache } from "@/infrastructure/storage/urlCache";
 
 // Mock do cliente Supabase: precisamos encadear várias chamadas `.from(...)`
 // (orcamentos, entradas, clientes, motos, fotos) e `.rpc(...)` para a
@@ -131,6 +132,7 @@ const setupBuscarCompletosPorStatus = (
 
 beforeEach(() => {
   vi.clearAllMocks();
+  _clearUrlCache();
 });
 
 describe("SupabaseOrcamentoRepository — geração de signed URLs", () => {

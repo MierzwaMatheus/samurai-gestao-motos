@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 import { SupabaseFotoRepository } from "@/infrastructure/repositories/SupabaseFotoRepository";
+import { _clearUrlCache } from "@/infrastructure/storage/urlCache";
 
 // Mock do cliente Supabase: precisamos controlar o retorno de
 // `from("fotos")` (queries no DB) e de `storage.from("fotos")` (signed URLs).
@@ -52,6 +53,7 @@ const buildFotoRow = (overrides: Record<string, unknown> = {}) => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  _clearUrlCache();
 });
 
 describe("SupabaseFotoRepository — geração de signed URLs", () => {

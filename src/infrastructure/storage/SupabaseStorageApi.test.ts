@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 import { SupabaseStorageApi } from "@/infrastructure/storage/SupabaseStorageApi";
+import { _clearUrlCache } from "@/infrastructure/storage/urlCache";
 
 // Mock do cliente Supabase: precisamos controlar o retorno de
 // `auth.getUser` (para passar pela checagem de autenticação) e do
@@ -75,6 +76,7 @@ const buildBucket = (
 
 beforeEach(() => {
   vi.clearAllMocks();
+  _clearUrlCache();
 });
 
 /** Arquivo exatamente no limite (5 MB) — testa o boundary `>` vs `>=`. */
@@ -283,6 +285,20 @@ describe("SupabaseStorageApi.obterUrlAssinada", () => {
     // Após a reversão: nenhuma opção é enviada. O 3º arg não existe
     // mesmo na assinatura da interface.
     expect(createSignedUrl.mock.calls[0]).toHaveLength(2);
+  });
+
+  it("reutiliza a URL em cache para chamadas repetidas do mesmo path", async () => {
+    const { api, createSignedUrl } = buildBucket();
+
+    const primeiraUrl = await api.obterUrlAssinada(
+      "user/entrada/moto/foto.jpg"
+    );
+    const segundaUrl = await api.obterUrlAssinada(
+      "user/entrada/moto/foto.jpg"
+    );
+
+    expect(segundaUrl).toBe(primeiraUrl);
+    expect(createSignedUrl).toHaveBeenCalledTimes(1);
   });
 
   it("lança erro quando o Supabase falha ao gerar a URL", async () => {

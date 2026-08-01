@@ -22,6 +22,7 @@ vi.mock("@/infrastructure/supabase/client", () => {
 });
 
 import { supabase } from "@/infrastructure/supabase/client";
+import { _clearUrlCache } from "@/infrastructure/storage/urlCache";
 
 const mockedFrom = vi.mocked(supabase.storage.from);
 
@@ -42,6 +43,7 @@ const buildBucket = () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  _clearUrlCache();
 });
 
 describe("GaleriaFotosMoto", () => {
