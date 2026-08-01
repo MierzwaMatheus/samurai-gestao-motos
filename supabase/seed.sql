@@ -150,7 +150,13 @@ SELECT
   (NOW() - ((13 - (g % 14)) || ' months')::interval - ((g % 27) || ' days')::interval - '7 days'::interval),
   (NOW() - ((13 - (g % 14)) || ' months')::interval - ((g % 27) || ' days')::interval),
   (NOW() - ((13 - (g % 14)) || ' months')::interval - ((g % 27) - 2 || ' days')::interval),
-  CASE g % 3 WHEN 0 THEN 'entregue' WHEN 1 THEN 'retirado' ELSE 'pendente' END,
+  -- Variação entregue/retirado apenas — `pendente` foi removido porque
+  -- todas as entradas deste bloco têm `status = 'concluido'` (acima) e
+  -- a UI usa `status_entrega = 'pendente'` como filtro da aba "Em
+  -- Andamento" (issue #11 ciclo 9). Manter `pendente` aqui criava
+  -- ~40 entradas "concluídas" aparecendo em "Em Andamento" com
+  -- botões incoerentes (Reabrir / Gerar OS).
+  CASE g % 2 WHEN 0 THEN 'entregue' ELSE 'retirado' END,
   'Concluido via seed E2E #' || g,
   'https://example.com/os/' || g || '.pdf',
   '[]'::jsonb,
