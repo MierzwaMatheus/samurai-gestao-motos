@@ -75,19 +75,21 @@ export default function Oficina() {
 
   // Duas instâncias independentes de `useMotosOficina` — uma por aba.
   // Cada aba tem sua própria paginação, busca debounced e sentinel
-  // (issue #11 ciclo 9). O hook filtra por `tipo: "entrada"` no
-  // servidor; o split "pendente/alinhando" vs "concluido" continua
-  // client-side via `motos.filter` (a interface do hook não expõe o
-  // status do serviço ainda).
+  // (issue #11 ciclo 9). O split entre as abas é feito server-side via
+  // `statusEntrega`:
+  //   - Em Andamento  → status_entrega = 'pendente' (em processamento)
+  //   - Concluídos    → status_entrega IN ('entregue', 'retirado')
+  // A coluna `status` da entrada (sempre 'concluido' para entradas já
+  // processadas) NÃO serve para esse split — usar `statusEntrega`.
   const oficinaEmAndamento = useMotosOficina(entradaRepo, {
     pageSize: 10,
     tipo: "entrada",
-    status: ["pendente", "alinhando"],
+    statusEntrega: ["pendente"],
   });
   const oficinaConcluidos = useMotosOficina(entradaRepo, {
     pageSize: 10,
     tipo: "entrada",
-    status: ["concluido"],
+    statusEntrega: ["entregue", "retirado"],
   });
 
   // Helper que atualiza uma moto em ambas as instâncias (a moto pode
@@ -490,18 +492,20 @@ export default function Oficina() {
   const erroGlobal =
     oficinaEmAndamento.error || oficinaConcluidos.error;
 
-  // Separar motos por status. A partir do ciclo 9, a busca é server-side
-  // (via `oficinaX.setBusca`) — não há mais `filtrarMotos` client-side.
-  // O split por status (pendente/alinhando vs concluido) também é feito
-  // aqui em memória: cada `oficinaX.motos` é a fatia daquela aba
-  // retornada pelo backend.
+  // Separar motos por status_entrega. A partir do ciclo 9, a busca é
+  // server-side (via `oficinaX.setBusca`) — não há mais `filtrarMotos`
+  // client-side. O split entre as abas também é server-side via
+  // `statusEntrega`, mas mantemos um filtro em memória como salvaguarda
+  // (defesa em profundidade) caso a paginação traga um item fora do
+  // esperado por race condition.
   const motosEmAndamento = sortMotosEmAndamento(
-    oficinaEmAndamento.motos.filter(
-      moto => moto.status === "pendente" || moto.status === "alinhando"
-    )
+    oficinaEmAndamento.motos.filter(moto => moto.statusEntrega === "pendente")
   );
   const motosConcluidas = sortMotosConcluidas(
-    oficinaConcluidos.motos.filter(moto => moto.status === "concluido")
+    oficinaConcluidos.motos.filter(
+      moto =>
+        moto.statusEntrega === "entregue" || moto.statusEntrega === "retirado"
+    )
   );
 
   const renderMotoCard = (moto: MotoCompleta, posicao?: number) => (

@@ -248,6 +248,7 @@ function makeMoto(entradaId: string) {
     cliente: `Cliente ${entradaId}`,
     telefone: "11999999999",
     status: "pendente" as const,
+    statusEntrega: "pendente" as const,
     progresso: 0,
     dataConclusao: null,
     formaPagamento: null,
@@ -334,7 +335,7 @@ afterEach(() => {
 // Testes — ciclo 9
 // ============================================================================
 describe("Oficina — ciclo 9 (scroll infinito + busca + reset sub-aba)", () => {
-  it("consulta cada aba com seu status no servidor", () => {
+  it("consulta cada aba com seu statusEntrega no servidor", () => {
     mockUseMotosOficina();
 
     render(<Oficina />);
@@ -343,20 +344,23 @@ describe("Oficina — ciclo 9 (scroll infinito + busca + reset sub-aba)", () => 
       1,
       expect.anything(),
       expect.objectContaining({
-        status: ["pendente", "alinhando"],
+        statusEntrega: ["pendente"],
       })
     );
     expect(useMotosOficinaMock).toHaveBeenNthCalledWith(
       2,
       expect.anything(),
       expect.objectContaining({
-        status: ["concluido"],
+        statusEntrega: ["entregue", "retirado"],
       })
     );
   });
 
   it("observa o sentinel de Concluídos quando ele surge após a carga inicial", async () => {
-    const motoConcluida = { ...makeMoto("con-1"), status: "concluido" as const };
+    const motoConcluida = {
+      ...makeMoto("con-1"),
+      statusEntrega: "entregue" as const,
+    };
     const { concluidos } = mockUseMotosOficina(
       {},
       { motos: [], total: 3, hasMore: true }
@@ -448,11 +452,14 @@ describe("Oficina — ciclo 9 (scroll infinito + busca + reset sub-aba)", () => 
   it("(c) scroll dispara carregarMais em cada aba independentemente", async () => {
     // O sentinel só é renderizado quando há itens na lista. Providenciamos
     // 1 item em cada aba para que ambos os sentinels existam no DOM.
-    // A página filtra a aba "Concluídos" por `status === "concluido"`,
-    // então o moto do mock precisa ter esse status para passar pelo
-    // filtro client-side.
+    // A página filtra a aba "Concluídos" por `statusEntrega === "entregue"`
+    // (ou "retirado"), então o moto do mock precisa ter esse valor para
+    // passar pelo filtro client-side.
     const emMoto = makeMoto("em-1");
-    const conMoto = { ...makeMoto("con-1"), status: "concluido" as const };
+    const conMoto = {
+      ...makeMoto("con-1"),
+      statusEntrega: "entregue" as const,
+    };
 
     const { emAndamento, concluidos } = mockUseMotosOficina(
       {

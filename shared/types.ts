@@ -181,6 +181,12 @@ export interface MotoCompleta extends Moto {
   cliente: string;
   telefone?: string;
   status: "pendente" | "alinhando" | "concluido";
+  /**
+   * Espelha `entrada.status_entrega` para que a UI possa fazer o split
+   * entre Em Andamento / Concluídos sem precisar voltar ao banco.
+   * Valores: "pendente" | "entregue" | "retirado".
+   */
+  statusEntrega?: "pendente" | "entregue" | "retirado";
   progresso: number;
   dataConclusao?: Date | null;
   formaPagamento?: FormaPagamento | null;

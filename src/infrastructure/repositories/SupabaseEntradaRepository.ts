@@ -347,6 +347,7 @@ export class SupabaseEntradaRepository implements EntradaRepository {
         cliente: cliente?.nome || "Cliente não encontrado",
         telefone: cliente?.telefone,
         status: entrada.status,
+        statusEntrega: entrada.status_entrega || "pendente",
         progresso: entrada.progresso || 0,
         dataConclusao: entrada.data_conclusao
           ? new Date(entrada.data_conclusao)
