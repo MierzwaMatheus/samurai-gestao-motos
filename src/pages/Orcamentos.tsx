@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import Header from "@/components/Header";
 import BottomNav from "@/components/BottomNav";
 import { OrcamentoCompleto } from "@shared/types";
@@ -36,6 +36,7 @@ import { ConverterOrcamentoEntradaUseCase } from "@/domain/usecases/ConverterOrc
 import { useGerarOS } from "@/hooks/useGerarOS";
 import { PrepararDadosOrcamentoParaOSUseCase } from "@/domain/usecases/PrepararDadosOrcamentoParaOSUseCase";
 import { useDeletarOrcamento } from "@/hooks/useDeletarOrcamento";
+import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
 import { useLocation } from "wouter";
 import { HistoryModal } from "@/components/HistoryModal";
 
@@ -71,13 +72,39 @@ export default function Orcamentos() {
 
   // Converte filtro UI para status do banco
   const statusBanco = filtro === "ativos" ? "ativo" : "expirado";
-  const { orcamentos, loading, error, recarregar, removerOrcamento } =
-    useOrcamentos(
-      orcamentoRepo,
-      statusBanco,
-      tipoServicoRepo,
-      servicoPersonalizadoRepo
-    );
+  const {
+    orcamentos,
+    total,
+    hasMore,
+    loading,
+    error,
+    recarregar,
+    carregarMais,
+    removerOrcamento,
+  } = useOrcamentos(
+    orcamentoRepo,
+    statusBanco,
+    tipoServicoRepo,
+    servicoPersonalizadoRepo,
+    { pageSize: 10 }
+  );
+
+  // Recarrega do zero (page=1) na montagem inicial e toda vez que o filtro
+  // Ativos/Expirados muda. O hook `useOrcamentos` reseta a paginação em
+  // `recarregar()`, então não precisamos manipular `page` manualmente aqui.
+  useEffect(() => {
+    recarregar();
+  }, [filtro, recarregar]);
+
+  // Sentinel observado pelo `useInfiniteScroll`. Quando entra em viewport e
+  // há mais itens, `carregarMais()` é disparado; o próprio hook já se
+  // resguarda contra chamadas concorrentes enquanto `loading === true`.
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useInfiniteScroll(sentinelRef, {
+    onIntersect: carregarMais,
+    hasMore,
+    loading,
+  });
 
   const converterOrcamentoEntradaUseCase = useMemo(
     () => new ConverterOrcamentoEntradaUseCase(orcamentoRepo, entradaRepo),
@@ -570,6 +597,29 @@ export default function Orcamentos() {
                   </Card>
                 );
               })
+            )}
+
+            {/* Contador discreto "Mostrando X de Y" + sentinel de scroll
+                infinito. O sentinel fica posicionado ao final da lista;
+                quando entra em viewport e `hasMore === true`, o hook
+                `useInfiniteScroll` chama `carregarMais`. O contador
+                também serve como ponto de leitura para o usuário saber
+                se ainda há mais itens além do que está renderizado. */}
+            {orcamentos.length > 0 && (
+              <div
+                ref={sentinelRef}
+                data-testid="orcamentos-sentinel"
+                className="pt-2 pb-6 flex flex-col items-center gap-1"
+              >
+                <p className="font-sans text-xs text-foreground/40">
+                  Mostrando {orcamentos.length} de {total}
+                </p>
+                {!hasMore && (
+                  <p className="font-sans text-[11px] text-foreground/30">
+                    Fim da lista
+                  </p>
+                )}
+              </div>
             )}
           </div>
         </div>
