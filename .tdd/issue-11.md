@@ -52,7 +52,7 @@ base_commit: b936d4de851db3e4ee106a9bee1468ed3e84efac
   - Como: TDD mockando `IntersectionObserver` global no helper de teste. Testes verificam: (a) callback NÃO dispara se `!hasMore`, (b) callback NÃO dispara se `loading=true`, (c) `disconnect()` chamado no unmount.
   - Arquivos: `src/hooks/useInfiniteScroll.ts`, `src/hooks/useInfiniteScroll.test.ts` (novo)
 
-- [ ] 8. UI: `Orcamentos.tsx` com scroll infinito + contador + reset
+- [x] 8. UI: `Orcamentos.tsx` com scroll infinito + contador + reset
   - O que: plugar `useInfiniteScroll` no sentinel do final da lista; exibir `Mostrando X de Y` discreto; resetar `page=1` ao trocar filtro Ativos/Expirados; ações (converter/deletar) preservam posição via `removerOrcamento` já existente.
   - Como: component test `@testing-library/react`. Testes: (a) primeira carga pede `pageSize=10`, (b) troca de filtro zera paginação e recarrega do zero, (c) scroll até o sentinel dispara `carregarMais`, (d) "Mostrando X de Y" reflete `orcamentos.length`/`total`.
   - Arquivos: `src/pages/Orcamentos.tsx`, `src/pages/Orcamentos.test.tsx` (novo)
