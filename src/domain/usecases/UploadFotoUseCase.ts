@@ -37,7 +37,9 @@ export class UploadFotoUseCase {
     // A URL será gerada quando necessário ao buscar as fotos
     const foto = await this.fotoRepo.criar({
       entradaId,
-      url: fullPath ?? thumbPath ?? "", // Salva o caminho do arquivo
+      url: fullPath, // Salva o caminho do arquivo
+      thumbPath,
+      fullPath,
       tipo,
     });
 

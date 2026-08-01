@@ -162,6 +162,8 @@ export interface Foto {
 
 export interface FotoStatus {
   url: string;
+  thumbPath?: string | null;
+  fullPath?: string | null;
   data: Date;
   observacao?: string;
   progresso: number;

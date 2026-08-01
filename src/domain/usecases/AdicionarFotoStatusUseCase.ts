@@ -36,7 +36,7 @@ export class AdicionarFotoStatusUseCase {
     const progressoAtual = progresso !== undefined ? progresso : entrada.progresso;
 
     // Faz upload do arquivo
-    const { fullPath } = await this.storageApi.uploadFoto(
+    const { thumbPath, fullPath } = await this.storageApi.uploadFoto(
       file,
       entradaId,
       "status"
@@ -48,6 +48,8 @@ export class AdicionarFotoStatusUseCase {
     // Cria objeto de foto de status
     const fotoStatus: FotoStatus = {
       url: fullPath, // Salva o filePath, não a URL assinada
+      thumbPath,
+      fullPath,
       data: new Date(),
       observacao,
       progresso: progressoAtual,
