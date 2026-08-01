@@ -128,6 +128,26 @@ export class SupabaseEntradaRepository implements EntradaRepository {
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
 
+    // Pré-busca os IDs de clientes/motos que batem o termo de busca.
+    // A busca server-side cobre 5 campos: 2 da própria entrada
+    // (descricao, observacoes) e 3 dos relacionamentos (cliente.nome,
+    // moto.modelo, moto.placa). Usamos índices em clientes.id/motos.id
+    // para que o `IN (...)` seja barato independente do tamanho da base.
+    let clienteIdsMatch: string[] = [];
+    let motoIdsMatch: string[] = [];
+    if (busca && busca.trim().length > 0) {
+      const term = busca.trim();
+      const [clientesMatch, motosMatch] = await Promise.all([
+        supabase.from("clientes").select("id").or(`nome.ilike.%${term}%`),
+        supabase
+          .from("motos")
+          .select("id")
+          .or(`modelo.ilike.%${term}%,placa.ilike.%${term}%`),
+      ]);
+      clienteIdsMatch = (clientesMatch.data || []).map((c: any) => c.id);
+      motoIdsMatch = (motosMatch.data || []).map((m: any) => m.id);
+    }
+
     // Helper: encadeia um filtro condicionalmente num builder da Supabase.
     // Mantém a query linear (sem ternários longos) e evita `.eq()` com
     // valor `undefined` que o PostgREST rejeita.
@@ -141,9 +161,17 @@ export class SupabaseEntradaRepository implements EntradaRepository {
       }
       if (busca && busca.trim().length > 0) {
         const term = busca.trim();
-        builder = builder.or(
-          `descricao.ilike.%${term}%,observacoes.ilike.%${term}%`
-        );
+        const clauses = [
+          `descricao.ilike.%${term}%`,
+          `observacoes.ilike.%${term}%`,
+        ];
+        if (clienteIdsMatch.length > 0) {
+          clauses.push(`cliente_id.in.(${clienteIdsMatch.join(",")})`);
+        }
+        if (motoIdsMatch.length > 0) {
+          clauses.push(`moto_id.in.(${motoIdsMatch.join(",")})`);
+        }
+        builder = builder.or(clauses.join(","));
       }
       return builder;
     };
