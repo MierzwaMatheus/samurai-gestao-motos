@@ -5,8 +5,14 @@ import GaleriaFotosMoto from "@/components/GaleriaFotosMoto";
 
 // Isola do Dialog/Radix para que o teste foque apenas no callsite de storage.
 // O modal é testado (ou virá a ser) em outro arquivo.
+// Capturamos as props passadas para inspecionar o `urlsParaModal` (mata
+// mutantes de fallback em GaleriaFotosMoto.tsx:63).
+const modalSpy = vi.fn(() => null);
 vi.mock("@/components/ModalVisualizacaoFoto", () => ({
-  default: () => null,
+  default: (props: unknown) => {
+    modalSpy(props);
+    return null;
+  },
 }));
 
 // Mock do cliente Supabase: precisamos controlar o retorno de
@@ -44,6 +50,7 @@ const buildBucket = () => {
 beforeEach(() => {
   vi.clearAllMocks();
   _clearUrlCache();
+  modalSpy.mockClear();
 });
 
 describe("GaleriaFotosMoto", () => {
@@ -90,5 +97,48 @@ describe("GaleriaFotosMoto", () => {
     await waitFor(() => {
       expect(createSignedUrl).not.toHaveBeenCalled();
     });
+  });
+
+  it("retorna null quando fotos está vazio (boundary)", async () => {
+    // Mata o mutante ALTO em GaleriaFotosMoto.tsx:58 (ConditionalExpression
+    // `if (fotos.length === 0) return null` → `false`/`true`/`!==`).
+    const { container } = render(<GaleriaFotosMoto fotos={[]} />);
+    expect(container.firstChild).toBeNull();
+  });
+
+  it("passa urlsParaModal com signedUrl quando carregada e fallback para original", async () => {
+    // Mata os mutantes CRÍTICOS em GaleriaFotosMoto.tsx:63 (ConditionalExpression
+    // `urls[index] || url` → `false`/`true` e LogicalOperator `&&`).
+    // O modal recebe `urlsParaModal` calculado no pai. Com o fallback correto,
+    // índices com signed URL recebem a signed; demais recebem o original.
+    const { createSignedUrl } = buildBucket();
+
+    render(
+      <GaleriaFotosMoto
+        fotos={[
+          "user/entrada/moto/foto1.jpg",
+          "https://already-signed.example/foto2.jpg",
+          "user/entrada/moto/foto3.jpg",
+        ]}
+      />
+    );
+
+    await waitFor(() => {
+      expect(createSignedUrl).toHaveBeenCalledTimes(2);
+    });
+
+    // Modal foi renderizado (a spy capturou as props) com `urlsParaModal`.
+    expect(modalSpy).toHaveBeenCalled();
+    const props = modalSpy.mock.calls.at(-1)?.[0] as {
+      fotos: string[];
+    };
+    expect(props).toBeDefined();
+    expect(props.fotos).toHaveLength(3);
+    // Índice 0: signed URL gerada pelo Supabase
+    expect(props.fotos[0]).toBe("https://signed.example/foto.jpg");
+    // Índice 1: URL original (já completa, startsWith http)
+    expect(props.fotos[1]).toBe("https://already-signed.example/foto2.jpg");
+    // Índice 2: signed URL gerada pelo Supabase
+    expect(props.fotos[2]).toBe("https://signed.example/foto.jpg");
   });
 });

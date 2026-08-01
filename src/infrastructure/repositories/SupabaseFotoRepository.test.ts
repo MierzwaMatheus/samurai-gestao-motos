@@ -232,6 +232,40 @@ describe("SupabaseFotoRepository — geração de signed URLs", () => {
   });
 
   describe("buscarPorEntradaIdETipo", () => {
+    it("não chama createSignedUrl para fotos com URL já completa (http)", async () => {
+      // Mata os mutantes em src/infrastructure/repositories/SupabaseFotoRepository.ts:99
+      // (ConditionalExpression `if (!foto.url.startsWith("http"))` → `true` e
+      // MethodExpression `startsWith("http")` → `endsWith("http")`).
+      // Sem este teste, o Stryker considera os mutantes sobreviventes porque
+      // o caminho `buscarPorEntradaIdETipo` não tinha cobertura com URL completa.
+      const { createSignedUrl } = buildBucket();
+      const rows = [
+        buildFotoRow({
+          id: "f-1",
+          tipo: "moto",
+          url: "https://already-signed.example/foto.jpg",
+        }),
+      ];
+
+      mockedDbFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              order: vi.fn().mockResolvedValue({ data: rows, error: null }),
+            }),
+          }),
+        }),
+      } as never);
+
+      await new SupabaseFotoRepository().buscarPorEntradaIdETipo(
+        "entrada-1",
+        "moto"
+      );
+
+      // URL já começa com "http" → não deve assinar de novo.
+      expect(createSignedUrl).not.toHaveBeenCalled();
+    });
+
     it("chama createSignedUrl com (path, 3600) para cada foto retornada", async () => {
       const { createSignedUrl } = buildBucket();
       const rows = [
