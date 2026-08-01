@@ -48,10 +48,19 @@ const buildQueryChain = <T>(terminal: T) => {
   // Cada método encadeável retorna o próximo elo, e o último retorna o
   // `terminal` quando resolvido/encadeado o suficiente.
   const chain: any = {};
-  chain.then = (resolve: (v: T) => unknown) => Promise.resolve(terminal).then(resolve);
+  chain.then = (resolve: (v: T) => unknown) =>
+    Promise.resolve(terminal).then(resolve);
   chain.catch = () => chain;
 
-  for (const method of ["select", "eq", "order", "in", "single"]) {
+  for (const method of [
+    "select",
+    "eq",
+    "order",
+    "limit",
+    "range",
+    "in",
+    "single",
+  ]) {
     chain[method] = vi.fn().mockReturnValue(chain);
   }
 
@@ -135,6 +144,121 @@ beforeEach(() => {
   _clearUrlCache();
 });
 
+describe("SupabaseOrcamentoRepository — paginação", () => {
+  it("busca a página e os relacionamentos em batch com contagem exata", async () => {
+    const clienteId = "11111111-1111-4111-8111-111111111111";
+    const motoId = "22222222-2222-4222-8222-222222222222";
+    const orcamentosChain = buildQueryChain({
+      data: [
+        {
+          id: "orc-1",
+          entrada_id: "entrada-1",
+          valor: "100",
+          data_expiracao: "2099-01-01T00:00:00Z",
+          status: "ativo",
+          criado_em: "2025-01-01T00:00:00Z",
+          atualizado_em: "2025-01-01T00:00:00Z",
+        },
+      ],
+      error: null,
+    });
+    const countChain = buildQueryChain({ data: null, error: null, count: 21 });
+    const entradasChain = buildQueryChain({
+      data: [
+        {
+          id: "entrada-1",
+          cliente_id: clienteId,
+          moto_id: motoId,
+          descricao: "Revisão",
+        },
+      ],
+      error: null,
+    });
+    const clientesChain = buildQueryChain({
+      data: [{ id: clienteId, nome: "Cliente", telefone: "123" }],
+      error: null,
+    });
+    const motosChain = buildQueryChain({
+      data: [{ id: motoId, modelo: "CG", placa: "ABC1D23" }],
+      error: null,
+    });
+    const fotosChain = buildQueryChain({ data: [], error: null });
+    const vinculosChain = buildQueryChain({
+      data: [
+        {
+          entrada_id: "entrada-1",
+          tipo_servico_id: "tipo-1",
+          quantidade: 2,
+          com_oleo: true,
+        },
+      ],
+      error: null,
+    });
+    const tiposChain = buildQueryChain({
+      data: [{ id: "tipo-1", nome: "Troca de óleo", preco_oficina: "50" }],
+      error: null,
+    });
+
+    let orcamentosQuery = 0;
+    mockedDbFrom.mockImplementation(((table: string) => {
+      if (table === "orcamentos") {
+        orcamentosQuery += 1;
+        return orcamentosQuery === 1 ? orcamentosChain : countChain;
+      }
+      if (table === "entradas") return entradasChain;
+      if (table === "clientes") return clientesChain;
+      if (table === "motos") return motosChain;
+      if (table === "fotos") return fotosChain;
+      if (table === "entradas_tipos_servico") return vinculosChain;
+      if (table === "tipos_servico") return tiposChain;
+      return buildQueryChain({ data: [], error: null });
+    }) as never);
+
+    const pagina = await new SupabaseOrcamentoRepository().buscarPagina({
+      page: 2,
+      pageSize: 10,
+      status: "ativo",
+    });
+
+    expect(orcamentosChain.range).toHaveBeenCalledWith(10, 19);
+    expect(orcamentosChain.order).toHaveBeenCalledWith("criado_em", {
+      ascending: false,
+    });
+    expect(orcamentosChain.order.mock.invocationCallOrder[0]).toBeLessThan(
+      orcamentosChain.limit.mock.invocationCallOrder[0]
+    );
+    expect(orcamentosChain.limit).toHaveBeenCalledWith(10);
+    expect(countChain.select).toHaveBeenCalledWith("*", {
+      count: "exact",
+      head: true,
+    });
+    expect(clientesChain.in).toHaveBeenCalledWith("id", [clienteId]);
+    expect(motosChain.in).toHaveBeenCalledWith("id", [motoId]);
+    expect(fotosChain.in).toHaveBeenCalledWith("entrada_id", ["entrada-1"]);
+    expect(vinculosChain.in).toHaveBeenCalledWith("entrada_id", ["entrada-1"]);
+    expect(tiposChain.in).toHaveBeenCalledWith("id", ["tipo-1"]);
+    expect(pagina).toMatchObject({
+      total: 21,
+      page: 2,
+      pageSize: 10,
+      items: [
+        {
+          id: "orc-1",
+          cliente: "Cliente",
+          moto: "CG",
+          tiposServico: [
+            expect.objectContaining({
+              id: "tipo-1",
+              quantidade: 2,
+              comOleo: true,
+            }),
+          ],
+        },
+      ],
+    });
+  });
+});
+
 describe("SupabaseOrcamentoRepository — geração de signed URLs", () => {
   describe("buscarCompletosPorStatus", () => {
     it("chama createSignedUrl com (path, 3600) na listagem (query de fotos filtra tipo=moto)", async () => {
@@ -147,9 +271,7 @@ describe("SupabaseOrcamentoRepository — geração de signed URLs", () => {
         },
       ]);
 
-      await new SupabaseOrcamentoRepository().buscarCompletosPorStatus(
-        "ativo"
-      );
+      await new SupabaseOrcamentoRepository().buscarCompletosPorStatus("ativo");
 
       expect(createSignedUrl).toHaveBeenCalledTimes(1);
       expect(createSignedUrl).toHaveBeenCalledWith(
@@ -168,9 +290,7 @@ describe("SupabaseOrcamentoRepository — geração de signed URLs", () => {
         },
       ]);
 
-      await new SupabaseOrcamentoRepository().buscarCompletosPorStatus(
-        "ativo"
-      );
+      await new SupabaseOrcamentoRepository().buscarCompletosPorStatus("ativo");
 
       expect(createSignedUrl).not.toHaveBeenCalled();
     });
@@ -191,9 +311,7 @@ describe("SupabaseOrcamentoRepository — geração de signed URLs", () => {
         },
       ]);
 
-      await new SupabaseOrcamentoRepository().buscarCompletosPorStatus(
-        "ativo"
-      );
+      await new SupabaseOrcamentoRepository().buscarCompletosPorStatus("ativo");
 
       expect(createSignedUrl).toHaveBeenCalledTimes(2);
       expect(createSignedUrl).toHaveBeenCalledWith(

@@ -1,4 +1,8 @@
-import { OrcamentoRepository } from "@/domain/interfaces/OrcamentoRepository";
+import {
+  BuscarPaginaOrcamentosParams,
+  OrcamentoRepository,
+  Pagina,
+} from "@/domain/interfaces/OrcamentoRepository";
 import { TipoServicoRepository } from "@/domain/interfaces/TipoServicoRepository";
 import { Orcamento, OrcamentoCompleto } from "@shared/types";
 import { supabase } from "@/infrastructure/supabase/client";
@@ -252,6 +256,234 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
     } catch (error) {
       throw error;
     }
+  }
+
+  async buscarPagina({
+    page,
+    pageSize,
+    status,
+  }: BuscarPaginaOrcamentosParams): Promise<Pagina<OrcamentoCompleto>> {
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    const { data: orcamentos, error: orcamentosError } = await supabase
+      .from("orcamentos")
+      .select("*")
+      .eq("status", status)
+      .range(from, to)
+      .order("criado_em", { ascending: false })
+      .limit(pageSize);
+
+    if (orcamentosError) {
+      throw new Error(`Erro ao buscar orçamentos: ${orcamentosError.message}`);
+    }
+
+    const { count, error: countError } = await supabase
+      .from("orcamentos")
+      .select("*", { count: "exact", head: true })
+      .eq("status", status);
+
+    if (countError) {
+      throw new Error(`Erro ao contar orçamentos: ${countError.message}`);
+    }
+
+    if (!orcamentos?.length) {
+      return { items: [], total: count ?? 0, page, pageSize };
+    }
+
+    const entradaIds = Array.from(
+      new Set(orcamentos.map((orcamento: any) => orcamento.entrada_id))
+    );
+    const { data: entradas, error: entradasError } = await supabase
+      .from("entradas")
+      .select(
+        "id, descricao, frete, valor_cobrado, endereco, cep, data_orcamento, cliente_id, moto_id"
+      )
+      .in("id", entradaIds);
+
+    if (entradasError) {
+      throw new Error(`Erro ao buscar entradas: ${entradasError.message}`);
+    }
+
+    const isUuid = (id: unknown): id is string =>
+      typeof id === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        id
+      );
+    const clienteIdsValidos = Array.from(
+      new Set(
+        (entradas || [])
+          .map((entrada: any) => entrada.cliente_id)
+          .filter(isUuid)
+      )
+    );
+    const motoIdsValidos = Array.from(
+      new Set(
+        (entradas || []).map((entrada: any) => entrada.moto_id).filter(isUuid)
+      )
+    );
+
+    const [clientesResult, motosResult, fotosResult, vinculosResult] =
+      await Promise.all([
+        clienteIdsValidos.length
+          ? supabase
+              .from("clientes")
+              .select("id, nome, telefone")
+              .in("id", clienteIdsValidos)
+          : Promise.resolve({ data: [], error: null }),
+        motoIdsValidos.length
+          ? supabase
+              .from("motos")
+              .select(
+                "id, modelo, placa, marca, ano, cilindrada, final_numero_quadro"
+              )
+              .in("id", motoIdsValidos)
+          : Promise.resolve({ data: [], error: null }),
+        supabase
+          .from("fotos")
+          .select("entrada_id, url")
+          .in("entrada_id", entradaIds)
+          .eq("tipo", "moto")
+          .order("criado_em", { ascending: false }),
+        supabase
+          .from("entradas_tipos_servico")
+          .select("entrada_id, tipo_servico_id, quantidade, com_oleo")
+          .in("entrada_id", entradaIds),
+      ]);
+
+    if (clientesResult.error) {
+      throw new Error(
+        `Erro ao buscar clientes: ${clientesResult.error.message}`
+      );
+    }
+    if (motosResult.error) {
+      throw new Error(`Erro ao buscar motos: ${motosResult.error.message}`);
+    }
+    if (fotosResult.error) {
+      throw new Error(`Erro ao buscar fotos: ${fotosResult.error.message}`);
+    }
+    if (vinculosResult.error) {
+      throw new Error(
+        `Erro ao buscar vínculos de tipos de serviço: ${vinculosResult.error.message}`
+      );
+    }
+
+    const tipoServicoIds = Array.from(
+      new Set(
+        (vinculosResult.data || []).map(
+          (vinculo: any) => vinculo.tipo_servico_id
+        )
+      )
+    );
+    const tiposResult = tipoServicoIds.length
+      ? await supabase
+          .from("tipos_servico")
+          .select("*")
+          .in("id", tipoServicoIds)
+      : { data: [], error: null };
+
+    if (tiposResult.error) {
+      throw new Error(
+        `Erro ao buscar tipos de serviço: ${tiposResult.error.message}`
+      );
+    }
+
+    const fotosPorEntrada: Record<string, string> = {};
+    for (const foto of fotosResult.data || []) {
+      if (!fotosPorEntrada[foto.entrada_id]) {
+        fotosPorEntrada[foto.entrada_id] = foto.url;
+      }
+    }
+    const fotosAssinadas = await Promise.all(
+      Object.entries(fotosPorEntrada).map(async ([entradaId, url]) => [
+        entradaId,
+        url.startsWith("http")
+          ? url
+          : await this.storageApi.obterUrlAssinada(url),
+      ])
+    );
+
+    const entradasMap = new Map(
+      (entradas || []).map((entrada: any) => [entrada.id, entrada])
+    );
+    const clientesMap = new Map(
+      (clientesResult.data || []).map((cliente: any) => [cliente.id, cliente])
+    );
+    const motosMap = new Map(
+      (motosResult.data || []).map((moto: any) => [moto.id, moto])
+    );
+    const fotosMap = Object.fromEntries(fotosAssinadas);
+    const tiposMap = new Map(
+      (tiposResult.data || []).map((tipo: any) => [tipo.id, tipo])
+    );
+    const servicosPorEntrada: Record<string, any[]> = {};
+
+    for (const vinculo of vinculosResult.data || []) {
+      const tipo = tiposMap.get(vinculo.tipo_servico_id) as any;
+      if (!tipo) continue;
+      (servicosPorEntrada[vinculo.entrada_id] ||= []).push({
+        id: tipo.id,
+        nome: tipo.nome,
+        precoOficina: parseFloat(tipo.preco_oficina ?? tipo.valor ?? 0) || 0,
+        precoParticular:
+          parseFloat(tipo.preco_particular ?? tipo.valor ?? 0) || 0,
+        categoria: tipo.categoria || "padrao",
+        precoOficinaComOleo: tipo.preco_oficina_com_oleo
+          ? parseFloat(tipo.preco_oficina_com_oleo)
+          : undefined,
+        precoOficinaSemOleo: tipo.preco_oficina_sem_oleo
+          ? parseFloat(tipo.preco_oficina_sem_oleo)
+          : undefined,
+        precoParticularComOleo: tipo.preco_particular_com_oleo
+          ? parseFloat(tipo.preco_particular_com_oleo)
+          : undefined,
+        precoParticularSemOleo: tipo.preco_particular_sem_oleo
+          ? parseFloat(tipo.preco_particular_sem_oleo)
+          : undefined,
+        quantidadeServicos: tipo.quantidade_servicos || 0,
+        criadoEm: new Date(tipo.criado_em),
+        atualizadoEm: new Date(tipo.atualizado_em),
+        quantidade: vinculo.quantidade || 1,
+        comOleo: vinculo.com_oleo || false,
+      });
+    }
+
+    const items = orcamentos.map((orcamento: any) => {
+      const entrada = entradasMap.get(orcamento.entrada_id) as any;
+      const cliente = entrada
+        ? (clientesMap.get(entrada.cliente_id) as any)
+        : undefined;
+      const moto = entrada ? (motosMap.get(entrada.moto_id) as any) : undefined;
+
+      return {
+        ...this.mapToOrcamento(orcamento),
+        cliente: cliente?.nome || "Cliente não encontrado",
+        telefone: cliente?.telefone,
+        moto: moto?.modelo || "Moto não encontrada",
+        marca: moto?.marca,
+        ano: moto?.ano,
+        cilindrada: moto?.cilindrada,
+        placa: moto?.placa,
+        finalNumeroQuadro: moto?.final_numero_quadro,
+        descricao: entrada?.descricao,
+        frete:
+          entrada?.frete !== null && entrada?.frete !== undefined
+            ? parseFloat(entrada.frete)
+            : null,
+        valorCobrado: entrada?.valor_cobrado
+          ? parseFloat(entrada.valor_cobrado)
+          : undefined,
+        endereco: entrada?.endereco,
+        cep: entrada?.cep,
+        fotoMoto: entrada?.id ? fotosMap[entrada.id] : undefined,
+        dataOrcamento: entrada?.data_orcamento
+          ? new Date(entrada.data_orcamento)
+          : undefined,
+        tiposServico: entrada?.id ? servicosPorEntrada[entrada.id] || [] : [],
+      };
+    });
+
+    return { items, total: count ?? 0, page, pageSize };
   }
 
   async listar(): Promise<Orcamento[]> {
