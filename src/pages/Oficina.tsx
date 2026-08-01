@@ -175,8 +175,11 @@ export default function Oficina() {
     [entradaRepo]
   );
 
-  const { adicionar: adicionarFoto, loading: loadingFoto } =
-    useAdicionarFotoStatus(adicionarFotoStatusUseCase);
+  const {
+    adicionar: adicionarFoto,
+    loading: loadingFoto,
+    error: adicionarFotoError,
+  } = useAdicionarFotoStatus(adicionarFotoStatusUseCase);
   const { atualizar: atualizarProgresso, loading: loadingProgresso } =
     useAtualizarProgressoStatus(atualizarProgressoStatusUseCase);
   const { deletar: deletarEntrada, loading: loadingDeletar } =
@@ -275,7 +278,9 @@ export default function Oficina() {
       handleFecharModalFoto();
       recarregar();
     } else {
-      toast.error("Erro ao adicionar foto");
+      // Mostra a mensagem real do hook (se houver) em vez do genérico,
+      // para facilitar o diagnóstico de regressões.
+      toast.error(adicionarFotoError || "Erro ao adicionar foto");
     }
   };
 

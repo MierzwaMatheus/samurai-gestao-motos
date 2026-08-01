@@ -18,6 +18,8 @@ export function useAdicionarFotoStatus(useCase: AdicionarFotoStatusUseCase) {
       const foto = await useCase.execute(entradaId, file, observacao, progresso);
       return foto;
     } catch (err) {
+      // Loga no console para diagnóstico (a UI também exibe a mensagem).
+      console.error("[useAdicionarFotoStatus] erro ao adicionar foto:", err);
       const mensagem = err instanceof Error ? err.message : "Erro ao adicionar foto";
       setError(mensagem);
       return null;
