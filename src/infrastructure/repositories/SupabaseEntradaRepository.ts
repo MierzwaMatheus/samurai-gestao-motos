@@ -5,12 +5,15 @@ import {
 import { Pagina } from "@/domain/interfaces/OrcamentoRepository";
 import { Entrada, MotoCompleta } from "@shared/types";
 import { supabase } from "@/infrastructure/supabase/client";
+import { SupabaseStorageApi } from "@/infrastructure/storage/SupabaseStorageApi";
 
 /**
  * Implementação do repositório de entradas usando Supabase
  * Esta é uma implementação de infraestrutura que conhece detalhes do Supabase
  */
 export class SupabaseEntradaRepository implements EntradaRepository {
+  private storageApi = new SupabaseStorageApi();
+
   async criar(
     entrada: Omit<Entrada, "id" | "criadoEm" | "atualizadoEm">
   ): Promise<Entrada> {
@@ -121,11 +124,245 @@ export class SupabaseEntradaRepository implements EntradaRepository {
   async buscarPagina(
     params: BuscarPaginaEntradasParams
   ): Promise<Pagina<MotoCompleta>> {
-    void params;
-    // Stub mínimo para satisfazer o contrato da interface.
-    // A implementação real com filtros (.eq/.in/.or) e contagem exata
-    // (count: 'exact', head: true) entra no ciclo 4 do plano TDD.
-    return { items: [], total: 0, page: params.page, pageSize: params.pageSize };
+    const { page, pageSize, tipo, statusEntrega, busca } = params;
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    // Helper: encadeia um filtro condicionalmente num builder da Supabase.
+    // Mantém a query linear (sem ternários longos) e evita `.eq()` com
+    // valor `undefined` que o PostgREST rejeita.
+    const applyFilter = (builder: any) => {
+      if (tipo) builder = builder.eq("tipo", tipo);
+      if (statusEntrega && statusEntrega.length > 0) {
+        builder = builder.in("status_entrega", statusEntrega);
+      }
+      if (busca && busca.trim().length > 0) {
+        const term = busca.trim();
+        builder = builder.or(
+          `descricao.ilike.%${term}%,observacoes.ilike.%${term}%`
+        );
+      }
+      return builder;
+    };
+
+    const paginaBuilder = applyFilter(
+      supabase.from("entradas").select("*")
+    )
+      .range(from, to)
+      .order("criado_em", { ascending: false })
+      .limit(pageSize);
+
+    const { data: entradas, error: entradasError } = await paginaBuilder;
+
+    if (entradasError) {
+      throw new Error(`Erro ao buscar entradas: ${entradasError.message}`);
+    }
+
+    const countBuilder = applyFilter(supabase.from("entradas").select("*"));
+    const { count, error: countError } = await countBuilder.select("*", {
+      count: "exact",
+      head: true,
+    });
+
+    if (countError) {
+      throw new Error(`Erro ao contar entradas: ${countError.message}`);
+    }
+
+    if (!entradas?.length) {
+      return { items: [], total: count ?? 0, page, pageSize };
+    }
+
+    const entradaIds = Array.from(
+      new Set(entradas.map((e: any) => e.id))
+    );
+    const clienteIds = Array.from(
+      new Set(entradas.map((e: any) => e.cliente_id).filter(Boolean))
+    );
+    const motoIds = Array.from(
+      new Set(entradas.map((e: any) => e.moto_id).filter(Boolean))
+    );
+
+    const isUuid = (id: unknown): id is string =>
+      typeof id === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        id
+      );
+    const clienteIdsValidos = clienteIds.filter(isUuid);
+    const motoIdsValidos = motoIds.filter(isUuid);
+
+    const [clientesResult, motosResult, fotosResult, vinculosResult] =
+      await Promise.all([
+        clienteIdsValidos.length
+          ? supabase
+              .from("clientes")
+              .select("id, nome, telefone")
+              .in("id", clienteIdsValidos)
+          : Promise.resolve({ data: [], error: null }),
+        motoIdsValidos.length
+          ? supabase
+              .from("motos")
+              .select(
+                "id, modelo, placa, marca, ano, cilindrada, final_numero_quadro"
+              )
+              .in("id", motoIdsValidos)
+          : Promise.resolve({ data: [], error: null }),
+        supabase
+          .from("fotos")
+          .select("entrada_id, url")
+          .in("entrada_id", entradaIds)
+          .eq("tipo", "moto")
+          .order("criado_em", { ascending: false }),
+        supabase
+          .from("entradas_tipos_servico")
+          .select("entrada_id, tipo_servico_id, quantidade, com_oleo")
+          .in("entrada_id", entradaIds),
+      ]);
+
+    if (clientesResult.error) {
+      throw new Error(
+        `Erro ao buscar clientes: ${clientesResult.error.message}`
+      );
+    }
+    if (motosResult.error) {
+      throw new Error(`Erro ao buscar motos: ${motosResult.error.message}`);
+    }
+    if (fotosResult.error) {
+      throw new Error(`Erro ao buscar fotos: ${fotosResult.error.message}`);
+    }
+    if (vinculosResult.error) {
+      throw new Error(
+        `Erro ao buscar vínculos de tipos de serviço: ${vinculosResult.error.message}`
+      );
+    }
+
+    const tipoServicoIds = Array.from(
+      new Set(
+        (vinculosResult.data || []).map((v: any) => v.tipo_servico_id)
+      )
+    );
+    const tiposResult = tipoServicoIds.length
+      ? await supabase
+          .from("tipos_servico")
+          .select("*")
+          .in("id", tipoServicoIds)
+      : { data: [], error: null };
+
+    if (tiposResult.error) {
+      throw new Error(
+        `Erro ao buscar tipos de serviço: ${tiposResult.error.message}`
+      );
+    }
+
+    const fotosPorEntrada: Record<string, string> = {};
+    for (const foto of fotosResult.data || []) {
+      if (!fotosPorEntrada[foto.entrada_id]) {
+        fotosPorEntrada[foto.entrada_id] = foto.url;
+      }
+    }
+    const fotosAssinadas = await Promise.all(
+      Object.entries(fotosPorEntrada).map(async ([entradaId, url]) => [
+        entradaId,
+        url.startsWith("http")
+          ? url
+          : await this.storageApi.obterUrlAssinada(url),
+      ])
+    );
+    const fotosMap = Object.fromEntries(fotosAssinadas);
+
+    const clientesMap = new Map(
+      (clientesResult.data || []).map((c: any) => [c.id, c])
+    );
+    const motosMap = new Map(
+      (motosResult.data || []).map((m: any) => [m.id, m])
+    );
+    const tiposMap = new Map(
+      (tiposResult.data || []).map((t: any) => [t.id, t])
+    );
+
+    const servicosPorEntrada: Record<string, any[]> = {};
+    for (const vinculo of vinculosResult.data || []) {
+      const tipo = tiposMap.get(vinculo.tipo_servico_id) as any;
+      if (!tipo) continue;
+      (servicosPorEntrada[vinculo.entrada_id] ||= []).push({
+        id: tipo.id,
+        nome: tipo.nome,
+        precoOficina: parseFloat(tipo.preco_oficina ?? tipo.valor ?? 0) || 0,
+        precoParticular:
+          parseFloat(tipo.preco_particular ?? tipo.valor ?? 0) || 0,
+        categoria: tipo.categoria || "padrao",
+        precoOficinaComOleo: tipo.preco_oficina_com_oleo
+          ? parseFloat(tipo.preco_oficina_com_oleo)
+          : undefined,
+        precoOficinaSemOleo: tipo.preco_oficina_sem_oleo
+          ? parseFloat(tipo.preco_oficina_sem_oleo)
+          : undefined,
+        precoParticularComOleo: tipo.preco_particular_com_oleo
+          ? parseFloat(tipo.preco_particular_com_oleo)
+          : undefined,
+        precoParticularSemOleo: tipo.preco_particular_sem_oleo
+          ? parseFloat(tipo.preco_particular_sem_oleo)
+          : undefined,
+        quantidadeServicos: tipo.quantidade_servicos || 0,
+        criadoEm: new Date(tipo.criado_em),
+        atualizadoEm: new Date(tipo.atualizado_em),
+        quantidade: vinculo.quantidade || 1,
+        comOleo: vinculo.com_oleo || false,
+      });
+    }
+
+    const items: MotoCompleta[] = entradas.map((entrada: any) => {
+      const cliente = clientesMap.get(entrada.cliente_id) as any;
+      const moto = motosMap.get(entrada.moto_id) as any;
+      const fotosStatus = (() => {
+        if (!entrada.fotos_status) return [];
+        try {
+          const parsed =
+            typeof entrada.fotos_status === "string"
+              ? JSON.parse(entrada.fotos_status)
+              : entrada.fotos_status;
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      })();
+
+      const motoBase: any = {
+        id: entrada.id,
+        motoId: moto?.id || entrada.moto_id,
+        clienteId: cliente?.id || entrada.cliente_id,
+        modelo: moto?.modelo || "Moto não encontrada",
+        marca: moto?.marca,
+        ano: moto?.ano,
+        cilindrada: moto?.cilindrada,
+        placa: moto?.placa,
+        criadoEm: new Date(entrada.criado_em),
+        atualizadoEm: new Date(entrada.atualizado_em),
+      };
+      return {
+        ...motoBase,
+        entradaId: entrada.id,
+        cliente: cliente?.nome || "Cliente não encontrado",
+        telefone: cliente?.telefone,
+        status: entrada.status,
+        progresso: entrada.progresso || 0,
+        dataConclusao: entrada.data_conclusao
+          ? new Date(entrada.data_conclusao)
+          : null,
+        formaPagamento: entrada.forma_pagamento || null,
+        statusPagamento: entrada.status_pagamento || null,
+        fotosStatus: fotosStatus.map((foto: any) => ({
+          url: foto.url,
+          data: new Date(foto.data),
+          observacao: foto.observacao,
+          progresso: foto.progresso,
+        })),
+        fotos: entrada.id && fotosMap[entrada.id] ? [fotosMap[entrada.id]] : [],
+        tiposServico: servicosPorEntrada[entrada.id] || [],
+        servicosPersonalizados: [],
+      } as MotoCompleta;
+    });
+
+    return { items, total: count ?? 0, page, pageSize };
   }
 
   async atualizar(id: string, dados: Partial<Entrada>): Promise<Entrada> {
