@@ -1,123 +1,168 @@
-import { useState, useEffect, useMemo } from "react";
-import { ListarEntradasUseCase } from "@/domain/usecases/ListarEntradasUseCase";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { EntradaRepository } from "@/domain/interfaces/EntradaRepository";
-import { ClienteRepository } from "@/domain/interfaces/ClienteRepository";
-import { MotoRepository } from "@/domain/interfaces/MotoRepository";
-import { TipoServicoRepository } from "@/domain/interfaces/TipoServicoRepository";
-import { FotoRepository } from "@/domain/interfaces/FotoRepository";
-import { ServicoPersonalizadoRepository } from "@/domain/interfaces/ServicoPersonalizadoRepository";
-import { MotoCompleta } from "@shared/types";
+import { Entrada, MotoCompleta } from "@shared/types";
 
+/**
+ * Opções do hook `useMotosOficina`.
+ *
+ * - page:      número da página (1-based). Default 1.
+ * - pageSize:  quantidade de itens por página. Default 10.
+ * - tipo:      filtro server-side pelo tipo de entrada.
+ * - statusEntrega: filtro server-side pelos status de entrega aceitos.
+ * - busca:     termo livre enviado ao backend (cliente/moto/placa/serviço).
+ *
+ * Os filtros `tipo` / `statusEntrega` / `busca` são aplicados **no
+ * servidor** via `entradaRepo.buscarPagina()` — não há mais filtragem
+ * client-side (issue #11 ciclo 6).
+ */
+export interface UseMotosOficinaOpts {
+  page?: number;
+  pageSize?: number;
+  tipo?: Entrada["tipo"];
+  statusEntrega?: NonNullable<Entrada["statusEntrega"]>[];
+  busca?: string;
+}
+
+/**
+ * Hook paginado para listagem de motos da oficina.
+ *
+ * Retorno:
+ *  - `motos`           — lista acumulada (concatena via `carregarMais`).
+ *  - `total`           — total de registros no servidor.
+ *  - `hasMore`         — `motos.length < total`.
+ *  - `loading` / `error`
+ *  - `carregarMais()`  — busca a próxima página e concatena.
+ *  - `recarregar()`    — volta para `page=1` e substitui a lista.
+ *  - `setBusca(value)` — atualiza o termo de busca com debounce de 300ms;
+ *                        ao disparar, zera a paginação (`page=1`) e
+ *                        substitui a lista.
+ *  - `atualizarMoto()` — mutação imutável sobre um item por `entradaId`.
+ *
+ * Mudanças rápidas em `busca` são colapsadas em **uma única** request
+ * após 300ms (debounce). Mudar `busca` sempre volta para `page=1`.
+ */
 export function useMotosOficina(
   entradaRepo: EntradaRepository,
-  clienteRepo: ClienteRepository,
-  motoRepo: MotoRepository,
-  tipoServicoRepo?: TipoServicoRepository,
-  fotoRepo?: FotoRepository,
-  servicoPersonalizadoRepo?: ServicoPersonalizadoRepository
+  opts: UseMotosOficinaOpts = {}
 ) {
+  const pageSize = opts.pageSize ?? 10;
+  const initialPage = opts.page ?? 1;
+  const tipo = opts.tipo;
+  const statusEntrega = opts.statusEntrega;
+  const buscaInicial = opts.busca;
+
   const [motos, setMotos] = useState<MotoCompleta[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const useCase = useMemo(
-    () => new ListarEntradasUseCase(entradaRepo),
-    [entradaRepo]
+  // Mantém a page corrente acessível de forma síncrona dentro dos
+  // callbacks. NÃO sincronizamos `pageRef.current = initialPage` em cada
+  // render — isso resetaria o ref para 1 e quebraria o encadeamento de
+  // `carregarMais()`. O ref só é atualizado quando uma página é de fato
+  // carregada (dentro de `carregarInterno`).
+  const pageRef = useRef(initialPage);
+
+  const carregarInterno = useCallback(
+    async (
+      proximaPage: number,
+      append: boolean,
+      params: { busca?: string } = {}
+    ) => {
+      pageRef.current = proximaPage;
+      setLoading(true);
+      setError(null);
+      try {
+        const pagina = await entradaRepo.buscarPagina({
+          page: proximaPage,
+          pageSize,
+          tipo,
+          statusEntrega,
+          busca: params.busca,
+        });
+        setTotal(pagina.total);
+        setMotos((prev) =>
+          append ? [...prev, ...pagina.items] : pagina.items
+        );
+      } catch (err) {
+        const mensagem =
+          err instanceof Error ? err.message : "Erro ao carregar motos";
+        setError(mensagem);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [entradaRepo, pageSize, tipo, statusEntrega]
   );
 
-  const carregar = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      // Busca apenas entradas do tipo "entrada" (não orçamentos) e que não estão entregues
-      const entradas = await useCase.execute();
-      const entradasFiltradas = entradas.filter(
-        e =>
-          e.tipo === "entrada" &&
-          e.statusEntrega !== "entregue" &&
-          e.statusEntrega !== "retirado"
-      );
+  const recarregar = useCallback(async () => {
+    await carregarInterno(1, false, { busca: buscaInicial });
+  }, [carregarInterno, buscaInicial]);
 
-      // Busca dados completos (cliente e moto) para cada entrada
-      const motosCompletas: MotoCompleta[] = await Promise.all(
-        entradasFiltradas.map(async entrada => {
-          const [
-            cliente,
-            moto,
-            tiposServico,
-            fotosMoto,
-            servicosPersonalizados,
-          ] = await Promise.all([
-            clienteRepo.buscarPorId(entrada.clienteId),
-            motoRepo.buscarPorId(entrada.motoId),
-            tipoServicoRepo?.buscarPorEntradaId(entrada.id).catch(() => []) ||
-              Promise.resolve([]),
-            fotoRepo
-              ?.buscarPorEntradaIdETipo(entrada.id, "moto")
-              .catch(() => []) || Promise.resolve([]),
-            servicoPersonalizadoRepo
-              ?.buscarPorEntradaId(entrada.id)
-              .catch(() => []) || Promise.resolve([]),
-          ]);
+  const carregarMais = useCallback(async () => {
+    await carregarInterno(pageRef.current + 1, true, {});
+  }, [carregarInterno]);
 
-          return {
-            id: entrada.id,
-            entradaId: entrada.id,
-            motoId: moto?.id || entrada.motoId,
-            clienteId: entrada.clienteId,
-            modelo: moto?.modelo || "Modelo não informado",
-            marca: moto?.marca,
-            ano: moto?.ano,
-            cilindrada: moto?.cilindrada,
-            placa: moto?.placa,
-            criadoEm: entrada.criadoEm,
-            atualizadoEm: entrada.atualizadoEm,
-            cliente: cliente?.nome || "Cliente não informado",
-            telefone: cliente?.telefone,
-            status: entrada.status,
-            progresso: entrada.progresso,
-            dataConclusao: entrada.dataConclusao ?? null,
-            formaPagamento: entrada.formaPagamento ?? null,
-            statusPagamento: entrada.statusPagamento ?? null,
-            fotosStatus: entrada.fotosStatus || [],
-            fotos: fotosMoto.map(foto => foto.url),
-            tiposServico: tiposServico || [],
-            servicosPersonalizados: servicosPersonalizados || [],
-          };
-        })
-      );
+  // ====== Busca com debounce 300ms ======
+  const [busca, setBuscaState] = useState<string | undefined>(buscaInicial);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Mantém a versão mais recente do callback de carga para que o timer
+  // possa chamá-lo sem precisar re-registrar.
+  const carregarInternoRef = useRef(carregarInterno);
+  carregarInternoRef.current = carregarInterno;
 
-      setMotos(motosCompletas);
-    } catch (err) {
-      const mensagem =
-        err instanceof Error ? err.message : "Erro ao carregar motos";
-      setError(mensagem);
-    } finally {
-      setLoading(false);
+  const cancelarDebounce = () => {
+    if (debounceRef.current !== null) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
     }
   };
 
+  // Limpa timer pendente no unmount.
   useEffect(() => {
-    carregar();
-  }, [
-    useCase,
-    clienteRepo,
-    motoRepo,
-    fotoRepo,
-    tipoServicoRepo,
-    servicoPersonalizadoRepo,
-  ]);
+    return () => {
+      cancelarDebounce();
+    };
+  }, []);
+
+  const setBusca = useCallback((valor: string) => {
+    setBuscaState(valor);
+    cancelarDebounce();
+    // Se vazio, dispara imediatamente (sem debounce) para reativar a lista.
+    // Se não-vazio, agenda 300ms.
+    if (valor.length === 0) {
+      void carregarInternoRef.current(1, false, { busca: undefined });
+      return;
+    }
+    debounceRef.current = setTimeout(() => {
+      debounceRef.current = null;
+      void carregarInternoRef.current(1, false, { busca: valor });
+    }, 300);
+  }, []);
 
   const atualizarMoto = (
     entradaId: string,
     atualizacoes: Partial<MotoCompleta>
   ) => {
-    setMotos(prevMotos =>
-      prevMotos.map(moto =>
+    setMotos((prevMotos) =>
+      prevMotos.map((moto) =>
         moto.entradaId === entradaId ? { ...moto, ...atualizacoes } : moto
       )
     );
   };
 
-  return { motos, loading, error, recarregar: carregar, atualizarMoto };
+  const hasMore = motos.length < total;
+
+  return {
+    motos,
+    total,
+    hasMore,
+    loading,
+    error,
+    carregarMais,
+    recarregar,
+    setBusca,
+    atualizarMoto,
+    busca,
+  };
 }
