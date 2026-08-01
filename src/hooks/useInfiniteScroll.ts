@@ -42,26 +42,64 @@ export function useInfiniteScroll(
   });
 
   useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
+    // Cria o IntersectionObserver UMA ÚNICA VEZ por mount do hook. Re-criar
+    // o observer a cada render (deps = []) causa dois bugs no Oficina:
+    //   (1) "reload geral" — o disconnect() + observe() em sequência rápida
+    //       faz o navegador disparar o callback imediatamente ao re-anexar,
+    //       gerando requests duplicadas e resetando o estado de scroll;
+    //   (2) loop de carga — depois de carregarMais() o estado muda, o
+    //       useEffect recria o observer, o sentinel visível dispara a
+    //       callback de novo, etc.
+    //
+    // Para o caso de o sentinel ainda não existir no primeiro render (carga
+    // assíncrona dos primeiros itens), instalamos um MutationObserver no
+    // document.body que dispara `tryAttach` assim que qualquer nó novo
+    // for adicionado — barato e reativo, sem polling.
+    let observer: IntersectionObserver | null = null;
+    let mutationObs: MutationObserver | null = null;
+    let cancelled = false;
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        if (!entry?.isIntersecting) return;
-        if (!hasMoreRef.current) return;
-        if (loadingRef.current) return;
-        onIntersectRef.current();
-      },
-      rootMargin ? { rootMargin } : undefined
-    );
+    const tryAttach = () => {
+      if (cancelled) return;
+      if (observer) return; // já anexado
+      const sentinel = sentinelRef.current;
+      if (!sentinel) return;
+      observer = new IntersectionObserver(
+        (entries) => {
+          const entry = entries[0];
+          if (!entry?.isIntersecting) return;
+          if (!hasMoreRef.current) return;
+          if (loadingRef.current) return;
+          onIntersectRef.current();
+        },
+        rootMargin ? { rootMargin } : undefined
+      );
+      observer.observe(sentinel);
+      // Já anexado — não precisamos mais do MutationObserver.
+      if (mutationObs) {
+        mutationObs.disconnect();
+        mutationObs = null;
+      }
+    };
 
-    observer.observe(sentinel);
+    tryAttach();
+
+    // Se o sentinel ainda não estiver no DOM, observa o body para reagir
+    // a adições de nós. Isso captura tanto o caso da carga assíncrona
+    // inicial quanto mudanças de aba (forceMount mantém ambos os
+    // TabsContent no DOM, mas o sentinel só aparece após a lista carregar).
+    if (!observer && typeof MutationObserver !== "undefined") {
+      mutationObs = new MutationObserver(() => {
+        tryAttach();
+      });
+      mutationObs.observe(document.body, { childList: true, subtree: true });
+    }
 
     return () => {
-      observer.disconnect();
+      cancelled = true;
+      if (mutationObs) mutationObs.disconnect();
+      if (observer) observer.disconnect();
     };
-    // Reavalia após cada render para anexar um sentinel que só aparece
-    // depois da carga assíncrona dos primeiros itens.
-  });
+    // refs são estáveis; rootMargin raramente muda em runtime.
+  }, [sentinelRef, rootMargin]);
 }
