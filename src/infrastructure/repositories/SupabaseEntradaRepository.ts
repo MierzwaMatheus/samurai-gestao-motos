@@ -1,5 +1,9 @@
-import { EntradaRepository } from "@/domain/interfaces/EntradaRepository";
-import { Entrada } from "@shared/types";
+import {
+  BuscarPaginaEntradasParams,
+  EntradaRepository,
+} from "@/domain/interfaces/EntradaRepository";
+import { Pagina } from "@/domain/interfaces/OrcamentoRepository";
+import { Entrada, MotoCompleta } from "@shared/types";
 import { supabase } from "@/infrastructure/supabase/client";
 
 /**
@@ -112,6 +116,16 @@ export class SupabaseEntradaRepository implements EntradaRepository {
     }
 
     return (data || []).map(this.mapToEntrada);
+  }
+
+  async buscarPagina(
+    params: BuscarPaginaEntradasParams
+  ): Promise<Pagina<MotoCompleta>> {
+    void params;
+    // Stub mínimo para satisfazer o contrato da interface.
+    // A implementação real com filtros (.eq/.in/.or) e contagem exata
+    // (count: 'exact', head: true) entra no ciclo 4 do plano TDD.
+    return { items: [], total: 0, page: params.page, pageSize: params.pageSize };
   }
 
   async atualizar(id: string, dados: Partial<Entrada>): Promise<Entrada> {
