@@ -810,23 +810,23 @@ export default function Oficina() {
 
       <main className="pt-20 pb-32 px-6">
         <div className="max-w-2xl mx-auto space-y-6">
-          {loadingGlobal ? (
-            <Card className="card-samurai text-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-accent mx-auto mb-4" />
-              <p className="font-sans text-foreground/60">
-                Carregando motos...
-              </p>
-            </Card>
-          ) : erroGlobal ? (
-            <Card className="card-samurai text-center py-12">
+          {/*
+            Importante: renderizar Tabs e a lista sempre — mesmo durante
+            carregarMais() — para que o scroll e os IntersectionObservers
+            não sejam desmontados/reinicializados a cada página. Loading
+            aparece inline (spinner discreto) acima da lista, sem cobrir
+            todo o conteúdo. erroGlobal também é exibido inline.
+          */}
+          {erroGlobal && (
+            <Card className="card-samurai text-center py-4">
               <p className="font-sans text-red-500">{erroGlobal}</p>
             </Card>
-          ) : (
-            <Tabs
-              value={abaSelecionada}
-              onValueChange={handleTabChange}
-              className="w-full"
-            >
+          )}
+          <Tabs
+            value={abaSelecionada}
+            onValueChange={handleTabChange}
+            className="w-full"
+          >
               <TabsList className="w-full flex overflow-x-auto no-scrollbar rounded-lg bg-muted p-1">
                 <TabsTrigger
                   value="em-andamento"
@@ -920,6 +920,12 @@ export default function Oficina() {
                     data-testid="oficina-em-andamento-sentinel"
                     className="pt-2 pb-6 flex flex-col items-center gap-1"
                   >
+                    {oficinaEmAndamento.loading && oficinaEmAndamento.hasMore && (
+                      <Loader2
+                        className="h-4 w-4 animate-spin text-foreground/30"
+                        data-testid="oficina-em-andamento-loading"
+                      />
+                    )}
                     {!oficinaEmAndamento.hasMore && (
                       <p className="font-sans text-[11px] text-foreground/30">
                         Fim da lista
@@ -984,6 +990,12 @@ export default function Oficina() {
                     data-testid="oficina-concluidos-sentinel"
                     className="pt-2 pb-6 flex flex-col items-center gap-1"
                   >
+                    {oficinaConcluidos.loading && oficinaConcluidos.hasMore && (
+                      <Loader2
+                        className="h-4 w-4 animate-spin text-foreground/30"
+                        data-testid="oficina-concluidos-loading"
+                      />
+                    )}
                     {!oficinaConcluidos.hasMore && (
                       <p className="font-sans text-[11px] text-foreground/30">
                         Fim da lista
@@ -993,7 +1005,6 @@ export default function Oficina() {
                 )}
               </TabsContent>
             </Tabs>
-          )}
         </div>
       </main>
 

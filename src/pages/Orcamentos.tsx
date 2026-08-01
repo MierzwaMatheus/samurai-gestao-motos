@@ -263,25 +263,26 @@ export default function Orcamentos() {
 
           {/* Lista de Orçamentos */}
           <div className="space-y-4">
-            {loading ? (
-              <Card className="card-samurai text-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-accent mx-auto mb-4" />
-                <p className="font-sans text-foreground/60">
-                  Carregando orçamentos...
-                </p>
-              </Card>
-            ) : error ? (
-              <Card className="card-samurai text-center py-12">
+            {/*
+              Importante: NÃO desmontar a lista nem o sentinel durante
+              `loading` — isso resetaria o scroll e desconectaria o
+              IntersectionObserver a cada carregarMais(). Loading aparece
+              inline no sentinel (spinner pequeno). Erro e vazio aparecem
+              como cards discretos.
+            */}
+            {error && (
+              <Card className="card-samurai text-center py-4">
                 <p className="font-sans text-red-500">{error}</p>
               </Card>
-            ) : orcamentos.length === 0 ? (
+            )}
+            {orcamentos.length === 0 && !loading && (
               <Card className="card-samurai text-center py-12">
                 <p className="font-sans text-foreground/60">
                   Nenhum orçamento {filtro === "ativos" ? "ativo" : "expirado"}
                 </p>
               </Card>
-            ) : (
-              orcamentos.map(orcamento => {
+            )}
+            {orcamentos.map(orcamento => {
                 const diasRestantes = calcularDiasRestantes(
                   orcamento.dataExpiracao
                 );
@@ -596,8 +597,7 @@ export default function Orcamentos() {
                     </div>
                   </Card>
                 );
-              })
-            )}
+              })}
 
             {/* Contador discreto "Mostrando X de Y" + sentinel de scroll
                 infinito. O sentinel fica posicionado ao final da lista;
@@ -614,6 +614,12 @@ export default function Orcamentos() {
                 <p className="font-sans text-xs text-foreground/40">
                   Mostrando {orcamentos.length} de {total}
                 </p>
+                {loading && hasMore && (
+                  <Loader2
+                    className="h-4 w-4 animate-spin text-foreground/30"
+                    data-testid="orcamentos-loading"
+                  />
+                )}
                 {!hasMore && (
                   <p className="font-sans text-[11px] text-foreground/30">
                     Fim da lista
