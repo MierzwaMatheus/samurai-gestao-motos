@@ -6,6 +6,12 @@ interface GaleriaFotosProps {
   fotos: FotoStatus[];
 }
 
+/**
+ * Componente para exibir galeria de fotos de status.
+ *
+ * Cada thumb usa `thumbPath` (com fallback para `url` quando `thumbPath` é
+ * null — fotos legadas sem pipeline de 2 variantes).
+ */
 export default function GaleriaFotos({ fotos }: GaleriaFotosProps) {
   const [urls, setUrls] = useState<Record<number, string>>({});
 
@@ -14,15 +20,17 @@ export default function GaleriaFotos({ fotos }: GaleriaFotosProps) {
       const urlsMap: Record<number, string> = {};
       await Promise.all(
         fotos.map(async (foto, index) => {
-          if (!foto.url.startsWith("http")) {
+          // thumbPath preferido; cai no url para fotos legadas
+          const path = foto.thumbPath ?? foto.url;
+          if (!path.startsWith("http")) {
             try {
-              const signedUrl = await obterSignedUrl(foto.url);
+              const signedUrl = await obterSignedUrl(path);
               urlsMap[index] = signedUrl;
             } catch (error) {
               console.error(`Erro ao carregar URL da foto ${index}:`, error);
             }
           } else {
-            urlsMap[index] = foto.url;
+            urlsMap[index] = path;
           }
         })
       );
@@ -68,6 +76,3 @@ export default function GaleriaFotos({ fotos }: GaleriaFotosProps) {
     </div>
   );
 }
-
-
-

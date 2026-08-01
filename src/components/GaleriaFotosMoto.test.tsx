@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, waitFor } from "@testing-library/react";
 
 import GaleriaFotosMoto from "@/components/GaleriaFotosMoto";
+import type { Foto } from "@shared/types";
 
 // Isola do Dialog/Radix para que o teste foque apenas no callsite de storage.
 // O modal é testado (ou virá a ser) em outro arquivo.
@@ -38,7 +39,7 @@ const mockedFrom = vi.mocked(supabase.storage.from);
  */
 const buildBucket = () => {
   const createSignedUrl = vi.fn().mockResolvedValue({
-    data: { signedUrl: "https://signed.example/foto.jpg" },
+    data: { signedUrl: "https://signed.example/thumb.jpg" },
     error: null,
   });
 
@@ -47,6 +48,27 @@ const buildBucket = () => {
   return { createSignedUrl };
 };
 
+/**
+ * Constrói uma Foto mínima para uso nos testes. Recebe paths separados para
+ * thumbPath e fullPath (cada um opcional) e devolve um objeto Foto com os
+ * campos obrigatórios preenchidos.
+ */
+const buildFoto = (params: {
+  url: string;
+  thumbPath?: string | null;
+  fullPath?: string | null;
+  id?: string;
+  entradaId?: string;
+}): Foto => ({
+  id: params.id ?? "foto-id",
+  entradaId: params.entradaId ?? "entrada-id",
+  url: params.url,
+  thumbPath: params.thumbPath ?? null,
+  fullPath: params.fullPath ?? null,
+  tipo: "moto",
+  criadoEm: new Date("2025-01-01T12:00:00Z"),
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
   _clearUrlCache();
@@ -54,17 +76,22 @@ beforeEach(() => {
 });
 
 describe("GaleriaFotosMoto", () => {
-  it("chama createSignedUrl com (path, 3600) — sem opções de transform", async () => {
+  it("chama createSignedUrl com (thumbPath, 3600) quando thumbPath existe", async () => {
     const { createSignedUrl } = buildBucket();
 
-    render(<GaleriaFotosMoto fotos={["user/entrada/moto/foto.jpg"]} />);
+    const foto: Foto = buildFoto({
+      url: "user/entrada/moto/full.jpg",
+      thumbPath: "user/entrada/moto/thumb.jpg",
+    });
+    render(<GaleriaFotosMoto fotos={[foto]} />);
 
     await waitFor(() => {
       expect(createSignedUrl).toHaveBeenCalledTimes(1);
     });
 
+    // O thumb (galeria) usa o thumbPath
     expect(createSignedUrl).toHaveBeenCalledWith(
-      "user/entrada/moto/foto.jpg",
+      "user/entrada/moto/thumb.jpg",
       3600
     );
     expect(createSignedUrl.mock.calls[0]).toHaveLength(2);
@@ -73,7 +100,11 @@ describe("GaleriaFotosMoto", () => {
   it("aponta para o bucket 'fotos' do Supabase", async () => {
     const { createSignedUrl } = buildBucket();
 
-    render(<GaleriaFotosMoto fotos={["user/entrada/moto/foto.jpg"]} />);
+    const foto: Foto = buildFoto({
+      url: "user/entrada/moto/full.jpg",
+      thumbPath: "user/entrada/moto/thumb.jpg",
+    });
+    render(<GaleriaFotosMoto fotos={[foto]} />);
 
     await waitFor(() => {
       expect(createSignedUrl).toHaveBeenCalledTimes(1);
@@ -82,48 +113,75 @@ describe("GaleriaFotosMoto", () => {
     expect(mockedFrom).toHaveBeenCalledWith("fotos");
   });
 
-  it("não chama createSignedUrl quando a URL já é completa (começa com http)", async () => {
+  it("cai no url (signed) quando thumbPath é null — fallback para fotos legadas", async () => {
+    // Cobre o ramo CRÍTICO: `foto.thumbPath ?? foto.url` quando thumbPath
+    // é null. Sem essa fallback, fotos legadas (sem thumb_path no banco)
+    // ficariam sem imagem na galeria.
     const { createSignedUrl } = buildBucket();
 
-    render(
-      <GaleriaFotosMoto
-        fotos={["https://already-signed.example/foto.jpg"]}
-      />
-    );
+    const fotoLegada: Foto = buildFoto({
+      url: "user/entrada/moto/legada.jpg",
+      thumbPath: null,
+    });
+    render(<GaleriaFotosMoto fotos={[fotoLegada]} />);
 
-    // Aguarda o useEffect rodar. `createSignedUrl` não deve ser invocado
-    // para URLs que já começam com "http" — o `startsWith("http")` é a
-    // salvaguarda que evita tentar assinar uma URL já assinada.
+    await waitFor(() => {
+      expect(createSignedUrl).toHaveBeenCalledTimes(1);
+    });
+
+    expect(createSignedUrl).toHaveBeenCalledWith(
+      "user/entrada/moto/legada.jpg",
+      3600
+    );
+  });
+
+  it("não chama createSignedUrl quando thumbPath é uma URL completa (já assinada)", async () => {
+    const { createSignedUrl } = buildBucket();
+
+    const foto: Foto = buildFoto({
+      url: "user/entrada/moto/full.jpg",
+      thumbPath: "https://already-signed.example/thumb.jpg",
+    });
+    render(<GaleriaFotosMoto fotos={[foto]} />);
+
     await waitFor(() => {
       expect(createSignedUrl).not.toHaveBeenCalled();
     });
   });
 
   it("retorna null quando fotos está vazio (boundary)", async () => {
-    // Mata o mutante ALTO em GaleriaFotosMoto.tsx:58 (ConditionalExpression
-    // `if (fotos.length === 0) return null` → `false`/`true`/`!==`).
     const { container } = render(<GaleriaFotosMoto fotos={[]} />);
     expect(container.firstChild).toBeNull();
   });
 
-  it("passa urlsParaModal com signedUrl quando carregada e fallback para original", async () => {
-    // Mata os mutantes CRÍTICOS em GaleriaFotosMoto.tsx:63 (ConditionalExpression
-    // `urls[index] || url` → `false`/`true` e LogicalOperator `&&`).
-    // O modal recebe `urlsParaModal` calculado no pai. Com o fallback correto,
-    // índices com signed URL recebem a signed; demais recebem o original.
+  it("passa urlsParaModal com signed URL do thumb e fallback para thumbPath original", async () => {
+    // O modal recebe `urlsParaModal` calculado no pai. Para cada foto, o
+    // modal recebe a URL assinada do thumb (ou o thumbPath original se já
+    // for URL completa). O fallback cobre fotos sem signed URL.
     const { createSignedUrl } = buildBucket();
 
-    render(
-      <GaleriaFotosMoto
-        fotos={[
-          "user/entrada/moto/foto1.jpg",
-          "https://already-signed.example/foto2.jpg",
-          "user/entrada/moto/foto3.jpg",
-        ]}
-      />
-    );
+    const fotos: Foto[] = [
+      buildFoto({
+        id: "1",
+        url: "user/entrada/moto/full1.jpg",
+        thumbPath: "user/entrada/moto/thumb1.jpg",
+      }),
+      buildFoto({
+        id: "2",
+        url: "user/entrada/moto/full2.jpg",
+        thumbPath: "https://already-signed.example/thumb2.jpg",
+      }),
+      buildFoto({
+        id: "3",
+        url: "user/entrada/moto/legada3.jpg",
+        thumbPath: null,
+      }),
+    ];
+
+    render(<GaleriaFotosMoto fotos={fotos} />);
 
     await waitFor(() => {
+      // 2 chamadas signed: thumb1 e legado3 (url)
       expect(createSignedUrl).toHaveBeenCalledTimes(2);
     });
 
@@ -134,11 +192,11 @@ describe("GaleriaFotosMoto", () => {
     };
     expect(props).toBeDefined();
     expect(props.fotos).toHaveLength(3);
-    // Índice 0: signed URL gerada pelo Supabase
-    expect(props.fotos[0]).toBe("https://signed.example/foto.jpg");
-    // Índice 1: URL original (já completa, startsWith http)
-    expect(props.fotos[1]).toBe("https://already-signed.example/foto2.jpg");
-    // Índice 2: signed URL gerada pelo Supabase
-    expect(props.fotos[2]).toBe("https://signed.example/foto.jpg");
+    // Índice 0: signed URL do thumb1 gerada pelo Supabase
+    expect(props.fotos[0]).toBe("https://signed.example/thumb.jpg");
+    // Índice 1: thumbPath original (já começa com http, não foi assinado)
+    expect(props.fotos[1]).toBe("https://already-signed.example/thumb2.jpg");
+    // Índice 2: signed URL do url (foto legada, sem thumbPath)
+    expect(props.fotos[2]).toBe("https://signed.example/thumb.jpg");
   });
 });

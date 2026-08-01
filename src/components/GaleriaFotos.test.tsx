@@ -27,7 +27,7 @@ const mockedFrom = vi.mocked(supabase.storage.from);
  */
 const buildBucket = () => {
   const createSignedUrl = vi.fn().mockResolvedValue({
-    data: { signedUrl: "https://signed.example/status.jpg" },
+    data: { signedUrl: "https://signed.example/thumb.jpg" },
     error: null,
   });
 
@@ -36,26 +36,38 @@ const buildBucket = () => {
   return { createSignedUrl };
 };
 
+/**
+ * Constrói uma FotoStatus mínima para uso nos testes. Recebe thumbPath
+ * opcional para cobrir o fallback para url quando thumbPath é null.
+ */
+const buildFoto = (params: {
+  url: string;
+  thumbPath?: string | null;
+  observacao?: string;
+}): FotoStatus => ({
+  url: params.url,
+  thumbPath: params.thumbPath ?? null,
+  fullPath: null,
+  data: new Date("2025-01-01T12:00:00Z"),
+  progresso: 50,
+  ...(params.observacao ? { observacao: params.observacao } : {}),
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
   _clearUrlCache();
 });
 
-/**
- * Constrói uma FotoStatus mínima para uso nos testes.
- */
-const buildFoto = (url: string, observacao?: string): FotoStatus => ({
-  url,
-  data: new Date("2025-01-01T12:00:00Z"),
-  progresso: 50,
-  ...(observacao ? { observacao } : {}),
-});
-
 describe("GaleriaFotos", () => {
-  it("chama createSignedUrl com (path, 3600) — sem opções de transform", async () => {
+  it("chama createSignedUrl com (thumbPath, 3600) quando thumbPath existe", async () => {
     const { createSignedUrl } = buildBucket();
 
-    const fotos: FotoStatus[] = [buildFoto("user/entrada/status/status.jpg")];
+    const fotos: FotoStatus[] = [
+      buildFoto({
+        url: "user/entrada/status/full.jpg",
+        thumbPath: "user/entrada/status/thumb.jpg",
+      }),
+    ];
     render(<GaleriaFotos fotos={fotos} />);
 
     await waitFor(() => {
@@ -63,23 +75,45 @@ describe("GaleriaFotos", () => {
     });
 
     expect(createSignedUrl).toHaveBeenCalledWith(
-      "user/entrada/status/status.jpg",
+      "user/entrada/status/thumb.jpg",
       3600
     );
     expect(createSignedUrl.mock.calls[0]).toHaveLength(2);
   });
 
-  it("não chama createSignedUrl quando a URL já é completa (começa com http)", async () => {
+  it("cai no url (signed) quando thumbPath é null — fallback para fotos legadas", async () => {
+    // Cobre o ramo CRÍTICO do `thumbPath ?? url` quando thumbPath é null.
     const { createSignedUrl } = buildBucket();
 
     const fotos: FotoStatus[] = [
-      buildFoto("https://already-signed.example/status.jpg"),
+      buildFoto({
+        url: "user/entrada/status/legada.jpg",
+        thumbPath: null,
+      }),
     ];
     render(<GaleriaFotos fotos={fotos} />);
 
-    // Aguarda o useEffect rodar. `createSignedUrl` não deve ser invocado
-    // para URLs que já começam com "http" — o `startsWith("http")` é a
-    // salvaguarda que evita tentar assinar uma URL já assinada.
+    await waitFor(() => {
+      expect(createSignedUrl).toHaveBeenCalledTimes(1);
+    });
+
+    expect(createSignedUrl).toHaveBeenCalledWith(
+      "user/entrada/status/legada.jpg",
+      3600
+    );
+  });
+
+  it("não chama createSignedUrl quando thumbPath é uma URL completa (já assinada)", async () => {
+    const { createSignedUrl } = buildBucket();
+
+    const fotos: FotoStatus[] = [
+      buildFoto({
+        url: "user/entrada/status/full.jpg",
+        thumbPath: "https://already-signed.example/thumb.jpg",
+      }),
+    ];
+    render(<GaleriaFotos fotos={fotos} />);
+
     await waitFor(() => {
       expect(createSignedUrl).not.toHaveBeenCalled();
     });
