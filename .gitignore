@@ -112,3 +112,11 @@ temp/
 # Stryker mutation testing artifacts
 .stryker-tmp/
 reports/
+
+# Deno
+.deno/
+deno.lock
+
+# Supabase local artifacts
+supabase/.branches/
+supabase/.temp/

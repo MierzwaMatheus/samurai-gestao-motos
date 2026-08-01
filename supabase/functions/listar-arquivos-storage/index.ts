@@ -30,7 +30,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-Deno.serve(async (req: Request) => {
+export async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
@@ -150,4 +150,8 @@ Deno.serve(async (req: Request) => {
       }
     );
   }
-});
+}
+
+if (import.meta.main) {
+  Deno.serve(handler);
+}
