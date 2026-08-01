@@ -1,12 +1,10 @@
 import { useState, useEffect } from "react";
 import { FotoStatus } from "@shared/types";
-import { SupabaseStorageApi } from "@/infrastructure/storage/SupabaseStorageApi";
+import { obterSignedUrl } from "@/infrastructure/storage/urlCache";
 
 interface GaleriaFotosProps {
   fotos: FotoStatus[];
 }
-
-const storageApi = new SupabaseStorageApi();
 
 export default function GaleriaFotos({ fotos }: GaleriaFotosProps) {
   const [urls, setUrls] = useState<Record<number, string>>({});
@@ -18,7 +16,7 @@ export default function GaleriaFotos({ fotos }: GaleriaFotosProps) {
         fotos.map(async (foto, index) => {
           if (!foto.url.startsWith("http")) {
             try {
-              const signedUrl = await storageApi.obterUrlAssinada(foto.url);
+              const signedUrl = await obterSignedUrl(foto.url);
               urlsMap[index] = signedUrl;
             } catch (error) {
               console.error(`Erro ao carregar URL da foto ${index}:`, error);
