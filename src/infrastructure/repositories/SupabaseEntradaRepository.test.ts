@@ -208,6 +208,19 @@ describe("SupabaseEntradaRepository — paginação", () => {
     ]);
   });
 
+  it("aplica .in('status', [...]) quando status é informado", async () => {
+    buildBucket();
+    const { entradasChain } = setupPagedEntradas();
+
+    await new SupabaseEntradaRepository().buscarPagina({
+      page: 1,
+      pageSize: 10,
+      status: ["concluido"],
+    });
+
+    expect(entradasChain.in).toHaveBeenCalledWith("status", ["concluido"]);
+  });
+
   it("gera .or(...) quando busca é informada", async () => {
     buildBucket();
     const { entradasChain } = setupPagedEntradas();

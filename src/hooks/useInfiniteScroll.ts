@@ -61,7 +61,7 @@ export function useInfiniteScroll(
     return () => {
       observer.disconnect();
     };
-    // O observer é criado uma única vez por mount; `rootMargin` raramente
-    // muda em runtime, então aceitamos re-criar o observer nessa caso.
-  }, [sentinelRef, rootMargin]);
+    // Reavalia após cada render para anexar um sentinel que só aparece
+    // depois da carga assíncrona dos primeiros itens.
+  });
 }

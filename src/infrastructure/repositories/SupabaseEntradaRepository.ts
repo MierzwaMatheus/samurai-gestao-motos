@@ -124,7 +124,7 @@ export class SupabaseEntradaRepository implements EntradaRepository {
   async buscarPagina(
     params: BuscarPaginaEntradasParams
   ): Promise<Pagina<MotoCompleta>> {
-    const { page, pageSize, tipo, statusEntrega, busca } = params;
+    const { page, pageSize, tipo, status, statusEntrega, busca } = params;
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
 
@@ -133,6 +133,9 @@ export class SupabaseEntradaRepository implements EntradaRepository {
     // valor `undefined` que o PostgREST rejeita.
     const applyFilter = (builder: any) => {
       if (tipo) builder = builder.eq("tipo", tipo);
+      if (status && status.length > 0) {
+        builder = builder.in("status", status);
+      }
       if (statusEntrega && statusEntrega.length > 0) {
         builder = builder.in("status_entrega", statusEntrega);
       }

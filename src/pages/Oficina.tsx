@@ -82,10 +82,12 @@ export default function Oficina() {
   const oficinaEmAndamento = useMotosOficina(entradaRepo, {
     pageSize: 10,
     tipo: "entrada",
+    status: ["pendente", "alinhando"],
   });
   const oficinaConcluidos = useMotosOficina(entradaRepo, {
     pageSize: 10,
     tipo: "entrada",
+    status: ["concluido"],
   });
 
   // Helper que atualiza uma moto em ambas as instâncias (a moto pode

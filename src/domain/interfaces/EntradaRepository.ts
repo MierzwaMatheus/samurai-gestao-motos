@@ -10,6 +10,7 @@ import { Pagina } from "@/domain/interfaces/OrcamentoRepository";
  * - page: número da página (1-based)
  * - pageSize: quantidade de itens por página
  * - tipo: filtra entradas pelo tipo ("entrada" | "orcamento")
+ * - status: lista de status da oficina aceitos ("pendente" | "alinhando" | "concluido")
  * - statusEntrega: lista de status de entrega aceitos ("pendente" | "entregue" | "retirado")
  * - busca: termo livre aplicado em cliente/moto/placa/serviço
  */
@@ -17,6 +18,7 @@ export interface BuscarPaginaEntradasParams {
   page: number;
   pageSize: number;
   tipo?: Entrada["tipo"];
+  status?: Entrada["status"][];
   statusEntrega?: NonNullable<Entrada["statusEntrega"]>[];
   busca?: string;
 }

@@ -8,6 +8,7 @@ import { Entrada, MotoCompleta } from "@shared/types";
  * - page:      número da página (1-based). Default 1.
  * - pageSize:  quantidade de itens por página. Default 10.
  * - tipo:      filtro server-side pelo tipo de entrada.
+ * - status:    filtro server-side pelos status da oficina aceitos.
  * - statusEntrega: filtro server-side pelos status de entrega aceitos.
  * - busca:     termo livre enviado ao backend (cliente/moto/placa/serviço).
  *
@@ -19,6 +20,7 @@ export interface UseMotosOficinaOpts {
   page?: number;
   pageSize?: number;
   tipo?: Entrada["tipo"];
+  status?: Entrada["status"][];
   statusEntrega?: NonNullable<Entrada["statusEntrega"]>[];
   busca?: string;
 }
@@ -48,6 +50,7 @@ export function useMotosOficina(
   const pageSize = opts.pageSize ?? 10;
   const initialPage = opts.page ?? 1;
   const tipo = opts.tipo;
+  const status = opts.status;
   const statusEntrega = opts.statusEntrega;
   const buscaInicial = opts.busca;
 
@@ -77,6 +80,7 @@ export function useMotosOficina(
           page: proximaPage,
           pageSize,
           tipo,
+          status,
           statusEntrega,
           busca: params.busca,
         });
@@ -92,7 +96,7 @@ export function useMotosOficina(
         setLoading(false);
       }
     },
-    [entradaRepo, pageSize, tipo, statusEntrega]
+    [entradaRepo, pageSize, tipo, status, statusEntrega]
   );
 
   const recarregar = useCallback(async () => {

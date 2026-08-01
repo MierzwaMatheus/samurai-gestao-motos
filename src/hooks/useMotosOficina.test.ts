@@ -165,6 +165,33 @@ describe("useMotosOficina — ciclo 6 (paginado + busca server-side debounced 30
     expect(result.current.hasMore).toBe(false);
   });
 
+  it("envia o filtro de status da aba ao buscar páginas", async () => {
+    const entradaRepo = buildEntradaRepo() as unknown as EntradaRepository;
+    (entradaRepo.buscarPagina as ReturnType<typeof vi.fn>).mockResolvedValue({
+      items: [makeMotoCompleta("entrada-1")],
+      total: 1,
+      page: 1,
+      pageSize: 10,
+    });
+
+    const { result } = renderHook(() =>
+      useMotosOficina(entradaRepo, {
+        pageSize: 10,
+        status: ["concluido"],
+      })
+    );
+
+    await act(async () => {
+      await result.current.recarregar();
+    });
+
+    expect(entradaRepo.buscarPagina).toHaveBeenCalledWith({
+      page: 1,
+      pageSize: 10,
+      status: ["concluido"],
+    });
+  });
+
   it("debounce de 300ms colapsa mudanças rápidas de busca em uma única request", async () => {
     vi.useFakeTimers();
     const entradaRepo = buildEntradaRepo() as unknown as EntradaRepository;

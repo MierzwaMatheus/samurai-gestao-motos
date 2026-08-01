@@ -334,7 +334,53 @@ afterEach(() => {
 // Testes — ciclo 9
 // ============================================================================
 describe("Oficina — ciclo 9 (scroll infinito + busca + reset sub-aba)", () => {
-  it("(a) digitar busca dispara 1 request após 300ms (debounce via setBusca)", async () => {
+  it("consulta cada aba com seu status no servidor", () => {
+    mockUseMotosOficina();
+
+    render(<Oficina />);
+
+    expect(useMotosOficinaMock).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      expect.objectContaining({
+        status: ["pendente", "alinhando"],
+      })
+    );
+    expect(useMotosOficinaMock).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      expect.objectContaining({
+        status: ["concluido"],
+      })
+    );
+  });
+
+  it("observa o sentinel de Concluídos quando ele surge após a carga inicial", async () => {
+    const motoConcluida = { ...makeMoto("con-1"), status: "concluido" as const };
+    const { concluidos } = mockUseMotosOficina(
+      {},
+      { motos: [], total: 3, hasMore: true }
+    );
+
+    const view = render(<Oficina />);
+    expect(screen.queryByTestId("oficina-concluidos-sentinel")).toBeNull();
+
+    concluidos.motos.push(motoConcluida);
+    view.rerender(<Oficina />);
+
+    const sentinel = await screen.findByTestId("oficina-concluidos-sentinel");
+    const observer = MockIntersectionObserver.instances.find(instance =>
+      instance.observed.includes(sentinel)
+    );
+
+    expect(observer).toBeDefined();
+    act(() => {
+      observer?.__trigger([{ isIntersecting: true }]);
+    });
+    expect(concluidos.carregarMais).toHaveBeenCalledTimes(1);
+  });
+
+  it("(a) digitar busca dispara 1 request após 300ms (debounce via setBusca)",async () => {
     // A página DEVE invocar setBusca do hook ao digitar no input. O
     // comportamento de debounce 300ms é responsabilidade do próprio
     // hook (já coberto em `useMotosOficina.test.ts` ciclo 6). Aqui
