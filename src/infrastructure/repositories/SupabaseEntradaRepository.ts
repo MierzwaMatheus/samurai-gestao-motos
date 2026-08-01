@@ -161,11 +161,14 @@ export class SupabaseEntradaRepository implements EntradaRepository {
       throw new Error(`Erro ao buscar entradas: ${entradasError.message}`);
     }
 
-    const countBuilder = applyFilter(supabase.from("entradas").select("*"));
-    const { count, error: countError } = await countBuilder.select("*", {
-      count: "exact",
-      head: true,
-    });
+    // O count head precisa ser uma query separada, MAS passando as
+    // opções { count, head } no MESMO select() que recebe os filtros —
+    // chamar `select('*', { count: 'exact', head: true })` DEPOIS de
+    // `applyFilter(select('*'))` sobrescreve os filtros no cliente
+    // PostgREST, fazendo o count retornar 0/null em vez do total real.
+    const { count, error: countError } = await applyFilter(
+      supabase.from("entradas").select("*", { count: "exact", head: true })
+    );
 
     if (countError) {
       throw new Error(`Erro ao contar entradas: ${countError.message}`);
