@@ -600,6 +600,126 @@ describe("SupabaseStorageApi.uploadFoto — pipeline de 2 variantes (moto/status
     expect(spy).not.toHaveBeenCalled();
     expect(upload).not.toHaveBeenCalled();
   });
+
+  it("lança erro quando thumbUpload falha no pipeline de 2 variantes", async () => {
+    // Mata o mutante em SupabaseStorageApi.ts:95 (`if (thumbUpload.error)` →
+    // `if (false)`). Sem essa asserção, o mutante sobrevive porque o teste
+    // existente só observa o caminho de 1 upload (documento).
+    const variantes = buildVariantesMock();
+    const upload = vi
+      .fn()
+      // 1ª chamada (thumb) falha; 2ª (full) sucede.
+      .mockResolvedValueOnce({
+        data: null,
+        error: { message: "erro no thumb" },
+      })
+      .mockResolvedValueOnce({ data: { path: "stub" }, error: null });
+    mockedFrom.mockReturnValue({ upload, createSignedUrl: vi.fn() } as never);
+
+    const mod = await import("@/infrastructure/storage/imageVariants");
+    vi.spyOn(mod, "gerarVariantes").mockResolvedValue({
+      thumb: variantes.thumb,
+      full: variantes.full,
+    });
+
+    const api = new SupabaseStorageApi();
+
+    await expect(
+      api.uploadFoto(buildFile(), "entrada-1", "moto")
+    ).rejects.toThrow("Erro ao fazer upload: erro no thumb");
+  });
+
+  it("lança erro quando fullUpload falha no pipeline de 2 variantes", async () => {
+    // Mata o mutante em SupabaseStorageApi.ts:98 (`if (fullUpload.error)` →
+    // `if (false)`).
+    const variantes = buildVariantesMock();
+    const upload = vi
+      .fn()
+      // 1ª chamada (thumb) sucede; 2ª (full) falha.
+      .mockResolvedValueOnce({ data: { path: "stub" }, error: null })
+      .mockResolvedValueOnce({
+        data: null,
+        error: { message: "erro no full" },
+      });
+    mockedFrom.mockReturnValue({ upload, createSignedUrl: vi.fn() } as never);
+
+    const mod = await import("@/infrastructure/storage/imageVariants");
+    vi.spyOn(mod, "gerarVariantes").mockResolvedValue({
+      thumb: variantes.thumb,
+      full: variantes.full,
+    });
+
+    const api = new SupabaseStorageApi();
+
+    await expect(
+      api.uploadFoto(buildFile(), "entrada-1", "status")
+    ).rejects.toThrow("Erro ao fazer upload: erro no full");
+  });
+
+  it("renomeia corretamente o arquivo com extensão de múltiplos caracteres (regex boundary)", async () => {
+    // Mata os mutantes de Regex em SupabaseStorageApi.ts:81-82
+    // (`(\.[^.]+)?$` → `(\.[.]+)?$` / `(\.[^.])?$`). Esses mutantes
+    // exigem 2+ dots ou capturam apenas 1 char após o ponto — produzem
+    // paths com a extensão original `.jpg` ainda anexada (ex:
+    // "...-foto.jpg-thumb.webp") em vez de "...-foto-thumb.webp".
+    // Usar `not.toMatch(/\.jpg/)` no path enviado ao bucket é a
+    // asserção mínima que mata os mutantes (e passa no original).
+    const { api, upload } = buildBucket();
+
+    const fileComExtensao = new File(["x"], "foto.jpg", {
+      type: "image/jpeg",
+    });
+
+    const resultado = await api.uploadFoto(
+      fileComExtensao,
+      "entrada-1",
+      "moto"
+    );
+
+    // Sufixo presente.
+    expect(resultado.thumbPath).toMatch(/-thumb\.webp$/);
+    expect(resultado.fullPath).toMatch(/-full\.webp$/);
+    // A extensão original `.jpg` foi removida do path.
+    expect(resultado.thumbPath).not.toMatch(/\.jpg/);
+    expect(resultado.fullPath).not.toMatch(/\.jpg/);
+    // E o bucket recebeu paths sem a extensão original.
+    const pathsEnviados = (upload.mock.calls as Array<[string, File]>).map(
+      ([path]) => path
+    );
+    expect(pathsEnviados).toHaveLength(2);
+    expect(pathsEnviados[0]).not.toMatch(/\.jpg/);
+    expect(pathsEnviados[1]).not.toMatch(/\.jpg/);
+  });
+
+  it("renomeia corretamente o arquivo sem extensão (regex `?` opcional)", async () => {
+    // Mata os mutantes de Regex em SupabaseStorageApi.ts:81-82
+    // (`(\.[^.]+)?$` → `(\.[^.]+)$`). Sem o `?`, o grupo deixa de
+    // ser opcional e o replace só atua quando o path JÁ termina com
+    // um dot + extensão. Para um arquivo sem extensão, o mutante
+    // não faz replacement nenhum e o basePath fica sem o sufixo
+    // `-thumb.webp` / `-full.webp` no retorno.
+    const { api, upload } = buildBucket();
+
+    const fileSemExtensao = new File(["x"], "foto", { type: "image/jpeg" });
+
+    const resultado = await api.uploadFoto(
+      fileSemExtensao,
+      "entrada-1",
+      "moto"
+    );
+
+    // O `?` é o que permite o match vazio no fim do path — sem ele o
+    // replace não acontece e os paths retornados ficam sem o sufixo.
+    expect(resultado.thumbPath).toMatch(/-thumb\.webp$/);
+    expect(resultado.fullPath).toMatch(/-full\.webp$/);
+    // E o bucket recebeu os paths com sufixo.
+    const pathsEnviados = (upload.mock.calls as Array<[string, File]>).map(
+      ([path]) => path
+    );
+    expect(pathsEnviados).toHaveLength(2);
+    expect(pathsEnviados[0]).toMatch(/-thumb\.webp$/);
+    expect(pathsEnviados[1]).toMatch(/-full\.webp$/);
+  });
 });
 
 describe("SupabaseStorageApi.listarArquivosPorPeriodo", () => {

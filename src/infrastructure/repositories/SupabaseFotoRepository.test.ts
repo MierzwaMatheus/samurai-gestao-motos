@@ -618,6 +618,80 @@ describe("SupabaseFotoRepository — persistência e mapeamento de thumbPath/ful
     });
   });
 
+  describe("buscarPorId — paths já completos (http) em thumbPath/fullPath", () => {
+    it("não chama createSignedUrl para thumbPath que já é URL completa (http)", async () => {
+      // Mata os mutantes em src/infrastructure/repositories/SupabaseFotoRepository.ts:139
+      // (ConditionalExpression `if (path.startsWith("http"))` → `if (false)` e
+      // MethodExpression `startsWith("http")` → `endsWith("http")`).
+      // Sem este teste, ambos os mutantes sobrevivem porque o caminho com
+      // URL completa só era exercitado para o `url` (não para
+      // thumbPath/fullPath).
+      const { createSignedUrl } = buildBucket();
+      const row = buildFotoRow({
+        url: "user/.../legacy.jpg",
+        thumb_path: "https://already-signed.example/thumb.jpg",
+        full_path: "https://already-signed.example/full.jpg",
+      });
+
+      mockedDbFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({ data: row, error: null }),
+          }),
+        }),
+      } as never);
+
+      const foto = await new SupabaseFotoRepository().buscarPorId("foto-1");
+
+      // Só o `url` (path cru) é assinado; thumb_path/full_path já são
+      // URLs completas e voltam intactas.
+      expect(createSignedUrl).toHaveBeenCalledTimes(1);
+      expect(createSignedUrl).toHaveBeenCalledWith("user/.../legacy.jpg", 3600);
+      expect(foto).not.toBeNull();
+      expect(foto!.thumbPath).toBe("https://already-signed.example/thumb.jpg");
+      expect(foto!.fullPath).toBe("https://already-signed.example/full.jpg");
+    });
+
+    it("não chama createSignedUrl para thumbPath que termina com http (anti endsWith)", async () => {
+      // Mata o mutante `startsWith("http")` → `endsWith("http")`:
+      // um path cru como "user/.../xhttp" terminaria com "http" e o
+      // mutante o devolveria intacto (skipando a assinatura).
+      // O original `startsWith("http")` exige que o path COMECE com
+      // "http" — então assina normalmente.
+      const { createSignedUrl } = buildBucket();
+      const row = buildFotoRow({
+        url: "user/.../outro.jpg",
+        thumb_path: "user/.../thumbxhttp", // termina com "http" mas não começa
+        full_path: "user/.../fullxhttp",
+      });
+
+      mockedDbFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({ data: row, error: null }),
+          }),
+        }),
+      } as never);
+
+      const foto = await new SupabaseFotoRepository().buscarPorId("foto-1");
+
+      // O `url` + os 2 paths devem ser assinados (3 chamadas) — nenhum
+      // começa com "http", então o original trata todos como paths crus.
+      // Com o mutante `endsWith`, os dois paths terminam com "http" e
+      // seriam devolvidos intactos (apenas 1 chamada para `url`).
+      expect(createSignedUrl).toHaveBeenCalledTimes(3);
+      expect(createSignedUrl).toHaveBeenCalledWith(
+        "user/.../thumbxhttp",
+        3600
+      );
+      expect(createSignedUrl).toHaveBeenCalledWith(
+        "user/.../fullxhttp",
+        3600
+      );
+      expect(foto).not.toBeNull();
+    });
+  });
+
   describe("buscarPorEntradaIdETipo — mapeamento thumbPath/fullPath", () => {
     it("mapeia thumb_path/full_path para cada foto retornada", async () => {
       buildBucket(path => `https://signed.example/${path}`);

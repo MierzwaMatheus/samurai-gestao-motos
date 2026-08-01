@@ -199,4 +199,107 @@ describe("GaleriaFotosMoto", () => {
     // Índice 2: signed URL do url (foto legada, sem thumbPath)
     expect(props.fotos[2]).toBe("https://signed.example/thumb.jpg");
   });
+
+  it("passa url original (signed) ao modal quando thumbPath é URL completa e url é diferente", async () => {
+    // Mata o mutante de LogicalOperator em GaleriaFotosMoto.tsx:63
+    // (`??` → `&&`). Quando thumbPath já é uma URL completa (http) e
+    // `url` aponta para um path distinto, o operador correto é `??`:
+    // precisamos do thumbPath (já assinado) e NÃO do `url` (path cru).
+    // Com o mutante `&&`, `pathOriginal` seria o `url` cru (string
+    // diferente), vazando a URL de alta resolução.
+    const { createSignedUrl } = buildBucket();
+
+    const fotos: Foto[] = [
+      buildFoto({
+        id: "1",
+        url: "user/entrada/moto/legado.jpg",
+        thumbPath: "https://already-signed.example/thumb1.jpg",
+      }),
+    ];
+
+    render(<GaleriaFotosMoto fotos={fotos} />);
+
+    await waitFor(() => {
+      expect(createSignedUrl).not.toHaveBeenCalled();
+    });
+
+    expect(modalSpy).toHaveBeenCalled();
+    const props = modalSpy.mock.calls.at(-1)?.[0] as {
+      fotos: string[];
+    };
+    expect(props).toBeDefined();
+    // thumbPath é http → urls[0] é setado para o thumbPath original; o
+    // modal recebe o thumbPath (não o `url` legado).
+    expect(props.fotos[0]).toBe("https://already-signed.example/thumb1.jpg");
+    expect(props.fotos[0]).not.toBe("user/entrada/moto/legado.jpg");
+  });
+
+  it("cai no thumbPath original quando createSignedUrl falha (carregamento parcial)", async () => {
+    // Mata o mutante de LogicalOperator em GaleriaFotosMoto.tsx:63
+    // (`??` → `&&`) no caminho em que `urls[index]` permanece
+    // undefined (porque createSignedUrl rejeitou). A expressão
+    // `urls[index] ?? pathOriginal` deve cair no `pathOriginal =
+    // thumbPath ?? url`, que para thumbPath truthy é o próprio
+    // thumbPath. Com o mutante `&&`, `pathOriginal` vira o `url`
+    // (string diferente) — distinguível asserindo o thumbPath exato.
+    const createSignedUrl = vi.fn().mockRejectedValue(new Error("rede off"));
+    mockedFrom.mockReturnValue({ createSignedUrl } as never);
+
+    const fotos: Foto[] = [
+      buildFoto({
+        id: "1",
+        url: "user/entrada/moto/legado.jpg",
+        thumbPath: "user/entrada/moto/thumb1.jpg",
+      }),
+    ];
+
+    render(<GaleriaFotosMoto fotos={fotos} />);
+
+    // Espera o useEffect rodar e rejeitar — `urls[0]` fica undefined
+    // e a prop do modal cai em `pathOriginal`.
+    await waitFor(() => {
+      expect(createSignedUrl).toHaveBeenCalledTimes(1);
+    });
+
+    expect(modalSpy).toHaveBeenCalled();
+    const props = modalSpy.mock.calls.at(-1)?.[0] as {
+      fotos: string[];
+    };
+    expect(props).toBeDefined();
+    // Original (`??`): pathOriginal = "user/.../thumb1.jpg".
+    // Mutante (`&&`): pathOriginal = "user/.../legado.jpg".
+    expect(props.fotos[0]).toBe("user/entrada/moto/thumb1.jpg");
+    expect(props.fotos[0]).not.toBe("user/entrada/moto/legado.jpg");
+  });
+
+  it("usa o id (não o index) como key do botão — fotos com id duplicado disparam warning do React", () => {
+    // Mata o mutante de LogicalOperator em GaleriaFotosMoto.tsx:72
+    // (`key={foto.id ?? index}` → `key={foto.id && index}`). Quando
+    // duas fotos têm o MESMO id, o `key` original repete o id e o
+    // React dispara um warning de "duplicate key". Com o mutante
+    // `&&`, o key vira o `index` (único por iteração) e o warning
+    // não acontece. Espiamos `console.error` para detectar o aviso.
+    buildBucket();
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const fotos: Foto[] = [
+      buildFoto({ id: "dup", url: "u/1.jpg", thumbPath: "u/t1.jpg" }),
+      buildFoto({
+        id: "dup",
+        url: "u/2.jpg",
+        thumbPath: "u/t2.jpg",
+        entradaId: "entrada-id",
+      }),
+    ];
+
+    render(<GaleriaFotosMoto fotos={fotos} />);
+
+    // Stryker mutante `&&`: keys = 0, 1 → sem warning.
+    // Original: keys = "dup", "dup" → warning "Encountered two
+    // children with the same key, `dup`".
+    const mensagens = errorSpy.mock.calls.flat().map(String).join(" ");
+    expect(mensagens).toMatch(/same key|duplicate key/i);
+
+    errorSpy.mockRestore();
+  });
 });
