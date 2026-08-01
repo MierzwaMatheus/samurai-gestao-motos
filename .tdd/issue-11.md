@@ -47,7 +47,7 @@ base_commit: b936d4de851db3e4ee106a9bee1468ed3e84efac
   - Como: TDD com `vi.useFakeTimers()`. Testes verificam: (a) mudanças rápidas em `busca` colapsam em uma única request após 300ms, (b) mudar `busca` zera `page=1`, (c) `carregarMais` concatena.
   - Arquivos: `src/hooks/useMotosOficina.ts`, `src/hooks/useMotosOficina.test.ts` (novo)
 
-- [ ] 7. Hook `useInfiniteScroll` (IntersectionObserver)
+- [x] 7. Hook `useInfiniteScroll` (IntersectionObserver)
   - O que: `(sentinelRef, { onIntersect, hasMore, loading, rootMargin? })` — dispara `onIntersect()` quando sentinel intersecta E `hasMore && !loading`; ignora se `!hasMore` ou `loading`.
   - Como: TDD mockando `IntersectionObserver` global no helper de teste. Testes verificam: (a) callback NÃO dispara se `!hasMore`, (b) callback NÃO dispara se `loading=true`, (c) `disconnect()` chamado no unmount.
   - Arquivos: `src/hooks/useInfiniteScroll.ts`, `src/hooks/useInfiniteScroll.test.ts` (novo)
