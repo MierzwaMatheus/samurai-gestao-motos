@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/infrastructure/supabase/client';
 import type {
   FaturamentoMensal,
@@ -15,6 +15,17 @@ import type {
   FotosPeriodo,
   FiltrosRelatorio,
 } from '@/domain/interfaces/relatorios';
+
+/** Colunas explícitas por view - ciclo 1 issue #4 */
+const COLUMNS_BY_VIEW = {
+  'vw_status_entradas': ['status', 'quantidade', 'percentual', 'progresso_medio', 'dias_medio_conclusao'],
+  'vw_status_entrega': ['status_entrega', 'quantidade', 'percentual', 'dias_medio_entrega'],
+  'vw_distribuicao_categoria': ['categoria', 'tipos_servico', 'entradas_afetadas', 'total_execucoes', 'faturamento_categoria'],
+  'vw_metricas_performance': ['total_entradas', 'total_orcamentos', 'pendentes', 'alinhando', 'concluidos', 'entrega_pendente', 'entregues', 'retirados', 'faturamento_total', 'ticket_medio_geral', 'clientes_unicos', 'motos_unicas'],
+  'vw_faturamento_por_servico': ['servico', 'categoria', 'quantidade_entradas', 'total_execucoes', 'faturamento_total'],
+  'vw_top_clientes': ['cliente_id', 'cliente_nome', 'telefone', 'email', 'numero_servicos', 'total_entradas', 'faturamento_total', 'ticket_medio', 'ultimo_servico'],
+  'vw_servicos_mais_realizados': ['servico', 'categoria', 'total_historico', 'entradas_diferentes', 'total_execucoes', 'media_por_entrada'],
+} as const;
 
 interface UseQueryResult<T> {
   data: T[] | T | null;
@@ -68,7 +79,7 @@ export function useFaturamentoPorServico(periodo: FiltrosRelatorio['periodo'] = 
   return useSupabaseQuery<FaturamentoPorServico[]>(
     () => supabase
       .from('vw_faturamento_por_servico')
-      .select('*')
+      .select(COLUMNS_BY_VIEW['vw_faturamento_por_servico'].join(','))
       .order('faturamento_total', { ascending: false })
       .limit(20)
   );
@@ -78,7 +89,7 @@ export function useTopClientes(limit: number = 20) {
   return useSupabaseQuery<TopCliente[]>(
     () => supabase
       .from('vw_top_clientes')
-      .select('*')
+      .select(COLUMNS_BY_VIEW['vw_top_clientes'].join(','))
       .order('faturamento_total', { ascending: false })
       .limit(limit)
   );
@@ -88,7 +99,7 @@ export function useServicosMaisRealizados() {
   return useSupabaseQuery<ServicoMaisRealizado[]>(
     () => supabase
       .from('vw_servicos_mais_realizados')
-      .select('*')
+      .select(COLUMNS_BY_VIEW['vw_servicos_mais_realizados'].join(','))
       .order('total_execucoes', { ascending: false })
       .limit(15)
   );
@@ -108,7 +119,7 @@ export function useStatusEntradas() {
   return useSupabaseQuery<StatusEntrada[]>(
     () => supabase
       .from('vw_status_entradas')
-      .select('*')
+      .select(COLUMNS_BY_VIEW['vw_status_entradas'].join(','))
       .order('quantidade', { ascending: false })
   );
 }
@@ -117,7 +128,7 @@ export function useStatusEntrega() {
   return useSupabaseQuery<StatusEntrega[]>(
     () => supabase
       .from('vw_status_entrega')
-      .select('*')
+      .select(COLUMNS_BY_VIEW['vw_status_entrega'].join(','))
       .order('quantidade', { ascending: false })
   );
 }
@@ -140,7 +151,7 @@ export function useDistribuicaoCategoria() {
   return useSupabaseQuery<DistribuicaoCategoria[]>(
     () => supabase
       .from('vw_distribuicao_categoria')
-      .select('*')
+      .select(COLUMNS_BY_VIEW['vw_distribuicao_categoria'].join(','))
       .order('faturamento_categoria', { ascending: false })
   );
 }
@@ -149,7 +160,7 @@ export function useMetricasPerformance() {
   return useSupabaseQuery<MetricasPerformance>(
     () => supabase
       .from('vw_metricas_performance')
-      .select('*')
+      .select(COLUMNS_BY_VIEW['vw_metricas_performance'].join(','))
       .single()
   );
 }
