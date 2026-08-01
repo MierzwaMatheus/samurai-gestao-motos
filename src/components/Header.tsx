@@ -16,12 +16,21 @@ const storageApi = new SupabaseStorageApi();
 
 function StorageBar() {
   const { info, loading, carregarInfo } = useStorageInfo(storageApi);
+  const { user, loading: authLoading } = useAuth();
 
   useEffect(() => {
+    // Só chama a edge function quando o usuário está autenticado. Sem
+    // essa guarda, o useEffect de mount dispara `carregarInfo()`
+    // ANTES do `AuthContext` terminar `getSession()` (sessão sendo
+    // restaurada do localStorage) — o `supabase.functions.invoke`
+    // sai sem Authorization header e a função `consultar-uso-storage`
+    // retorna 401 (gera erro no console e no StorageManager).
+    if (authLoading || !user) return;
+
     carregarInfo();
     const interval = setInterval(carregarInfo, 30000);
     return () => clearInterval(interval);
-  }, [carregarInfo]);
+  }, [carregarInfo, user, authLoading]);
 
   return (
     <StorageManager storageApi={storageApi}>
@@ -50,8 +59,17 @@ export default function Header({ title }: HeaderProps) {
   const [, setLocation] = useLocation();
 
   const handleLogout = async () => {
-    await signOut();
-    setLocation("/login");
+    // try/finally garante que o redirect pra /login acontece MESMO se
+    // o signOut() falhar com 403/401 (sessão já expirada ou revogada
+    // no servidor). O estado local do supabase-js é limpo
+    // independentemente — o usuário fica efetivamente deslogado.
+    try {
+      await signOut();
+    } catch (err) {
+      console.error("[Header] signOut falhou (sessão provavelmente já inválida):", err);
+    } finally {
+      setLocation("/login");
+    }
   };
 
   return (
