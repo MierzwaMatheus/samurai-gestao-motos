@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import { SupabaseStorageApi } from "@/infrastructure/storage/SupabaseStorageApi";
 import { _clearUrlCache } from "@/infrastructure/storage/urlCache";
+import { _clearEspacoBucketCache } from "@/infrastructure/storage/espacoBucketCache";
 
 // Mock do cliente Supabase: precisamos controlar o retorno de
 // `auth.getUser` (para passar pela checagem de autenticação) e do
@@ -80,6 +81,7 @@ const buildBucket = (
 beforeEach(() => {
   vi.clearAllMocks();
   _clearUrlCache();
+  _clearEspacoBucketCache();
 });
 
 /** Arquivo exatamente no limite (5 MB) — testa o boundary `>` vs `>=`. */
@@ -410,5 +412,46 @@ describe("SupabaseStorageApi.consultarEspacoBucket", () => {
     await expect(api.consultarEspacoBucket()).rejects.toThrow(
       "Erro ao consultar espaço do bucket: timeout no banco"
     );
+  });
+});
+
+describe("SupabaseStorageApi.consultarEspacoBucket — cache de 5 min", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-01T12:00:00Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("faz 1 invoke em 2 chamadas dentro da janela de 5 min", async () => {
+    mockedInvoke.mockResolvedValue({
+      data: { espacoUsadoBytes: 100, totalArquivos: 1 },
+      error: null,
+    } as never);
+
+    const api = new SupabaseStorageApi();
+
+    await api.consultarEspacoBucket();
+    vi.advanceTimersByTime(4 * 60 * 1000); // 4 min dentro da janela
+    await api.consultarEspacoBucket();
+
+    expect(mockedInvoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("faz 2 invokes em 2 chamadas após o TTL expirar", async () => {
+    mockedInvoke.mockResolvedValue({
+      data: { espacoUsadoBytes: 100, totalArquivos: 1 },
+      error: null,
+    } as never);
+
+    const api = new SupabaseStorageApi();
+
+    await api.consultarEspacoBucket();
+    vi.advanceTimersByTime(5 * 60 * 1000 + 1); // além do TTL
+    await api.consultarEspacoBucket();
+
+    expect(mockedInvoke).toHaveBeenCalledTimes(2);
   });
 });

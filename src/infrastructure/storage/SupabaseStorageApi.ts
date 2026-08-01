@@ -5,6 +5,7 @@ import {
 } from "@/domain/interfaces/StorageApi";
 import { supabase } from "@/infrastructure/supabase/client";
 import { obterSignedUrl as obterSignedUrlCacheada } from "@/infrastructure/storage/urlCache";
+import { consultarEspacoBucketCacheado } from "@/infrastructure/storage/espacoBucketCache";
 import imageCompression from "browser-image-compression";
 
 /**
@@ -151,38 +152,40 @@ export class SupabaseStorageApi implements StorageApi {
    * `EspacoBucketInfo` consumido pela UI.
    */
   async consultarEspacoBucket(): Promise<EspacoBucketInfo> {
-    const LIMITE_GB = 1;
-    const LIMITE_BYTES = LIMITE_GB * 1024 * 1024 * 1024;
+    return consultarEspacoBucketCacheado(async () => {
+      const LIMITE_GB = 1;
+      const LIMITE_BYTES = LIMITE_GB * 1024 * 1024 * 1024;
 
-    try {
-      const { data, error } = await supabase.functions.invoke<{
-        espacoUsadoBytes: number;
-        totalArquivos: number;
-      }>("consultar-uso-storage");
+      try {
+        const { data, error } = await supabase.functions.invoke<{
+          espacoUsadoBytes: number;
+          totalArquivos: number;
+        }>("consultar-uso-storage");
 
-      if (error) {
-        throw new Error(error.message);
+        if (error) {
+          throw new Error(error.message);
+        }
+
+        const espacoUsadoBytes = data?.espacoUsadoBytes ?? 0;
+        const totalArquivos = data?.totalArquivos ?? 0;
+        const espacoDisponivelBytes = LIMITE_BYTES - espacoUsadoBytes;
+        const percentualUsado = (espacoUsadoBytes / LIMITE_BYTES) * 100;
+
+        return {
+          espacoUsadoBytes,
+          espacoTotalBytes: LIMITE_BYTES,
+          espacoDisponivelBytes: Math.max(0, espacoDisponivelBytes),
+          percentualUsado: Math.min(100, percentualUsado),
+          totalArquivos,
+        };
+      } catch (error) {
+        throw new Error(
+          `Erro ao consultar espaço do bucket: ${
+            error instanceof Error ? error.message : "Erro desconhecido"
+          }`
+        );
       }
-
-      const espacoUsadoBytes = data?.espacoUsadoBytes ?? 0;
-      const totalArquivos = data?.totalArquivos ?? 0;
-      const espacoDisponivelBytes = LIMITE_BYTES - espacoUsadoBytes;
-      const percentualUsado = (espacoUsadoBytes / LIMITE_BYTES) * 100;
-
-      return {
-        espacoUsadoBytes,
-        espacoTotalBytes: LIMITE_BYTES,
-        espacoDisponivelBytes: Math.max(0, espacoDisponivelBytes),
-        percentualUsado: Math.min(100, percentualUsado),
-        totalArquivos,
-      };
-    } catch (error) {
-      throw new Error(
-        `Erro ao consultar espaço do bucket: ${
-          error instanceof Error ? error.message : "Erro desconhecido"
-        }`
-      );
-    }
+    });
   }
 
   /**
