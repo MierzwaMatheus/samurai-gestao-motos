@@ -140,66 +140,32 @@ export class SupabaseStorageApi implements StorageApi {
 
   /**
    * Consulta espaço utilizado no bucket
-   * Lista todos os arquivos e calcula o tamanho total
-   * Limite padrão: 1GB (1073741824 bytes)
-   * Faz busca recursiva em todas as subpastas
+   *
+   * Delega para a Edge Function `consultar-uso-storage`, que agrega
+   * bytes/quantidade por usuário no SQL (SECURITY DEFINER). Isso troca
+   * a listagem recursiva paginada (centenas de requests) por uma única
+   * chamada HTTP.
+   *
+   * O cliente recompõe `espacoDisponivelBytes` e `percentualUsado` com
+   * a constante `LIMITE_BYTES = 1 GB` para preservar o shape
+   * `EspacoBucketInfo` consumido pela UI.
    */
   async consultarEspacoBucket(): Promise<EspacoBucketInfo> {
     const LIMITE_GB = 1;
     const LIMITE_BYTES = LIMITE_GB * 1024 * 1024 * 1024;
 
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) {
-        throw new Error("Usuário não autenticado");
+      const { data, error } = await supabase.functions.invoke<{
+        espacoUsadoBytes: number;
+        totalArquivos: number;
+      }>("consultar-uso-storage");
+
+      if (error) {
+        throw new Error(error.message);
       }
 
-      let totalArquivos = 0;
-      let espacoUsadoBytes = 0;
-      const prefixoBase = `${userData.user.id}`;
-      const pastasParaProcessar: string[] = [prefixoBase];
-
-      while (pastasParaProcessar.length > 0) {
-        const pastaAtual = pastasParaProcessar.shift()!;
-        let offset = 0;
-        const limit = 1000;
-        let hasMore = true;
-
-        while (hasMore) {
-          const { data: items, error } = await supabase.storage
-            .from(this.bucketName)
-            .list(pastaAtual, {
-              limit: limit,
-              offset: offset,
-              sortBy: { column: "created_at", order: "desc" },
-            });
-
-          if (error) {
-            throw new Error(`Erro ao listar arquivos: ${error.message}`);
-          }
-
-          if (!items || items.length === 0) {
-            hasMore = false;
-            break;
-          }
-
-          for (const item of items) {
-            if (item.id) {
-              totalArquivos++;
-              espacoUsadoBytes += item.metadata?.size || 0;
-            } else {
-              pastasParaProcessar.push(`${pastaAtual}/${item.name}`);
-            }
-          }
-
-          if (items.length < limit) {
-            hasMore = false;
-          } else {
-            offset += limit;
-          }
-        }
-      }
-
+      const espacoUsadoBytes = data?.espacoUsadoBytes ?? 0;
+      const totalArquivos = data?.totalArquivos ?? 0;
       const espacoDisponivelBytes = LIMITE_BYTES - espacoUsadoBytes;
       const percentualUsado = (espacoUsadoBytes / LIMITE_BYTES) * 100;
 

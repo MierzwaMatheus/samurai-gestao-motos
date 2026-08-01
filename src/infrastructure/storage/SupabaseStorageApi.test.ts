@@ -9,6 +9,7 @@ import { _clearUrlCache } from "@/infrastructure/storage/urlCache";
 // `createSignedUrl`).
 vi.mock("@/infrastructure/supabase/client", () => {
   const from = vi.fn();
+  const invoke = vi.fn();
   const getUser = vi.fn().mockResolvedValue({
     data: { user: { id: "user-test" } },
     error: null,
@@ -17,6 +18,7 @@ vi.mock("@/infrastructure/supabase/client", () => {
     supabase: {
       auth: { getUser },
       storage: { from },
+      functions: { invoke },
     },
   };
 });
@@ -33,6 +35,7 @@ import { supabase } from "@/infrastructure/supabase/client";
 import imageCompression from "browser-image-compression";
 
 const mockedFrom = vi.mocked(supabase.storage.from);
+const mockedInvoke = vi.mocked(supabase.functions.invoke);
 const mockedCompression = vi.mocked(imageCompression);
 
 const buildFile = (): File =>
@@ -309,5 +312,103 @@ describe("SupabaseStorageApi.obterUrlAssinada", () => {
     await expect(
       api.obterUrlAssinada("user/entrada/moto/inexistente.jpg")
     ).rejects.toThrow("Erro ao gerar URL assinada: objeto não existe");
+  });
+});
+
+describe("SupabaseStorageApi.consultarEspacoBucket", () => {
+  /**
+   * Monta o duplo de teste da Edge Function `consultar-uso-storage`.
+   * O Edge Function devolve `{ espacoUsadoBytes, totalArquivos }` e o
+   * cliente recompor `espacoDisponivelBytes`/`percentualUsado` com a
+   * constante `LIMITE_BYTES = 1 GB`.
+   */
+  const buildEspacoInvoke = (
+    overrides: {
+      invokeData?: { espacoUsadoBytes: number; totalArquivos: number };
+      invokeError?: { message: string } | null;
+    } = {}
+  ) => {
+    mockedInvoke.mockResolvedValue({
+      data: overrides.invokeData ?? { espacoUsadoBytes: 0, totalArquivos: 0 },
+      error: overrides.invokeError ?? null,
+    } as never);
+
+    return { api: new SupabaseStorageApi() };
+  };
+
+  beforeEach(() => {
+    // `invoke` precisa voltar ao default antes de cada teste — caso
+    // contrário, mocks com `.mockResolvedValueOnce` de um teste vazariam
+    // para o seguinte.
+    mockedInvoke.mockReset();
+    // Garante que `storage.from().list` não é chamado por padrão: cada
+    // teste que quiser observar listagens monta o próprio stub.
+    mockedFrom.mockReset();
+  });
+
+  it('chama functions.invoke("consultar-uso-storage") exatamente 1 vez', async () => {
+    const { api } = buildEspacoInvoke({
+      invokeData: { espacoUsadoBytes: 1234, totalArquivos: 2 },
+    });
+
+    await api.consultarEspacoBucket();
+
+    expect(mockedInvoke).toHaveBeenCalledTimes(1);
+    expect(mockedInvoke).toHaveBeenCalledWith("consultar-uso-storage");
+  });
+
+  it("não chama supabase.storage.from(...).list em momento algum", async () => {
+    // A recursão antiga fazia centenas de chamadas `list` em loop; o
+    // contrato novo é 1 invoke apenas. Stryker muta o corpo recursivo
+    // para manter loops aninhados — esse teste mata o mutante.
+    const { api } = buildEspacoInvoke({
+      invokeData: { espacoUsadoBytes: 0, totalArquivos: 0 },
+    });
+
+    await api.consultarEspacoBucket();
+
+    expect(mockedFrom).not.toHaveBeenCalled();
+  });
+
+  it("retorna EspacoBucketInfo com shape derivado do invoke", async () => {
+    // 512 MB (= 1/2 do GB binário) usados de 1 GB → percentualUsado = 50.
+    const METADE_GB = 512 * 1024 * 1024;
+    const UM_GB = 1024 * 1024 * 1024;
+    const { api } = buildEspacoInvoke({
+      invokeData: { espacoUsadoBytes: METADE_GB, totalArquivos: 7 },
+    });
+
+    const info = await api.consultarEspacoBucket();
+
+    expect(info).toEqual({
+      espacoUsadoBytes: METADE_GB,
+      espacoTotalBytes: UM_GB,
+      espacoDisponivelBytes: UM_GB - METADE_GB,
+      percentualUsado: 50,
+      totalArquivos: 7,
+    });
+  });
+
+  it("limita percentualUsado em 100 quando uso excede o limite", async () => {
+    // Edge case do `Math.min(100, ...)`: garante que o cálculo não estoura.
+    const UM_GB_MAIS_UM = 1024 * 1024 * 1024 + 1;
+    const { api } = buildEspacoInvoke({
+      invokeData: { espacoUsadoBytes: UM_GB_MAIS_UM, totalArquivos: 1 },
+    });
+
+    const info = await api.consultarEspacoBucket();
+
+    expect(info.percentualUsado).toBe(100);
+    expect(info.espacoDisponivelBytes).toBe(0);
+  });
+
+  it("propaga erro do invoke com mensagem amigável", async () => {
+    const { api } = buildEspacoInvoke({
+      invokeError: { message: "timeout no banco" },
+    });
+
+    await expect(api.consultarEspacoBucket()).rejects.toThrow(
+      "Erro ao consultar espaço do bucket: timeout no banco"
+    );
   });
 });
