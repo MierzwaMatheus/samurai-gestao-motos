@@ -15,6 +15,9 @@ interface RelatorioExcelRow {
   Total: number;
 }
 
+const SENTINEL_START = "1970-01-01";
+const SENTINEL_END = "2099-12-31";
+
 export function useRelatorioExcel() {
   const [data, setData] = useState<RelatorioExcelRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -26,19 +29,17 @@ export function useRelatorioExcel() {
       setError(null);
 
       try {
-        let query = supabase
-          .from("vw_relatorio_excel")
-          .select("*")
-          .order('"Data Entrada"', { ascending: false });
+        const data_inicio = dataInicio
+          ? dataInicio.toISOString().split("T")[0]
+          : SENTINEL_START;
+        const data_fim = dataFim
+          ? dataFim.toISOString().split("T")[0]
+          : SENTINEL_END;
 
-        if (dataInicio) {
-          query = query.gte('"Data Entrada"', dataInicio.toISOString());
-        }
-        if (dataFim) {
-          query = query.lte('"Data Entrada"', dataFim.toISOString());
-        }
-
-        const { data: result, error: err } = await query;
+        const { data: result, error: err } = await supabase.rpc(
+          "fn_relatorio_por_periodo",
+          { data_inicio, data_fim }
+        );
 
         if (err) throw err;
         setData(result || []);
