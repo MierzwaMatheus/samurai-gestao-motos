@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import Header from "@/components/Header";
 import BottomNav from "@/components/BottomNav";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,7 @@ import { SupabaseStorageApi } from "@/infrastructure/storage/SupabaseStorageApi"
 import { SupabaseServicoPersonalizadoRepository } from "@/infrastructure/repositories/SupabaseServicoPersonalizadoRepository";
 import { Badge } from "@/components/ui/badge";
 import { useMotosOficina } from "@/hooks/useMotosOficina";
+import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
 import { AdicionarFotoStatusUseCase } from "@/domain/usecases/AdicionarFotoStatusUseCase";
 import { AtualizarProgressoStatusUseCase } from "@/domain/usecases/AtualizarProgressoStatusUseCase";
 import { useAdicionarFotoStatus } from "@/hooks/useAdicionarFotoStatus";
@@ -54,6 +55,8 @@ import { usePagamento } from "@/hooks/usePagamento";
 import { PrepararDadosEntradaParaEdicaoUseCase } from "@/domain/usecases/PrepararDadosEntradaParaEdicaoUseCase";
 import { sortMotosEmAndamento, sortMotosConcluidas } from "@/utils/sorting";
 
+type Aba = "em-andamento" | "concluidos";
+
 export default function Oficina() {
   const [, setLocation] = useLocation();
   const entradaRepo = useMemo(() => new SupabaseEntradaRepository(), []);
@@ -69,14 +72,44 @@ export default function Oficina() {
     () => new SupabaseServicoPersonalizadoRepository(),
     []
   );
-  const { motos, loading, error, recarregar, atualizarMoto } = useMotosOficina(
-    entradaRepo,
-    clienteRepo,
-    motoRepo,
-    tipoServicoRepo,
-    fotoRepo,
-    servicoPersonalizadoRepo
-  );
+
+  // Duas instâncias independentes de `useMotosOficina` — uma por aba.
+  // Cada aba tem sua própria paginação, busca debounced e sentinel
+  // (issue #11 ciclo 9). O hook filtra por `tipo: "entrada"` no
+  // servidor; o split "pendente/alinhando" vs "concluido" continua
+  // client-side via `motos.filter` (a interface do hook não expõe o
+  // status do serviço ainda).
+  const oficinaEmAndamento = useMotosOficina(entradaRepo, {
+    pageSize: 10,
+    tipo: "entrada",
+  });
+  const oficinaConcluidos = useMotosOficina(entradaRepo, {
+    pageSize: 10,
+    tipo: "entrada",
+  });
+
+  // Helper que atualiza uma moto em ambas as instâncias (a moto pode
+  // estar em qualquer das duas listas paginadas).
+  const atualizarMoto = (
+    entradaId: string,
+    atualizacoes: Partial<MotoCompleta>
+  ) => {
+    oficinaEmAndamento.atualizarMoto(entradaId, atualizacoes);
+    oficinaConcluidos.atualizarMoto(entradaId, atualizacoes);
+  };
+
+  // Helper que recarrega ambas as instâncias (usado após ações que
+  // afetam a lista: salvar foto, deletar entrada, gerar OS).
+  const recarregar = () => {
+    void oficinaEmAndamento.recarregar();
+    void oficinaConcluidos.recarregar();
+  };
+
+  // Carga inicial: ambas as instâncias disparam a primeira página.
+  useEffect(() => {
+    recarregar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const { atualizarStatusPagamento, atualizarFormaPagamento } = usePagamento();
 
@@ -120,10 +153,13 @@ export default function Oficina() {
       const nomeCliente = decodeURIComponent(clienteParam);
       setBuscaEmAndamento(nomeCliente);
       setBuscaConcluidos(nomeCliente);
+      oficinaEmAndamento.setBusca(nomeCliente);
+      oficinaConcluidos.setBusca(nomeCliente);
       // Limpar o parâmetro da URL após ler
       const newUrl = window.location.pathname;
       window.history.replaceState({}, "", newUrl);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const adicionarFotoStatusUseCase = useMemo(
@@ -200,7 +236,9 @@ export default function Oficina() {
 
   const handleAbrirModalFoto = (entradaId: string) => {
     setEntradaSelecionada(entradaId);
-    const moto = motos.find(m => m.entradaId === entradaId);
+    const moto =
+      oficinaEmAndamento.motos.find(m => m.entradaId === entradaId) ??
+      oficinaConcluidos.motos.find(m => m.entradaId === entradaId);
     if (moto) {
       setProgressoFoto(moto.progresso);
     }
@@ -410,49 +448,58 @@ export default function Oficina() {
     setHistoryModalOpen(true);
   };
 
-  // Separar motos por status
+  // Sub-aba ativa (Em Andamento / Concluídos). O Radix Tabs é controlado
+  // para que possamos chamar `recarregar()` na aba recém-ativada
+  // — assim, ao alternar entre as duas listas, cada uma zera a
+  // paginação e recarrega do zero (issue #11 ciclo 9).
+  const [abaSelecionada, setAbaSelecionada] = useState<Aba>("em-andamento");
+
+  const handleTabChange = (value: string) => {
+    const novaAba = (value as Aba) ?? "em-andamento";
+    setAbaSelecionada(novaAba);
+    if (novaAba === "em-andamento") {
+      void oficinaEmAndamento.recarregar();
+    } else {
+      void oficinaConcluidos.recarregar();
+    }
+  };
+
+  // Sentinels de scroll infinito, um por aba. Cada um é observado pelo
+  // `useInfiniteScroll` com o `carregarMais` da sua própria instância
+  // — daí o comportamento independente entre as abas.
+  const sentinelEmAndamentoRef = useRef<HTMLDivElement | null>(null);
+  const sentinelConcluidosRef = useRef<HTMLDivElement | null>(null);
+
+  useInfiniteScroll(sentinelEmAndamentoRef, {
+    onIntersect: oficinaEmAndamento.carregarMais,
+    hasMore: oficinaEmAndamento.hasMore,
+    loading: oficinaEmAndamento.loading,
+  });
+
+  useInfiniteScroll(sentinelConcluidosRef, {
+    onIntersect: oficinaConcluidos.carregarMais,
+    hasMore: oficinaConcluidos.hasMore,
+    loading: oficinaConcluidos.loading,
+  });
+
+  // Combina loading/error de ambas as instâncias para o overlay global.
+  const loadingGlobal =
+    oficinaEmAndamento.loading || oficinaConcluidos.loading;
+  const erroGlobal =
+    oficinaEmAndamento.error || oficinaConcluidos.error;
+
+  // Separar motos por status. A partir do ciclo 9, a busca é server-side
+  // (via `oficinaX.setBusca`) — não há mais `filtrarMotos` client-side.
+  // O split por status (pendente/alinhando vs concluido) também é feito
+  // aqui em memória: cada `oficinaX.motos` é a fatia daquela aba
+  // retornada pelo backend.
   const motosEmAndamento = sortMotosEmAndamento(
-    motos.filter(
+    oficinaEmAndamento.motos.filter(
       moto => moto.status === "pendente" || moto.status === "alinhando"
     )
   );
   const motosConcluidas = sortMotosConcluidas(
-    motos.filter(moto => moto.status === "concluido")
-  );
-
-  // Filtrar motos por busca
-  const filtrarMotos = (motosParaFiltrar: MotoCompleta[], busca: string) => {
-    if (!busca.trim()) return motosParaFiltrar;
-
-    const buscaLower = busca.toLowerCase();
-    return motosParaFiltrar.filter((moto: MotoCompleta) => {
-      const modeloMatch = moto.modelo?.toLowerCase().includes(buscaLower);
-      const placaMatch = moto.placa?.toLowerCase().includes(buscaLower);
-      const clienteMatch = moto.cliente?.toLowerCase().includes(buscaLower);
-      const tiposServicoMatch = moto.tiposServico?.some((tipo: any) =>
-        tipo.nome.toLowerCase().includes(buscaLower)
-      );
-      const servicosPersonalizadosMatch = moto.servicosPersonalizados?.some(
-        (servico: any) => servico.nome.toLowerCase().includes(buscaLower)
-      );
-
-      return (
-        modeloMatch ||
-        placaMatch ||
-        clienteMatch ||
-        tiposServicoMatch ||
-        servicosPersonalizadosMatch
-      );
-    });
-  };
-
-  const motosEmAndamentoFiltradas = filtrarMotos(
-    motosEmAndamento,
-    buscaEmAndamento
-  );
-  const motosConcluidasFiltradas = filtrarMotos(
-    motosConcluidas,
-    buscaConcluidos
+    oficinaConcluidos.motos.filter(moto => moto.status === "concluido")
   );
 
   const renderMotoCard = (moto: MotoCompleta, posicao?: number) => (
@@ -757,19 +804,23 @@ export default function Oficina() {
 
       <main className="pt-20 pb-32 px-6">
         <div className="max-w-2xl mx-auto space-y-6">
-          {loading ? (
+          {loadingGlobal ? (
             <Card className="card-samurai text-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-accent mx-auto mb-4" />
               <p className="font-sans text-foreground/60">
                 Carregando motos...
               </p>
             </Card>
-          ) : error ? (
+          ) : erroGlobal ? (
             <Card className="card-samurai text-center py-12">
-              <p className="font-sans text-red-500">{error}</p>
+              <p className="font-sans text-red-500">{erroGlobal}</p>
             </Card>
           ) : (
-            <Tabs defaultValue="em-andamento" className="w-full">
+            <Tabs
+              value={abaSelecionada}
+              onValueChange={handleTabChange}
+              className="w-full"
+            >
               <TabsList className="w-full flex overflow-x-auto no-scrollbar rounded-lg bg-muted p-1">
                 <TabsTrigger
                   value="em-andamento"
@@ -797,7 +848,20 @@ export default function Oficina() {
                 </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="em-andamento" className="space-y-6 mt-6">
+              {/*
+                `forceMount` em ambos os TabsContent garante que os
+                sentinels e seus IntersectionObservers existam desde o
+                primeiro render — sem isso, o observer da aba inativa
+                nunca seria criado (o `useInfiniteScroll` cria o
+                observer uma única vez por mount). O Radix Tabs esconde
+                o conteúdo inativo via `hidden`; o IntersectionObserver
+                não dispara para sentinels fora do viewport.
+              */}
+              <TabsContent
+                value="em-andamento"
+                forceMount
+                className="space-y-6 mt-6 data-[state=inactive]:hidden"
+              >
                 {/* Barra de busca */}
                 <div className="relative">
                   <Search
@@ -807,12 +871,28 @@ export default function Oficina() {
                   <Input
                     placeholder="Buscar por modelo, placa, cliente ou serviço..."
                     value={buscaEmAndamento}
-                    onChange={e => setBuscaEmAndamento(e.target.value)}
+                    onChange={e => {
+                      setBuscaEmAndamento(e.target.value);
+                      // Delega ao hook (debounce 300ms server-side)
+                      oficinaEmAndamento.setBusca(e.target.value);
+                    }}
                     className="pl-10 bg-card border-foreground/10"
+                    data-testid="oficina-em-andamento-busca"
                   />
                 </div>
 
-                {motosEmAndamentoFiltradas.length === 0 ? (
+                {/* Contador discreto "Mostrando X de Y" abaixo do input */}
+                {oficinaEmAndamento.motos.length > 0 && (
+                  <p
+                    className="font-sans text-xs text-foreground/40"
+                    data-testid="oficina-em-andamento-contador"
+                  >
+                    Mostrando {oficinaEmAndamento.motos.length} de{" "}
+                    {oficinaEmAndamento.total}
+                  </p>
+                )}
+
+                {motosEmAndamento.length === 0 ? (
                   <Card className="card-samurai text-center py-12">
                     <p className="font-sans text-foreground/60">
                       {buscaEmAndamento
@@ -821,14 +901,33 @@ export default function Oficina() {
                     </p>
                   </Card>
                 ) : (
-                  motosEmAndamentoFiltradas.map(
+                  motosEmAndamento.map(
                     (moto: MotoCompleta, index: number) =>
                       renderMotoCard(moto, index + 1)
                   )
                 )}
+
+                {/* Sentinel observado pelo useInfiniteScroll da aba */}
+                {motosEmAndamento.length > 0 && (
+                  <div
+                    ref={sentinelEmAndamentoRef}
+                    data-testid="oficina-em-andamento-sentinel"
+                    className="pt-2 pb-6 flex flex-col items-center gap-1"
+                  >
+                    {!oficinaEmAndamento.hasMore && (
+                      <p className="font-sans text-[11px] text-foreground/30">
+                        Fim da lista
+                      </p>
+                    )}
+                  </div>
+                )}
               </TabsContent>
 
-              <TabsContent value="concluidos" className="space-y-6 mt-6">
+              <TabsContent
+                value="concluidos"
+                forceMount
+                className="space-y-6 mt-6 data-[state=inactive]:hidden"
+              >
                 {/* Barra de busca */}
                 <div className="relative">
                   <Search
@@ -838,12 +937,27 @@ export default function Oficina() {
                   <Input
                     placeholder="Buscar por modelo, placa, cliente ou serviço..."
                     value={buscaConcluidos}
-                    onChange={e => setBuscaConcluidos(e.target.value)}
+                    onChange={e => {
+                      setBuscaConcluidos(e.target.value);
+                      oficinaConcluidos.setBusca(e.target.value);
+                    }}
                     className="pl-10 bg-card border-foreground/10"
+                    data-testid="oficina-concluidos-busca"
                   />
                 </div>
 
-                {motosConcluidasFiltradas.length === 0 ? (
+                {/* Contador discreto "Mostrando X de Y" abaixo do input */}
+                {oficinaConcluidos.motos.length > 0 && (
+                  <p
+                    className="font-sans text-xs text-foreground/40"
+                    data-testid="oficina-concluidos-contador"
+                  >
+                    Mostrando {oficinaConcluidos.motos.length} de{" "}
+                    {oficinaConcluidos.total}
+                  </p>
+                )}
+
+                {motosConcluidas.length === 0 ? (
                   <Card className="card-samurai text-center py-12">
                     <p className="font-sans text-foreground/60">
                       {buscaConcluidos
@@ -852,9 +966,24 @@ export default function Oficina() {
                     </p>
                   </Card>
                 ) : (
-                  motosConcluidasFiltradas.map((moto: MotoCompleta) =>
+                  motosConcluidas.map((moto: MotoCompleta) =>
                     renderMotoCard(moto)
                   )
+                )}
+
+                {/* Sentinel observado pelo useInfiniteScroll da aba */}
+                {motosConcluidas.length > 0 && (
+                  <div
+                    ref={sentinelConcluidosRef}
+                    data-testid="oficina-concluidos-sentinel"
+                    className="pt-2 pb-6 flex flex-col items-center gap-1"
+                  >
+                    {!oficinaConcluidos.hasMore && (
+                      <p className="font-sans text-[11px] text-foreground/30">
+                        Fim da lista
+                      </p>
+                    )}
+                  </div>
                 )}
               </TabsContent>
             </Tabs>
