@@ -36,14 +36,18 @@ export class AdicionarFotoStatusUseCase {
     const progressoAtual = progresso !== undefined ? progresso : entrada.progresso;
 
     // Faz upload do arquivo
-    const filePath = await this.storageApi.uploadFoto(file, entradaId, "status");
+    const { fullPath } = await this.storageApi.uploadFoto(
+      file,
+      entradaId,
+      "status"
+    );
 
     // Gera URL assinada
-    const url = await this.storageApi.obterUrlAssinada(filePath, 3600);
+    const url = await this.storageApi.obterUrlAssinada(fullPath, 3600);
 
     // Cria objeto de foto de status
     const fotoStatus: FotoStatus = {
-      url: filePath, // Salva o filePath, não a URL assinada
+      url: fullPath, // Salva o filePath, não a URL assinada
       data: new Date(),
       observacao,
       progresso: progressoAtual,

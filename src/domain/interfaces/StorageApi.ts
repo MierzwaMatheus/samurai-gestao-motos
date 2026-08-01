@@ -6,6 +6,20 @@
 export type TipoFoto = "moto" | "status" | "documento";
 
 /**
+ * Resultado de `uploadFoto` para o pipeline de duas variantes.
+ *
+ * - `thumbPath`: caminho da variante thumbnail no bucket. `null` para
+ *   `documento` (que mantém 1 upload único para preservar a
+ *   legibilidade do scan).
+ * - `fullPath`: caminho da variante em alta resolução (ou do arquivo
+ *   único, no caso de `documento`).
+ */
+export interface UploadFotoResult {
+  thumbPath: string | null;
+  fullPath: string;
+}
+
+/**
  * Interface para serviços de storage/upload de arquivos
  * Segue o princípio de Inversão de Dependência (DIP)
  */
@@ -14,7 +28,7 @@ export interface StorageApi {
     file: File,
     entradaId: string,
     tipo: TipoFoto
-  ): Promise<string>;
+  ): Promise<UploadFotoResult>;
   deletarFoto(path: string): Promise<void>;
   obterUrlPublica(path: string): string;
   obterUrlAssinada(path: string, expiresIn?: number): Promise<string>;

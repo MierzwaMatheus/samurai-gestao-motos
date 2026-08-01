@@ -2,11 +2,12 @@ import {
   StorageApi,
   EspacoBucketInfo,
   ArquivoStorage,
+  UploadFotoResult,
 } from "@/domain/interfaces/StorageApi";
 import { supabase } from "@/infrastructure/supabase/client";
 import { obterSignedUrl as obterSignedUrlCacheada } from "@/infrastructure/storage/urlCache";
 import { consultarEspacoBucketCacheado } from "@/infrastructure/storage/espacoBucketCache";
-import imageCompression from "browser-image-compression";
+import { gerarVariantes } from "@/infrastructure/storage/imageVariants";
 
 /**
  * Implementação do serviço de storage usando Supabase Storage
@@ -19,29 +20,18 @@ export class SupabaseStorageApi implements StorageApi {
   private static readonly FOTO_CACHE_CONTROL_SECONDS = "2592000";
 
   /**
-   * Opções de compressão aplicadas no browser antes do upload.
+   * Faz upload de uma foto para o bucket de fotos.
    *
-   * Image Transformations do Supabase é Pro-only, então a redução de
-   * egresso precisa acontecer *antes* do arquivo chegar ao bucket: o
-   * objeto armazenado já é o comprimido (~300-500 KB em vez de 3-5 MB),
-   * e toda leitura posterior trafega esse tamanho menor.
-   */
-  private static readonly OPCOES_COMPRESSAO = {
-    maxSizeMB: 0.5,
-    maxWidthOrHeight: 1600,
-    useWebWorker: true,
-    fileType: "image/webp",
-  };
-
-  /**
-   * Faz upload de uma foto para o bucket de fotos
-   * O arquivo é salvo em: {userId}/{entradaId}/{tipo}/{timestamp}-{filename}
+   * Para `moto`/`status` gera 2 variantes webp no browser (thumb
+   * 400x400 cover q70, full 1600x1600 max q80) e faz 2 uploads em
+   * paralelo. Para `documento` mantém 1 upload único (CNH/CRLV) e
+   * devolve `thumbPath: null`.
    */
   async uploadFoto(
     file: File,
     entradaId: string,
     tipo: "moto" | "status" | "documento"
-  ): Promise<string> {
+  ): Promise<UploadFotoResult> {
     // Obtém o usuário atual
     const {
       data: { user },
@@ -64,35 +54,52 @@ export class SupabaseStorageApi implements StorageApi {
       throw new Error("Arquivo muito grande. Tamanho máximo: 5MB.");
     }
 
-    // Comprime imagens antes do upload. Documentos (scans/PDFs) mantêm o
-    // arquivo original: recomprimir degradaria a legibilidade.
-    const arquivoParaUpload =
-      tipo === "documento"
-        ? file
-        : await imageCompression(file, SupabaseStorageApi.OPCOES_COMPRESSAO);
-
-    // Gera nome único para o arquivo
     const timestamp = Date.now();
-    const fileName = `${timestamp}-${file.name}`;
-    const filePath = `${user.id}/${entradaId}/${tipo}/${fileName}`;
+    const basePath = `${user.id}/${entradaId}/${tipo}/${timestamp}-${file.name}`;
 
-    // Faz upload com cache de 30 dias para casar com a janela de cache dos
-    // consumidores (signed URLs têm `expiresIn` curto, mas o objeto no
-    // Storage pode ficar cacheado por mais tempo no edge do Supabase).
-    // `upsert: true` permite reenviar o mesmo `filePath` sem 409.
-    const { data, error } = await supabase.storage
-      .from(this.bucketName)
-      .upload(filePath, arquivoParaUpload, {
-        cacheControl: SupabaseStorageApi.FOTO_CACHE_CONTROL_SECONDS,
-        upsert: true,
-      });
+    // Documento (CNH/CRLV): upload único, mantém legibilidade do scan.
+    if (tipo === "documento") {
+      const { error } = await supabase.storage
+        .from(this.bucketName)
+        .upload(basePath, file, {
+          cacheControl: SupabaseStorageApi.FOTO_CACHE_CONTROL_SECONDS,
+          upsert: true,
+        });
 
-    if (error) {
-      throw new Error(`Erro ao fazer upload: ${error.message}`);
+      if (error) {
+        throw new Error(`Erro ao fazer upload: ${error.message}`);
+      }
+
+      return { thumbPath: null, fullPath: basePath };
     }
 
-    // Retorna o caminho completo
-    return filePath;
+    // Moto/Status: gera as 2 variantes e sobe em paralelo.
+    const { thumb, full } = await gerarVariantes(file);
+
+    // Sufixos `-thumb` / `-full` permitem identificar a variante no
+    // bucket pelo próprio nome do arquivo.
+    const thumbPath = basePath.replace(/(\.[^.]+)?$/, "-thumb.webp");
+    const fullPath = basePath.replace(/(\.[^.]+)?$/, "-full.webp");
+
+    const [thumbUpload, fullUpload] = await Promise.all([
+      supabase.storage.from(this.bucketName).upload(thumbPath, thumb, {
+        cacheControl: SupabaseStorageApi.FOTO_CACHE_CONTROL_SECONDS,
+        upsert: true,
+      }),
+      supabase.storage.from(this.bucketName).upload(fullPath, full, {
+        cacheControl: SupabaseStorageApi.FOTO_CACHE_CONTROL_SECONDS,
+        upsert: true,
+      }),
+    ]);
+
+    if (thumbUpload.error) {
+      throw new Error(`Erro ao fazer upload: ${thumbUpload.error.message}`);
+    }
+    if (fullUpload.error) {
+      throw new Error(`Erro ao fazer upload: ${fullUpload.error.message}`);
+    }
+
+    return { thumbPath, fullPath };
   }
 
   /**

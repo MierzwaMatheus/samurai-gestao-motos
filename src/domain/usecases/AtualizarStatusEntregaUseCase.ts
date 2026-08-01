@@ -25,11 +25,12 @@ export class AtualizarStatusEntregaUseCase {
 
     // Se houver OS assinada, faz upload
     if (osAssinada) {
-      osAssinadaUrl = await this.storageApi.uploadFoto(
+      const { fullPath } = await this.storageApi.uploadFoto(
         osAssinada,
         entradaId,
         "documento"
       );
+      osAssinadaUrl = fullPath;
     }
 
     // Atualiza status de entrega

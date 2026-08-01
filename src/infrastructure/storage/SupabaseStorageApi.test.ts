@@ -24,20 +24,33 @@ vi.mock("@/infrastructure/supabase/client", () => {
   };
 });
 
-// Mock da compressão no browser: `browser-image-compression` depende de
-// Canvas/Web Worker, indisponíveis no ambiente de teste. Observamos apenas
-// os argumentos recebidos e devolvemos um `File` distinto do original.
-vi.mock("browser-image-compression", () => ({
-  default: vi.fn(),
-}));
+// Mock do módulo `imageVariants`: `gerarVariantes` depende de
+// Canvas/`createImageBitmap` (indisponíveis em jsdom). Substituímos por
+// um dublê que devolve dois `File` distintos para thumb e full,
+// permitindo observar separadamente cada upload.
+vi.mock("@/infrastructure/storage/imageVariants", async () => {
+  const actual = await vi.importActual<
+    typeof import("@/infrastructure/storage/imageVariants")
+  >("@/infrastructure/storage/imageVariants");
+  const thumbStub = new File(["thumb-stub"], "thumb.webp", {
+    type: "image/webp",
+  });
+  const fullStub = new File(["full-stub"], "full.webp", {
+    type: "image/webp",
+  });
+  return {
+    ...actual,
+    gerarVariantes: vi.fn(async () => ({ thumb: thumbStub, full: fullStub })),
+  };
+});
 
 // Importações após o mock para garantir que o módulo mockado seja usado.
 import { supabase } from "@/infrastructure/supabase/client";
-import imageCompression from "browser-image-compression";
+import { gerarVariantes } from "@/infrastructure/storage/imageVariants";
 
 const mockedFrom = vi.mocked(supabase.storage.from);
 const mockedInvoke = vi.mocked(supabase.functions.invoke);
-const mockedCompression = vi.mocked(imageCompression);
+const mockedGerarVariantes = vi.mocked(gerarVariantes);
 
 const buildFile = (): File =>
   new File(["conteudo-de-teste"], "foto.jpg", { type: "image/jpeg" });
@@ -47,10 +60,6 @@ const buildFileGrande = (): File =>
   new File([new ArrayBuffer(6 * 1024 * 1024)], "grande.jpg", {
     type: "image/jpeg",
   });
-
-/** `File` devolvido pelo mock de compressão — identidade distinta do original. */
-const buildFileComprimido = (): File =>
-  new File(["comprimido"], "foto.webp", { type: "image/webp" });
 
 /**
  * Monta o duplo de teste do bucket. Retorna os spies para que cada teste
@@ -71,11 +80,9 @@ const buildBucket = (
     }
   );
 
-  const comprimido = buildFileComprimido();
-  mockedCompression.mockResolvedValue(comprimido);
   mockedFrom.mockReturnValue({ upload, createSignedUrl } as never);
 
-  return { upload, createSignedUrl, comprimido, api: new SupabaseStorageApi() };
+  return { upload, createSignedUrl, api: new SupabaseStorageApi() };
 };
 
 beforeEach(() => {
@@ -99,10 +106,13 @@ describe("SupabaseStorageApi.uploadFoto", () => {
     expect(mockedFrom).toHaveBeenCalledWith("fotos");
   });
 
-  it('envia opts com cacheControl "2592000" (30 dias) e upsert true', async () => {
+  it('envia opts com cacheControl "2592000" (30 dias) e upsert true para documento', async () => {
+    // Documento é o único caminho com 1 upload — observa o primeiro (e
+    // único) call diretamente. Moto/Status são cobertos no bloco
+    // `pipeline de 2 variantes`.
     const { api, upload } = buildBucket();
 
-    await api.uploadFoto(buildFile(), "entrada-1", "moto");
+    await api.uploadFoto(buildFile(), "entrada-1", "documento");
 
     expect(upload).toHaveBeenCalledTimes(1);
     const [, , opts] = upload.mock.calls[0] as [
@@ -153,9 +163,11 @@ describe("SupabaseStorageApi.uploadFoto", () => {
     expect(upload).toHaveBeenCalledTimes(1);
   });
 
-  it("lança erro quando o Supabase devolve erro no upload", async () => {
+  it("lança erro quando o Supabase devolve erro no upload (documento)", async () => {
     // Stryker muta `if (error)` para `if (false)` — sem esse teste o
-    // mutante sobrevive (testes existentes não observam falha).
+    // mutante sobrevive (testes existentes não observam falha). Usamos
+    // `documento` para isolar o caminho de 1 upload; moto/Status com 2
+    // uploads é coberto no bloco do pipeline.
     mockedFrom.mockReturnValue({
       upload: vi
         .fn()
@@ -166,80 +178,8 @@ describe("SupabaseStorageApi.uploadFoto", () => {
     const api = new SupabaseStorageApi();
 
     await expect(
-      api.uploadFoto(buildFile(), "entrada-1", "moto")
+      api.uploadFoto(buildFile(), "entrada-1", "documento")
     ).rejects.toThrow("Erro ao fazer upload: quota excedida");
-  });
-});
-
-describe("SupabaseStorageApi.uploadFoto — compressão no browser", () => {
-  it('comprime a foto de tipo "moto" antes de enviar', async () => {
-    const { api } = buildBucket();
-    const original = buildFile();
-
-    await api.uploadFoto(original, "entrada-1", "moto");
-
-    expect(mockedCompression).toHaveBeenCalledTimes(1);
-    expect(mockedCompression).toHaveBeenCalledWith(original, {
-      maxSizeMB: 0.5,
-      maxWidthOrHeight: 1600,
-      useWebWorker: true,
-      fileType: "image/webp",
-    });
-  });
-
-  it('comprime a foto de tipo "status" com as mesmas opções', async () => {
-    const { api } = buildBucket();
-    const original = buildFile();
-
-    await api.uploadFoto(original, "entrada-1", "status");
-
-    expect(mockedCompression).toHaveBeenCalledTimes(1);
-    expect(mockedCompression).toHaveBeenCalledWith(original, {
-      maxSizeMB: 0.5,
-      maxWidthOrHeight: 1600,
-      useWebWorker: true,
-      fileType: "image/webp",
-    });
-  });
-
-  it('não comprime arquivos de tipo "documento"', async () => {
-    const { api } = buildBucket();
-
-    await api.uploadFoto(buildFile(), "entrada-1", "documento");
-
-    expect(mockedCompression).not.toHaveBeenCalled();
-  });
-
-  it("envia ao Supabase o arquivo comprimido, não o original", async () => {
-    const { api, upload, comprimido } = buildBucket();
-    const original = buildFile();
-
-    await api.uploadFoto(original, "entrada-1", "moto");
-
-    const [, enviado] = upload.mock.calls[0] as [string, File];
-    expect(enviado).toBe(comprimido);
-    expect(enviado).not.toBe(original);
-  });
-
-  it('envia o arquivo original quando o tipo é "documento"', async () => {
-    const { api, upload } = buildBucket();
-    const original = buildFile();
-
-    await api.uploadFoto(original, "entrada-1", "documento");
-
-    const [, enviado] = upload.mock.calls[0] as [string, File];
-    expect(enviado).toBe(original);
-  });
-
-  it("valida o tamanho de 5 MB antes de comprimir (sanity check)", async () => {
-    const { api, upload } = buildBucket();
-
-    await expect(
-      api.uploadFoto(buildFileGrande(), "entrada-1", "moto")
-    ).rejects.toThrow("Arquivo muito grande. Tamanho máximo: 5MB.");
-
-    expect(mockedCompression).not.toHaveBeenCalled();
-    expect(upload).not.toHaveBeenCalled();
   });
 });
 
@@ -475,6 +415,190 @@ describe("SupabaseStorageApi.consultarEspacoBucket — cache de 5 min", () => {
     await api.consultarEspacoBucket();
 
     expect(mockedInvoke).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("SupabaseStorageApi.uploadFoto — pipeline de 2 variantes (moto/status)", () => {
+  // O ciclo 1 introduz `gerarVariantes(file)` em `imageVariants.ts`. Para
+  // manter os testes determinísticos (jsdom não tem Canvas/WebP
+  // completos), mockamos o módulo e devolvemos dois `File` distintos —
+  // um para thumb e outro para full — controlando o que `uploadFoto`
+  // envia ao bucket.
+  const buildVariantesMock = () => {
+    const thumb = new File(["thumb-bytes"], "thumb.webp", {
+      type: "image/webp",
+    });
+    const full = new File(["full-bytes"], "full.webp", {
+      type: "image/webp",
+    });
+    return {
+      thumb,
+      full,
+      gerarVariantes: vi.fn().mockResolvedValue({ thumb, full }),
+    };
+  };
+
+  const buildBucketParaVariantes = (variantes: ReturnType<
+    typeof buildVariantesMock
+  >) => {
+    const upload = vi
+      .fn()
+      .mockResolvedValue({ data: { path: "stub" }, error: null });
+    const createSignedUrl = vi.fn();
+    mockedFrom.mockReturnValue({ upload, createSignedUrl } as never);
+    return { upload, variantes, api: new SupabaseStorageApi() };
+  };
+
+  it("retorna `{ thumbPath, fullPath }` com paths distintos para moto", async () => {
+    // Stryker muta o shape de retorno. Sem esse teste, um mutante que
+    // continua devolvendo `string` sobrevive.
+    const variantes = buildVariantesMock();
+    const { api, upload } = buildBucketParaVariantes(variantes);
+
+    // Injeta o mock em runtime via prototype injection — evita ter que
+    // tocar no caminho de import do módulo.
+    const mod = await import("@/infrastructure/storage/imageVariants");
+    const spy = vi
+      .spyOn(mod, "gerarVariantes")
+      .mockImplementation(variantes.gerarVariantes);
+    spy.mockResolvedValue({ thumb: variantes.thumb, full: variantes.full });
+
+    const resultado = await api.uploadFoto(buildFile(), "entrada-1", "moto");
+
+    expect(resultado).toMatchObject({
+      thumbPath: expect.stringMatching(/thumb\.webp$/),
+      fullPath: expect.stringMatching(/full\.webp$/),
+    });
+
+    // Sanidade: os dois caminhos são diferentes.
+    expect(resultado.thumbPath).not.toBe(resultado.fullPath);
+    // Os dois caminhos foram efetivamente enviados ao bucket.
+    const enviados = (upload.mock.calls as Array<[string, File]>).map(
+      ([path]) => path
+    );
+    expect(enviados).toContain(resultado.thumbPath);
+    expect(enviados).toContain(resultado.fullPath);
+  });
+
+  it("faz 2 uploads em paralelo (Promise.all) para moto", async () => {
+    // Stryker muta `Promise.all([...])` por chamadas sequenciais em série.
+    // O teste abaixo mata o mutante observando que ambas as chamadas
+    // acontecem antes do retorno de `uploadFoto`.
+    const variantes = buildVariantesMock();
+    const { api, upload } = buildBucketParaVariantes(variantes);
+
+    const mod = await import("@/infrastructure/storage/imageVariants");
+    vi.spyOn(mod, "gerarVariantes").mockResolvedValue({
+      thumb: variantes.thumb,
+      full: variantes.full,
+    });
+
+    await api.uploadFoto(buildFile(), "entrada-1", "moto");
+
+    expect(upload).toHaveBeenCalledTimes(2);
+  });
+
+  it("envia as duas variantes com cacheControl 30d e upsert true", async () => {
+    const variantes = buildVariantesMock();
+    const { api, upload } = buildBucketParaVariantes(variantes);
+
+    const mod = await import("@/infrastructure/storage/imageVariants");
+    vi.spyOn(mod, "gerarVariantes").mockResolvedValue({
+      thumb: variantes.thumb,
+      full: variantes.full,
+    });
+
+    await api.uploadFoto(buildFile(), "entrada-1", "moto");
+
+    // Stryker muta `cacheControl: "2592000"` ou remove `upsert: true`:
+    // sem essa asserção em ambos os uploads, um mutante sobrevive.
+    for (const [, , opts] of upload.mock.calls as Array<
+      [string, File, { cacheControl?: string; upsert?: boolean }]
+    >) {
+      expect(opts.cacheControl).toBe("2592000");
+      expect(opts.upsert).toBe(true);
+    }
+  });
+
+  it("faz upload único para documento (sem gerar variantes)", async () => {
+    // Stryker muta o branch `tipo === "documento"` — sem essa asserção,
+    // um mutante que faz 2 uploads para documento sobrevive.
+    const variantes = buildVariantesMock();
+    const { api, upload } = buildBucketParaVariantes(variantes);
+
+    const mod = await import("@/infrastructure/storage/imageVariants");
+    const spy = vi.spyOn(mod, "gerarVariantes");
+
+    const resultado = await api.uploadFoto(
+      buildFile(),
+      "entrada-1",
+      "documento"
+    );
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(upload).toHaveBeenCalledTimes(1);
+    expect(resultado.thumbPath).toBeNull();
+    expect(resultado.fullPath).toMatch(/documento\/.*\.jpg$/);
+  });
+
+  it("envia o arquivo original (sem compressão) para documento", async () => {
+    const { api, upload } = buildBucket();
+    const original = buildFile();
+
+    const resultado = await api.uploadFoto(original, "entrada-1", "documento");
+
+    const [, enviado] = upload.mock.calls[0] as [string, File];
+    expect(enviado).toBe(original);
+    expect(resultado.fullPath).toContain("documento");
+  });
+
+  it("lança erro de MIME antes de gerar variantes ou fazer upload", async () => {
+    const { api, upload } = buildBucket();
+    const arquivoTexto = new File(["oi"], "nota.txt", { type: "text/plain" });
+
+    const mod = await import("@/infrastructure/storage/imageVariants");
+    const spy = vi.spyOn(mod, "gerarVariantes");
+
+    await expect(
+      api.uploadFoto(arquivoTexto, "entrada-1", "moto")
+    ).rejects.toThrow(
+      "Tipo de arquivo não permitido. Use JPEG, PNG, WEBP ou GIF."
+    );
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(upload).not.toHaveBeenCalled();
+  });
+
+  it("lança erro de 5 MB antes de gerar variantes ou fazer upload", async () => {
+    const { api, upload } = buildBucket();
+
+    const mod = await import("@/infrastructure/storage/imageVariants");
+    const spy = vi.spyOn(mod, "gerarVariantes");
+
+    await expect(
+      api.uploadFoto(buildFileGrande(), "entrada-1", "moto")
+    ).rejects.toThrow("Arquivo muito grande. Tamanho máximo: 5MB.");
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(upload).not.toHaveBeenCalled();
+  });
+
+  it("lança erro de autenticação antes de gerar variantes ou fazer upload", async () => {
+    const { api, upload } = buildBucket();
+    vi.mocked(supabase.auth.getUser).mockResolvedValueOnce({
+      data: { user: null },
+      error: null,
+    } as never);
+
+    const mod = await import("@/infrastructure/storage/imageVariants");
+    const spy = vi.spyOn(mod, "gerarVariantes");
+
+    await expect(
+      api.uploadFoto(buildFile(), "entrada-1", "moto")
+    ).rejects.toThrow("Usuário não autenticado");
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(upload).not.toHaveBeenCalled();
   });
 });
 
