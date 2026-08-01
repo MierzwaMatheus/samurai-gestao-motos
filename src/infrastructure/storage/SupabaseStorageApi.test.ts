@@ -413,6 +413,28 @@ describe("SupabaseStorageApi.consultarEspacoBucket", () => {
       "Erro ao consultar espaço do bucket: timeout no banco"
     );
   });
+
+  it("usa fallback (zero) quando invoke devolve data null sem erro", async () => {
+    // Stryker muta `data?.espacoUsadoBytes` para `data.espacoUsadoBytes`
+    // — sem `?.`, acessar `.foo` em `null` joga TypeError. O fallback
+    // `?? 0` só funciona se o optional chaining for preservado.
+    mockedInvoke.mockResolvedValue({
+      data: null,
+      error: null,
+    } as never);
+
+    const api = new SupabaseStorageApi();
+
+    const info = await api.consultarEspacoBucket();
+
+    expect(info).toEqual({
+      espacoUsadoBytes: 0,
+      espacoTotalBytes: 1024 * 1024 * 1024,
+      espacoDisponivelBytes: 1024 * 1024 * 1024,
+      percentualUsado: 0,
+      totalArquivos: 0,
+    });
+  });
 });
 
 describe("SupabaseStorageApi.consultarEspacoBucket — cache de 5 min", () => {
@@ -582,5 +604,23 @@ describe("SupabaseStorageApi.listarArquivosPorPeriodo", () => {
     ).rejects.toThrow(
       "Erro ao listar arquivos por período: Edge Function fora do ar"
     );
+  });
+
+  it("retorna [] quando invoke devolve data null sem erro", async () => {
+    // Stryker muta `data?.arquivos` para `data.arquivos` — sem `?.`,
+    // acessar `.arquivos` em `null` joga TypeError.
+    mockedInvoke.mockResolvedValue({
+      data: null,
+      error: null,
+    } as never);
+
+    const api = new SupabaseStorageApi();
+
+    const resultado = await api.listarArquivosPorPeriodo(
+      new Date("2026-08-01T00:00:00.000Z"),
+      new Date("2026-08-01T23:59:59.999Z")
+    );
+
+    expect(resultado).toEqual([]);
   });
 });
