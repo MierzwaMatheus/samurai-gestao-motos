@@ -69,6 +69,24 @@ describe('useRelatorios - COLUMNS_BY_VIEW', () => {
       expect(result.current.data).toEqual(mockData);
       expect(result.current.error).toBeNull();
     });
+
+    it('deve ordenar por quantidade descendente', async () => {
+      const mockData: StatusEntrada[] = [];
+      const chain: any = {};
+      const builder = {
+        order: vi.fn(function(this: any) { Object.assign(chain, builder); return chain; }),
+      };
+      Object.assign(chain, builder);
+      const mockFrom: any = { select: vi.fn(() => chain) };
+      mockSupabase.from.mockReturnValue(mockFrom);
+
+      const { useStatusEntradas } = await import('@/hooks/useRelatorios');
+      renderHook(() => useStatusEntradas());
+
+      await waitFor(() => expect(mockFrom.select).toHaveBeenCalled());
+
+      expect(chain.order).toHaveBeenCalledWith('quantidade', { ascending: false });
+    });
   });
 
   describe('useStatusEntrega', () => {
@@ -92,6 +110,24 @@ describe('useRelatorios - COLUMNS_BY_VIEW', () => {
       expect(selectCall[0]).toContain('status_entrega');
       expect(selectCall[0]).toContain('quantidade');
     });
+
+    it('deve ordenar por quantidade descendente', async () => {
+      const mockData: StatusEntrega[] = [];
+      const chain: any = {};
+      const builder = {
+        order: vi.fn(function(this: any) { Object.assign(chain, builder); return chain; }),
+      };
+      Object.assign(chain, builder);
+      const mockFrom: any = { select: vi.fn(() => chain) };
+      mockSupabase.from.mockReturnValue(mockFrom);
+
+      const { useStatusEntrega } = await import('@/hooks/useRelatorios');
+      renderHook(() => useStatusEntrega());
+
+      await waitFor(() => expect(mockFrom.select).toHaveBeenCalled());
+
+      expect(chain.order).toHaveBeenCalledWith('quantidade', { ascending: false });
+    });
   });
 
   describe('useDistribuicaoCategoria', () => {
@@ -114,6 +150,24 @@ describe('useRelatorios - COLUMNS_BY_VIEW', () => {
       expect(selectCall[0]).not.toBe('*');
       expect(selectCall[0]).toContain('categoria');
       expect(selectCall[0]).toContain('faturamento_categoria');
+    });
+
+    it('deve ordenar por faturamento_categoria descendente', async () => {
+      const mockData: DistribuicaoCategoria[] = [];
+      const chain: any = {};
+      const builder = {
+        order: vi.fn(function(this: any) { Object.assign(chain, builder); return chain; }),
+      };
+      Object.assign(chain, builder);
+      const mockFrom: any = { select: vi.fn(() => chain) };
+      mockSupabase.from.mockReturnValue(mockFrom);
+
+      const { useDistribuicaoCategoria } = await import('@/hooks/useRelatorios');
+      renderHook(() => useDistribuicaoCategoria());
+
+      await waitFor(() => expect(mockFrom.select).toHaveBeenCalled());
+
+      expect(chain.order).toHaveBeenCalledWith('faturamento_categoria', { ascending: false });
     });
   });
 
@@ -200,6 +254,25 @@ describe('useRelatorios - COLUMNS_BY_VIEW', () => {
       expect(selectCall[0]).toContain('servico');
       expect(selectCall[0]).toContain('faturamento_total');
     });
+
+    it('deve ordenar por faturamento_total descendente', async () => {
+      const mockData: FaturamentoPorServico[] = [];
+      const chain: any = {};
+      const builder = {
+        order: vi.fn(function(this: any) { Object.assign(chain, builder); return chain; }),
+        limit: vi.fn(function(this: any) { Object.assign(chain, builder); return chain; }),
+      };
+      Object.assign(chain, builder);
+      const mockFrom: any = { select: vi.fn(() => chain) };
+      mockSupabase.from.mockReturnValue(mockFrom);
+
+      const { useFaturamentoPorServico } = await import('@/hooks/useRelatorios');
+      renderHook(() => useFaturamentoPorServico());
+
+      await waitFor(() => expect(mockFrom.select).toHaveBeenCalled());
+
+      expect(chain.order).toHaveBeenCalledWith('faturamento_total', { ascending: false });
+    });
   });
 
   describe('useTopClientes', () => {
@@ -224,6 +297,25 @@ describe('useRelatorios - COLUMNS_BY_VIEW', () => {
       expect(selectCall[0]).toContain('cliente_nome');
       expect(selectCall[0]).toContain('faturamento_total');
     });
+
+    it('deve ordenar por faturamento_total descendente', async () => {
+      const mockData: TopCliente[] = [];
+      const chain: any = {};
+      const builder = {
+        order: vi.fn(function(this: any) { Object.assign(chain, builder); return chain; }),
+        limit: vi.fn(function(this: any) { Object.assign(chain, builder); return chain; }),
+      };
+      Object.assign(chain, builder);
+      const mockFrom: any = { select: vi.fn(() => chain) };
+      mockSupabase.from.mockReturnValue(mockFrom);
+
+      const { useTopClientes } = await import('@/hooks/useRelatorios');
+      renderHook(() => useTopClientes());
+
+      await waitFor(() => expect(mockFrom.select).toHaveBeenCalled());
+
+      expect(chain.order).toHaveBeenCalledWith('faturamento_total', { ascending: false });
+    });
   });
 
   describe('useServicosMaisRealizados', () => {
@@ -247,6 +339,25 @@ describe('useRelatorios - COLUMNS_BY_VIEW', () => {
       expect(selectCall[0]).toContain('servico');
       expect(selectCall[0]).toContain('categoria');
       expect(selectCall[0]).toContain('total_execucoes');
+    });
+
+    it('deve ordenar por total_execucoes descendente', async () => {
+      const mockData: ServicoMaisRealizado[] = [];
+      const chain: any = {};
+      const builder = {
+        order: vi.fn(function(this: any) { Object.assign(chain, builder); return chain; }),
+        limit: vi.fn(function(this: any) { Object.assign(chain, builder); return chain; }),
+      };
+      Object.assign(chain, builder);
+      const mockFrom: any = { select: vi.fn(() => chain) };
+      mockSupabase.from.mockReturnValue(mockFrom);
+
+      const { useServicosMaisRealizados } = await import('@/hooks/useRelatorios');
+      renderHook(() => useServicosMaisRealizados());
+
+      await waitFor(() => expect(mockFrom.select).toHaveBeenCalled());
+
+      expect(chain.order).toHaveBeenCalledWith('total_execucoes', { ascending: false });
     });
   });
 
@@ -485,5 +596,339 @@ describe('useRelatorios - COLUMNS_BY_VIEW', () => {
       expect(COLUMNS_BY_VIEW['vw_resumo_diario']).toContain('data');
       expect(COLUMNS_BY_VIEW['vw_resumo_diario']).toContain('faturamento_dia');
     });
+  });
+});
+
+// ============================================================
+// CICLO 3 — Mutation Testing: mata sobreviventes CRÍTICOS/ALTOS
+// ============================================================
+
+describe('useRelatorios - error/loading/deps behavior (mutation gate)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // --- isLoading inicial deve ser true (BooleanLiteral linha 45) ---
+  it('deve iniciar com isLoading=true antes da primeira fetch completar', async () => {
+    const neverResolved = new Promise(() => {});
+    const chain: any = {
+      gte: vi.fn(() => chain),
+      order: vi.fn(() => chain),
+      limit: vi.fn(() => chain),
+      single: vi.fn(() => chain),
+    };
+    Object.defineProperty(chain, 'then', {
+      get() {
+        return (_onFul: any, _onRej: any) => neverResolved;
+      },
+    });
+    const mockFrom: any = { select: vi.fn(() => chain) };
+    mockSupabase.from.mockReturnValue(mockFrom);
+
+    const { useFaturamentoMensal } = await import('@/hooks/useRelatorios');
+    const { result } = renderHook(() => useFaturamentoMensal());
+
+    expect(result.current.isLoading).toBe(true);
+  });
+
+  // --- catch block deve capturar erro do supabase (BlockStatement linha 56, ConditionalExpression linha 54) ---
+  it('deve capturar erro do supabase no catch e setar error state', async () => {
+    const supabaseError = new Error('Falha de conexão');
+    let rejectQuery: (err: Error) => void = () => {};
+    const queryPromise = new Promise<{ data: any; error: any }>((_, reject) => {
+      rejectQuery = (err) => reject(err);
+    });
+    const chain: any = {
+      gte: vi.fn(function(this: any) { return chain; }),
+      limit: vi.fn(function(this: any) { return chain; }),
+      order: vi.fn(function(this: any) { return chain; }),
+      then: queryPromise.then.bind(queryPromise),
+      catch: queryPromise.catch.bind(queryPromise),
+    };
+    const mockFrom: any = { select: vi.fn(() => chain) };
+    mockSupabase.from.mockReturnValue(mockFrom);
+
+    const { useFaturamentoMensal } = await import('@/hooks/useRelatorios');
+    const { result } = renderHook(() => useFaturamentoMensal());
+
+    await waitFor(() => expect(mockFrom.select).toHaveBeenCalled());
+    rejectQuery(supabaseError);
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.error).not.toBeNull();
+    expect(result.current.error?.message).toBe('Falha de conexão');
+    expect(result.current.data).toBeNull();
+  });
+
+  it('deve capturar erro retornado em { error } e setar error state', async () => {
+    const queryPromise = Promise.resolve({ data: null, error: { message: 'Erro RPC' } });
+    const chain: any = {
+      gte: vi.fn(function(this: any) { return chain; }),
+      limit: vi.fn(function(this: any) { return chain; }),
+      order: vi.fn(function(this: any) { return chain; }),
+      then: queryPromise.then.bind(queryPromise),
+    };
+    const mockFrom: any = { select: vi.fn(() => chain) };
+    mockSupabase.from.mockReturnValue(mockFrom);
+
+    const { useFaturamentoMensal } = await import('@/hooks/useRelatorios');
+    const { result } = renderHook(() => useFaturamentoMensal());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.error).not.toBeNull();
+  });
+
+  // --- finally block deve sempre setar isLoading=false (BlockStatement linha 56) ---
+  it('deve setar isLoading=false mesmo quando há erro', async () => {
+    let rejectQuery: (err: Error) => void = () => {};
+    const queryPromise = new Promise<{ data: any; error: any }>((_, reject) => {
+      rejectQuery = (err) => reject(err);
+    });
+    const chain: any = {
+      gte: vi.fn(function(this: any) { return chain; }),
+      limit: vi.fn(function(this: any) { return chain; }),
+      order: vi.fn(function(this: any) { return chain; }),
+      then: queryPromise.then.bind(queryPromise),
+      catch: queryPromise.catch.bind(queryPromise),
+    };
+    const mockFrom: any = { select: vi.fn(() => chain) };
+    mockSupabase.from.mockReturnValue(mockFrom);
+
+    const { useFaturamentoMensal } = await import('@/hooks/useRelatorios');
+    const { result } = renderHook(() => useFaturamentoMensal());
+
+    await waitFor(() => expect(mockFrom.select).toHaveBeenCalled());
+    rejectQuery(new Error('boom'));
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+  });
+
+  // --- deps [periodo] deve re-trigger fetch quando periodo muda (ArrayDeclaration linhas 81, 122, 155, 188, 203) ---
+  it('deve re-executar fetch quando periodo muda em useFaturamentoMensal', async () => {
+    const chain: any = {
+      gte: vi.fn(() => chain),
+      order: vi.fn(() => chain),
+      limit: vi.fn(() => chain),
+    };
+    const mockFrom: any = { select: vi.fn(() => chain) };
+    mockSupabase.from.mockReturnValue(mockFrom);
+
+    const { useFaturamentoMensal } = await import('@/hooks/useRelatorios');
+    const { rerender } = renderHook(({ p }) => useFaturamentoMensal(p), {
+      initialProps: { p: '12m' as const },
+    });
+
+    await waitFor(() => expect(mockFrom.select).toHaveBeenCalledTimes(1));
+
+    rerender({ p: '7d' as const });
+    await waitFor(() => expect(mockFrom.select).toHaveBeenCalledTimes(2));
+
+    rerender({ p: '30d' as const });
+    await waitFor(() => expect(mockFrom.select).toHaveBeenCalledTimes(3));
+  });
+
+  it('deve re-executar fetch quando periodo muda em useNovosClientesPeriodo', async () => {
+    const chain: any = {
+      gte: vi.fn(() => chain),
+      order: vi.fn(() => chain),
+      limit: vi.fn(() => chain),
+    };
+    const mockFrom: any = { select: vi.fn(() => chain) };
+    mockSupabase.from.mockReturnValue(mockFrom);
+
+    const { useNovosClientesPeriodo } = await import('@/hooks/useRelatorios');
+    const { rerender } = renderHook(({ p }) => useNovosClientesPeriodo(p), {
+      initialProps: { p: '12m' as const },
+    });
+
+    await waitFor(() => expect(mockFrom.select).toHaveBeenCalledTimes(1));
+
+    rerender({ p: 'tudo' as const });
+    await waitFor(() => expect(mockFrom.select).toHaveBeenCalledTimes(2));
+  });
+
+  it('deve re-executar fetch quando periodo muda em useConversaoOrcamentos', async () => {
+    const chain: any = {
+      order: vi.fn(() => chain),
+      limit: vi.fn(() => chain),
+    };
+    const mockFrom: any = { select: vi.fn(() => chain) };
+    mockSupabase.from.mockReturnValue(mockFrom);
+
+    const { useConversaoOrcamentos } = await import('@/hooks/useRelatorios');
+    const { rerender } = renderHook(({ p }) => useConversaoOrcamentos(p), {
+      initialProps: { p: '12m' as const },
+    });
+
+    await waitFor(() => expect(mockFrom.select).toHaveBeenCalledTimes(1));
+
+    rerender({ p: '7d' as const });
+    await waitFor(() => expect(mockFrom.select).toHaveBeenCalledTimes(2));
+  });
+
+  it('deve re-executar fetch quando periodo muda em useResumoDiario', async () => {
+    const chain: any = {
+      gte: vi.fn(() => chain),
+      order: vi.fn(() => chain),
+      limit: vi.fn(() => chain),
+    };
+    const mockFrom: any = { select: vi.fn(() => chain) };
+    mockSupabase.from.mockReturnValue(mockFrom);
+
+    const { useResumoDiario } = await import('@/hooks/useRelatorios');
+    const { rerender } = renderHook(({ p }) => useResumoDiario(p), {
+      initialProps: { p: '90d' as const },
+    });
+
+    await waitFor(() => expect(mockFrom.select).toHaveBeenCalledTimes(1));
+
+    rerender({ p: '30d' as const });
+    await waitFor(() => expect(mockFrom.select).toHaveBeenCalledTimes(2));
+  });
+
+  it('deve re-executar fetch quando periodo muda em useFotosPeriodo', async () => {
+    const chain: any = {
+      gte: vi.fn(() => chain),
+      order: vi.fn(() => chain),
+      limit: vi.fn(() => chain),
+    };
+    const mockFrom: any = { select: vi.fn(() => chain) };
+    mockSupabase.from.mockReturnValue(mockFrom);
+
+    const { useFotosPeriodo } = await import('@/hooks/useRelatorios');
+    const { rerender } = renderHook(({ p }) => useFotosPeriodo(p), {
+      initialProps: { p: '12m' as const },
+    });
+
+    await waitFor(() => expect(mockFrom.select).toHaveBeenCalledTimes(1));
+
+    rerender({ p: 'tudo' as const });
+    await waitFor(() => expect(mockFrom.select).toHaveBeenCalledTimes(2));
+  });
+});
+
+describe('useRelatorios - getIntervaloSql boundaries', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // --- getIntervaloSql para '7d' deve ser ~7 dias atrás (linhas 211-212) ---
+  it('deve calcular intervalo de 7 dias a partir de agora', async () => {
+    const chain: any = {
+      gte: vi.fn(() => chain),
+      order: vi.fn(() => chain),
+      limit: vi.fn(() => chain),
+    };
+    const mockFrom: any = { select: vi.fn(() => chain) };
+    mockSupabase.from.mockReturnValue(mockFrom);
+
+    const before = Date.now();
+    const { useFaturamentoMensal } = await import('@/hooks/useRelatorios');
+    renderHook(() => useFaturamentoMensal('7d'));
+    await waitFor(() => expect(mockFrom.select).toHaveBeenCalled());
+    const after = Date.now();
+
+    const gteArg = chain.gte.mock.calls[0][1] as string;
+    const gteTime = new Date(gteArg).getTime();
+
+    // esperado: ~7 dias atrás (margem de 200ms)
+    expect(gteTime).toBeGreaterThanOrEqual(before - 7 * 24 * 60 * 60 * 1000 - 200);
+    expect(gteTime).toBeLessThanOrEqual(after - 7 * 24 * 60 * 60 * 1000 + 200);
+  });
+
+  // --- getIntervaloSql para '30d' deve ser ~30 dias atrás (linhas 213-214) ---
+  it('deve calcular intervalo de 30 dias a partir de agora', async () => {
+    const chain: any = {
+      gte: vi.fn(() => chain),
+      order: vi.fn(() => chain),
+      limit: vi.fn(() => chain),
+    };
+    const mockFrom: any = { select: vi.fn(() => chain) };
+    mockSupabase.from.mockReturnValue(mockFrom);
+
+    const before = Date.now();
+    const { useFaturamentoMensal } = await import('@/hooks/useRelatorios');
+    renderHook(() => useFaturamentoMensal('30d'));
+    await waitFor(() => expect(mockFrom.select).toHaveBeenCalled());
+    const after = Date.now();
+
+    const gteArg = chain.gte.mock.calls[0][1] as string;
+    const gteTime = new Date(gteArg).getTime();
+
+    expect(gteTime).toBeGreaterThanOrEqual(before - 30 * 24 * 60 * 60 * 1000 - 200);
+    expect(gteTime).toBeLessThanOrEqual(after - 30 * 24 * 60 * 60 * 1000 + 200);
+  });
+
+  // --- getIntervaloSql para '90d' deve ser ~90 dias atrás (linhas 215-216) ---
+  it('deve calcular intervalo de 90 dias a partir de agora', async () => {
+    const chain: any = {
+      gte: vi.fn(() => chain),
+      order: vi.fn(() => chain),
+      limit: vi.fn(() => chain),
+    };
+    const mockFrom: any = { select: vi.fn(() => chain) };
+    mockSupabase.from.mockReturnValue(mockFrom);
+
+    const before = Date.now();
+    const { useResumoDiario } = await import('@/hooks/useRelatorios');
+    renderHook(() => useResumoDiario('90d'));
+    await waitFor(() => expect(mockFrom.select).toHaveBeenCalled());
+    const after = Date.now();
+
+    const gteArg = chain.gte.mock.calls[0][1] as string;
+    const gteTime = new Date(gteArg).getTime();
+
+    expect(gteTime).toBeGreaterThanOrEqual(before - 90 * 24 * 60 * 60 * 1000 - 200);
+    expect(gteTime).toBeLessThanOrEqual(after - 90 * 24 * 60 * 60 * 1000 + 200);
+  });
+
+  // --- getIntervaloSql para '12m' deve ser ~1 ano atrás (linhas 217-218) ---
+  it('deve calcular intervalo de 12 meses (1 ano) a partir de agora', async () => {
+    const chain: any = {
+      gte: vi.fn(() => chain),
+      order: vi.fn(() => chain),
+      limit: vi.fn(() => chain),
+    };
+    const mockFrom: any = { select: vi.fn(() => chain) };
+    mockSupabase.from.mockReturnValue(mockFrom);
+
+    const before = new Date();
+    const { useFaturamentoMensal } = await import('@/hooks/useRelatorios');
+    renderHook(() => useFaturamentoMensal('12m'));
+    await waitFor(() => expect(mockFrom.select).toHaveBeenCalled());
+    const after = new Date();
+
+    const gteArg = chain.gte.mock.calls[0][1] as string;
+    const gteTime = new Date(gteArg);
+
+    const beforeYearAgo = new Date(before);
+    beforeYearAgo.setFullYear(beforeYearAgo.getFullYear() - 1);
+    const afterYearAgo = new Date(after);
+    afterYearAgo.setFullYear(afterYearAgo.getFullYear() - 1);
+
+    expect(gteTime.getTime()).toBeGreaterThanOrEqual(beforeYearAgo.getTime() - 1000);
+    expect(gteTime.getTime()).toBeLessThanOrEqual(afterYearAgo.getTime() + 1000);
+
+    expect(gteTime.getFullYear()).toBe(before.getFullYear() - 1);
+  });
+
+  // --- getIntervaloSql para 'tudo' deve ser '2000-01-01' (linha 219) ---
+  it('deve retornar sentinela 2000-01-01 quando periodo=tudo', async () => {
+    const chain: any = {
+      gte: vi.fn(() => chain),
+      order: vi.fn(() => chain),
+      limit: vi.fn(() => chain),
+    };
+    const mockFrom: any = { select: vi.fn(() => chain) };
+    mockSupabase.from.mockReturnValue(mockFrom);
+
+    const { useFaturamentoMensal } = await import('@/hooks/useRelatorios');
+    renderHook(() => useFaturamentoMensal('tudo'));
+    await waitFor(() => expect(mockFrom.select).toHaveBeenCalled());
+
+    const gteArg = chain.gte.mock.calls[0][1] as string;
+    expect(gteArg).toBe('2000-01-01T00:00:00.000Z');
   });
 });
