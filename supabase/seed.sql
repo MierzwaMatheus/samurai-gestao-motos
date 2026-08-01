@@ -30,6 +30,13 @@
 --    criadas no mesmo batch não ficam visíveis para SELECTs posteriores;
 --    inline `INSERT ... ON CONFLICT DO NOTHING` evita esse problema e é
 --    trivialmente idempotente.
+--
+--    Credenciais pra login manual via UI: `seed+e2e@samurai.local` /
+--    `samurai123`. Antes era `'seed-password-not-used'` (placeholder
+--    que não servia pra login) — o que obrigava o dev a criar um user
+--    à mão no Studio. Os testes E2E (tests/e2e/setup.ts e
+--    supabase/functions/_test/helpers.ts) NÃO dependem dessa senha
+--    (criam user próprio por teste), então a mudança é segura.
 -- ----------------------------------------------------------------------------
 INSERT INTO auth.users (
   id, instance_id, aud, role, email, encrypted_password,
@@ -41,7 +48,7 @@ VALUES (
   '00000000-0000-0000-0000-000000000001'::uuid,
   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
   'seed+e2e@samurai.local',
-  crypt('seed-password-not-used', gen_salt('bf')),
+  crypt('samurai123', gen_salt('bf')),
   NOW(),
   '{"provider":"email","providers":["email"]}'::jsonb,
   '{}'::jsonb,
