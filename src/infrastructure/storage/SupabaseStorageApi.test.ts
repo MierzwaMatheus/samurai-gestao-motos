@@ -455,3 +455,132 @@ describe("SupabaseStorageApi.consultarEspacoBucket — cache de 5 min", () => {
     expect(mockedInvoke).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("SupabaseStorageApi.listarArquivosPorPeriodo", () => {
+  /**
+   * Monta o duplo da Edge Function `listar-arquivos-storage`. Devolve
+   * `data.arquivos` com campos `caminho`, `nome`, `tamanhoBytes`,
+   * `dataCriacao` (ISO string) e `tipo` — espelhando o contrato que o
+   * ciclo 4 vai expor via SQL.
+   */
+  const buildListarInvoke = (
+    overrides: {
+      arquivos?: Array<{
+        caminho: string;
+        nome: string;
+        tamanhoBytes: number;
+        dataCriacao: string;
+        tipo: string;
+      }>;
+      invokeError?: { message: string } | null;
+    } = {}
+  ) => {
+    mockedInvoke.mockResolvedValue({
+      data: { arquivos: overrides.arquivos ?? [] },
+      error: overrides.invokeError ?? null,
+    } as never);
+
+    return { api: new SupabaseStorageApi() };
+  };
+
+  beforeEach(() => {
+    mockedInvoke.mockReset();
+    mockedFrom.mockReset();
+  });
+
+  it('chama functions.invoke("listar-arquivos-storage") exatamente 1 vez', async () => {
+    const { api } = buildListarInvoke({
+      arquivos: [
+        {
+          caminho: "user/entrada-1/moto/foto.jpg",
+          nome: "foto.jpg",
+          tamanhoBytes: 1024,
+          dataCriacao: "2026-08-01T10:00:00.000Z",
+          tipo: "image/jpeg",
+        },
+      ],
+    });
+
+    const inicio = new Date("2026-08-01T00:00:00.000Z");
+    const fim = new Date("2026-08-01T23:59:59.999Z");
+    await api.listarArquivosPorPeriodo(inicio, fim);
+
+    expect(mockedInvoke).toHaveBeenCalledTimes(1);
+    expect(mockedInvoke).toHaveBeenCalledWith("listar-arquivos-storage", {
+      body: {
+        dataInicio: "2026-08-01T00:00:00.000Z",
+        dataFim: "2026-08-01T23:59:59.999Z",
+      },
+    });
+  });
+
+  it("não chama supabase.storage.from(...).list em momento algum", async () => {
+    // A recursão antiga fazia centenas de chamadas `list` em loop; o
+    // contrato novo é 1 invoke apenas.
+    const { api } = buildListarInvoke();
+
+    await api.listarArquivosPorPeriodo(
+      new Date("2026-08-01T00:00:00.000Z"),
+      new Date("2026-08-01T23:59:59.999Z")
+    );
+
+    expect(mockedFrom).not.toHaveBeenCalled();
+  });
+
+  it("mapeia dataCriacao ISO string para Date e propaga os demais campos", async () => {
+    const { api } = buildListarInvoke({
+      arquivos: [
+        {
+          caminho: "user/entrada-1/moto/foto.jpg",
+          nome: "foto.jpg",
+          tamanhoBytes: 2048,
+          dataCriacao: "2026-08-01T10:00:00.000Z",
+          tipo: "image/jpeg",
+        },
+      ],
+    });
+
+    const resultado = await api.listarArquivosPorPeriodo(
+      new Date("2026-08-01T00:00:00.000Z"),
+      new Date("2026-08-01T23:59:59.999Z")
+    );
+
+    expect(resultado).toHaveLength(1);
+    expect(resultado[0]).toEqual({
+      caminho: "user/entrada-1/moto/foto.jpg",
+      nome: "foto.jpg",
+      tamanhoBytes: 2048,
+      dataCriacao: new Date("2026-08-01T10:00:00.000Z"),
+      tipo: "image/jpeg",
+    });
+    // Stryker muta `new Date(item.dataCriacao)` para `new Date(item.dataCriacao)` removido
+    // ou `new Date(item.caminho)` — sem o cast explícito o tipo vira string.
+    expect(resultado[0].dataCriacao).toBeInstanceOf(Date);
+  });
+
+  it("retorna lista vazia quando invoke devolve { arquivos: [] }", async () => {
+    const { api } = buildListarInvoke({ arquivos: [] });
+
+    const resultado = await api.listarArquivosPorPeriodo(
+      new Date("2026-08-01T00:00:00.000Z"),
+      new Date("2026-08-01T23:59:59.999Z")
+    );
+
+    expect(resultado).toEqual([]);
+  });
+
+  it("propaga erro do invoke com mensagem amigável", async () => {
+    const { api } = buildListarInvoke({
+      invokeError: { message: "Edge Function fora do ar" },
+    });
+
+    await expect(
+      api.listarArquivosPorPeriodo(
+        new Date("2026-08-01T00:00:00.000Z"),
+        new Date("2026-08-01T23:59:59.999Z")
+      )
+    ).rejects.toThrow(
+      "Erro ao listar arquivos por período: Edge Function fora do ar"
+    );
+  });
+});

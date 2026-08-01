@@ -190,74 +190,43 @@ export class SupabaseStorageApi implements StorageApi {
 
   /**
    * Lista arquivos por período
-   * Retorna todos os arquivos criados entre dataInicio e dataFim
-   * Faz busca recursiva em todas as subpastas
+   *
+   * Delega para a Edge Function `listar-arquivos-storage`, que executa
+   * a query SQL com filtro de período e RLS no servidor. O cliente
+   * recebe o array `arquivos` no shape que o ciclo 4 vai expor e
+   * reconstrói `dataCriacao: Date` a partir do ISO string.
    */
   async listarArquivosPorPeriodo(
     dataInicio: Date,
     dataFim: Date
   ): Promise<ArquivoStorage[]> {
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) {
-        throw new Error("Usuário não autenticado");
+      const { data, error } = await supabase.functions.invoke<{
+        arquivos: Array<{
+          caminho: string;
+          nome: string;
+          tamanhoBytes: number;
+          dataCriacao: string;
+          tipo: string;
+        }>;
+      }>("listar-arquivos-storage", {
+        body: {
+          dataInicio: dataInicio.toISOString(),
+          dataFim: dataFim.toISOString(),
+        },
+      });
+
+      if (error) {
+        throw new Error(error.message);
       }
 
-      const arquivosFiltrados: ArquivoStorage[] = [];
-      const prefixoBase = `${userData.user.id}`;
-      const pastasParaProcessar: string[] = [prefixoBase];
-
-      while (pastasParaProcessar.length > 0) {
-        const pastaAtual = pastasParaProcessar.shift()!;
-        let offset = 0;
-        const limit = 1000;
-        let hasMore = true;
-
-        while (hasMore) {
-          const { data: items, error } = await supabase.storage
-            .from(this.bucketName)
-            .list(pastaAtual, {
-              limit: limit,
-              offset: offset,
-              sortBy: { column: "created_at", order: "desc" },
-            });
-
-          if (error) {
-            throw new Error(`Erro ao listar arquivos: ${error.message}`);
-          }
-
-          if (!items || items.length === 0) {
-            hasMore = false;
-            break;
-          }
-
-          for (const item of items) {
-            if (item.id) {
-              const dataCriacao = new Date(item.created_at);
-
-              if (dataCriacao >= dataInicio && dataCriacao <= dataFim) {
-                arquivosFiltrados.push({
-                  nome: item.name,
-                  caminho: `${pastaAtual}/${item.name}`,
-                  tamanhoBytes: item.metadata?.size || 0,
-                  dataCriacao,
-                  tipo: item.metadata?.mimetype || "unknown",
-                });
-              }
-            } else {
-              pastasParaProcessar.push(`${pastaAtual}/${item.name}`);
-            }
-          }
-
-          if (items.length < limit) {
-            hasMore = false;
-          } else {
-            offset += limit;
-          }
-        }
-      }
-
-      return arquivosFiltrados;
+      return (data?.arquivos ?? []).map(item => ({
+        caminho: item.caminho,
+        nome: item.nome,
+        tamanhoBytes: item.tamanhoBytes,
+        dataCriacao: new Date(item.dataCriacao),
+        tipo: item.tipo,
+      }));
     } catch (error) {
       throw new Error(
         `Erro ao listar arquivos por período: ${
