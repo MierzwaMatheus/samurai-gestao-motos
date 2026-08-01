@@ -15,46 +15,51 @@
 -- Idempotente: usa ON CONFLICT DO NOTHING em todas as inserções baseadas em
 -- chaves determinísticas (UUIDs fixos) e em generate_series com offsets
 -- fixos. Pode ser re-executado a qualquer momento.
+--
+-- Sem BEGIN/COMMIT: a função seed_ensure_usuario precisa estar visível
+-- desde a primeira chamada, e o supabase db reset invoca o seed como um
+-- único batch onde COMMITs intermediários não estabelecem visibilidade
+-- para comandos posteriores no mesmo batch.
 -- ============================================================================
 
-BEGIN;
-
 -- ----------------------------------------------------------------------------
--- 0. Função helper: cria usuário em auth.users + public.usuarios
---    se ainda não existir. Necessário porque a FK de clientes/motos/
---    entradas para auth.users.id exige entrada real em auth.users.
+-- 0. Usuário em auth.users + public.usuarios
+--    Necessário porque a FK de clientes/motos/entradas para auth.users.id
+--    exige entrada real em auth.users. Sem BEGIN/COMMIT e sem função
+--    helper: o `supabase db reset` envia o seed em batch único e funções
+--    criadas no mesmo batch não ficam visíveis para SELECTs posteriores;
+--    inline `INSERT ... ON CONFLICT DO NOTHING` evita esse problema e é
+--    trivialmente idempotente.
 -- ----------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION public.seed_ensure_usuario(p_id UUID, p_email TEXT)
-RETURNS VOID AS $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM auth.users WHERE id = p_id) THEN
-    INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password,
-                            email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
-                            created_at, updated_at, confirmation_token,
-                            email_change, email_change_token_new, recovery_token)
-    VALUES (
-      p_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-      p_email,
-      crypt('seed-password-not-used', gen_salt('bf')),
-      NOW(),
-      '{"provider":"email","providers":["email"]}'::jsonb,
-      '{}'::jsonb,
-      NOW(), NOW(), '', '', '', ''
-    );
-  END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM public.usuarios WHERE id = p_id) THEN
-    INSERT INTO public.usuarios (id, email, nome, permissao, ativo, criado_em, atualizado_em)
-    VALUES (p_id, p_email, split_part(p_email, '@', 1), 'admin', TRUE, NOW(), NOW());
-  END IF;
-END;
-$$ LANGUAGE plpgsql;
-
--- Usuário dono de todos os dados fake do E2E
-SELECT public.seed_ensure_usuario(
+INSERT INTO auth.users (
+  id, instance_id, aud, role, email, encrypted_password,
+  email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+  created_at, updated_at, confirmation_token,
+  email_change, email_change_token_new, recovery_token
+)
+VALUES (
   '00000000-0000-0000-0000-000000000001'::uuid,
-  'seed+e2e@samurai.local'
-);
+  '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+  'seed+e2e@samurai.local',
+  crypt('seed-password-not-used', gen_salt('bf')),
+  NOW(),
+  '{"provider":"email","providers":["email"]}'::jsonb,
+  '{}'::jsonb,
+  NOW(), NOW(), '', '', '', ''
+)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.usuarios (id, email, nome, permissao, ativo, criado_em, atualizado_em)
+VALUES (
+  '00000000-0000-0000-0000-000000000001'::uuid,
+  'seed+e2e@samurai.local',
+  'seed-e2e',
+  'admin',
+  TRUE,
+  NOW(),
+  NOW()
+)
+ON CONFLICT (id) DO NOTHING;
 
 -- ----------------------------------------------------------------------------
 -- 1. Tipos de serviço (seed mínimo). Categoria 'padrao' com preco_oficina > 0
@@ -177,8 +182,6 @@ SELECT
   NOW()
 FROM generate_series(1, 120) AS g
 ON CONFLICT (id) DO NOTHING;
-
-COMMIT;
 
 -- ============================================================================
 -- GRANTs para service_role em todas as tabelas e views públicas
