@@ -16,8 +16,8 @@ import type {
   FiltrosRelatorio,
 } from '@/domain/interfaces/relatorios';
 
-/** Colunas explícitas por view - ciclo 1 issue #4 */
-const COLUMNS_BY_VIEW = {
+/** Colunas explícitas por view - ciclo 1+2 issue #4 */
+export const COLUMNS_BY_VIEW = {
   'vw_status_entradas': ['status', 'quantidade', 'percentual', 'progresso_medio', 'dias_medio_conclusao'],
   'vw_status_entrega': ['status_entrega', 'quantidade', 'percentual', 'dias_medio_entrega'],
   'vw_distribuicao_categoria': ['categoria', 'tipos_servico', 'entradas_afetadas', 'total_execucoes', 'faturamento_categoria'],
@@ -25,6 +25,12 @@ const COLUMNS_BY_VIEW = {
   'vw_faturamento_por_servico': ['servico', 'categoria', 'quantidade_entradas', 'total_execucoes', 'faturamento_total'],
   'vw_top_clientes': ['cliente_id', 'cliente_nome', 'telefone', 'email', 'numero_servicos', 'total_entradas', 'faturamento_total', 'ticket_medio', 'ultimo_servico'],
   'vw_servicos_mais_realizados': ['servico', 'categoria', 'total_historico', 'entradas_diferentes', 'total_execucoes', 'media_por_entrada'],
+  // issue #4 ciclo 2: views que agora usam .limit() antes de .order()
+  'vw_faturamento_mensal': ['mes', 'total_entradas', 'faturamento_total', 'total_frete', 'ticket_medio', 'clientes_unicos', 'motos_unicas'],
+  'vw_conversao_orcamentos': ['mes', 'orcamentos_criados', 'orcamentos_convertidos', 'taxa_conversao_percentual', 'orcamentos_expirados'],
+  'vw_novos_clientes_periodo': ['mes', 'novos_clientes', 'clientes_com_servico', 'taxa_conversao_percentual'],
+  'vw_fotos_periodo': ['mes', 'tipo', 'quantidade_fotos', 'entradas_com_fotos'],
+  'vw_resumo_diario': ['data', 'novas_entradas', 'novos_orcamentos', 'concluidos', 'em_andamento', 'entregues', 'faturamento_dia', 'frete_dia'],
 } as const;
 
 interface UseQueryResult<T> {
@@ -67,8 +73,9 @@ export function useFaturamentoMensal(periodo: FiltrosRelatorio['periodo'] = '12m
       const intervalo = getIntervaloSql(periodo);
       return supabase
         .from('vw_faturamento_mensal')
-        .select('*')
+        .select(COLUMNS_BY_VIEW['vw_faturamento_mensal'].join(','))
         .gte('mes', intervalo)
+        .limit(60)
         .order('mes', { ascending: false });
     },
     [periodo]
@@ -109,7 +116,8 @@ export function useConversaoOrcamentos(periodo: FiltrosRelatorio['periodo'] = '1
   return useSupabaseQuery<ConversaoOrcamento[]>(
     () => supabase
       .from('vw_conversao_orcamentos')
-      .select('*')
+      .select(COLUMNS_BY_VIEW['vw_conversao_orcamentos'].join(','))
+      .limit(60)
       .order('mes', { ascending: false }),
     [periodo]
   );
@@ -139,8 +147,9 @@ export function useResumoDiario(periodo: FiltrosRelatorio['periodo'] = '90d') {
       const intervalo = getIntervaloSql(periodo);
       return supabase
         .from('vw_resumo_diario')
-        .select('*')
+        .select(COLUMNS_BY_VIEW['vw_resumo_diario'].join(','))
         .gte('data', intervalo)
+        .limit(730)
         .order('data', { ascending: false });
     },
     [periodo]
@@ -171,8 +180,9 @@ export function useNovosClientesPeriodo(periodo: FiltrosRelatorio['periodo'] = '
       const intervalo = getIntervaloSql(periodo);
       return supabase
         .from('vw_novos_clientes_periodo')
-        .select('*')
+        .select(COLUMNS_BY_VIEW['vw_novos_clientes_periodo'].join(','))
         .gte('mes', intervalo)
+        .limit(60)
         .order('mes', { ascending: false });
     },
     [periodo]
@@ -185,8 +195,9 @@ export function useFotosPeriodo(periodo: FiltrosRelatorio['periodo'] = '12m') {
       const intervalo = getIntervaloSql(periodo);
       return supabase
         .from('vw_fotos_periodo')
-        .select('*')
+        .select(COLUMNS_BY_VIEW['vw_fotos_periodo'].join(','))
         .gte('mes', intervalo)
+        .limit(60)
         .order('mes', { ascending: false });
     },
     [periodo]
