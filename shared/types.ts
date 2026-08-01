@@ -144,6 +144,18 @@ export interface Foto {
   id: string;
   entradaId: string;
   url: string;
+  /**
+   * Caminho (path) da variante thumbnail no bucket. `null` para
+   * `documento` (que mantém 1 upload único) e para fotos legadas
+   * anteriores à pipeline de 2 variantes — neste último caso o
+   * consumer deve cair no `url` (já assinado).
+   */
+  thumbPath?: string | null;
+  /**
+   * Caminho (path) da variante em alta resolução no bucket. Mesmo
+   * fallback para `url` em fotos legadas sem essa coluna.
+   */
+  fullPath?: string | null;
   tipo: "moto" | "status" | "documento";
   criadoEm: Date;
 }

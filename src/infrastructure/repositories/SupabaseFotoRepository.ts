@@ -9,12 +9,19 @@ import { SupabaseStorageApi } from "@/infrastructure/storage/SupabaseStorageApi"
  */
 export class SupabaseFotoRepository implements FotoRepository {
   private storageApi = new SupabaseStorageApi();
-  async criar(foto: Omit<Foto, "id" | "criadoEm">): Promise<Foto> {
+  async criar(
+    foto: Omit<Foto, "id" | "criadoEm" | "thumbPath" | "fullPath"> & {
+      thumbPath?: string | null;
+      fullPath?: string | null;
+    }
+  ): Promise<Foto> {
     const { data, error } = await supabase
       .from("fotos")
       .insert({
         entrada_id: foto.entradaId,
         url: foto.url,
+        thumb_path: foto.thumbPath ?? null,
+        full_path: foto.fullPath ?? null,
         tipo: foto.tipo,
       })
       .select()
@@ -43,12 +50,7 @@ export class SupabaseFotoRepository implements FotoRepository {
 
     if (!data) return null;
 
-    const foto = this.mapToFoto(data);
-
-    // Se a URL parece ser um filePath (não começa com http), gera URL assinada
-    if (!foto.url.startsWith("http")) {
-      foto.url = await this.storageApi.obterUrlAssinada(foto.url);
-    }
+    const foto = await this.resolveSignedUrls(this.mapToFoto(data));
 
     return foto;
   }
@@ -66,14 +68,7 @@ export class SupabaseFotoRepository implements FotoRepository {
 
     // Converte filePath para URL assinada se necessário
     const fotos = await Promise.all(
-      (data || []).map(async (item) => {
-        const foto = this.mapToFoto(item);
-        // Se a URL parece ser um filePath (não começa com http), gera URL assinada
-        if (!foto.url.startsWith("http")) {
-          foto.url = await this.storageApi.obterUrlAssinada(foto.url);
-        }
-        return foto;
-      })
+      (data || []).map(async (item) => this.resolveSignedUrls(this.mapToFoto(item)))
     );
 
     return fotos;
@@ -93,14 +88,7 @@ export class SupabaseFotoRepository implements FotoRepository {
 
     // Converte filePath para URL assinada se necessário
     const fotos = await Promise.all(
-      (data || []).map(async (item) => {
-        const foto = this.mapToFoto(item);
-        // Se a URL parece ser um filePath (não começa com http), gera URL assinada
-        if (!foto.url.startsWith("http")) {
-          foto.url = await this.storageApi.obterUrlAssinada(foto.url);
-        }
-        return foto;
-      })
+      (data || []).map(async (item) => this.resolveSignedUrls(this.mapToFoto(item)))
     );
 
     return fotos;
@@ -117,11 +105,48 @@ export class SupabaseFotoRepository implements FotoRepository {
     }
   }
 
+  /**
+   * Resolve o `url` e os `thumbPath`/`fullPath` para URLs assinadas
+   * quando ainda são filePaths (raw). Para fotos legadas (sem
+   * thumb_path/full_path) ou para `documento` (thumb_path null), o
+   * thumbPath aponta para o MESMO signed URL do `url` — preservando
+   * compatibilidade. O cache de signed URLs (delegado a
+   * `urlCache`) garante que o mesmo path não assina 2x.
+   */
+  private async resolveSignedUrls(foto: Foto): Promise<Foto> {
+    if (!foto.url.startsWith("http")) {
+      foto.url = await this.storageApi.obterUrlAssinada(foto.url);
+    }
+
+    const signedUrl = foto.url;
+    foto.thumbPath = await this.resolvePath(foto.thumbPath, signedUrl);
+    foto.fullPath = await this.resolvePath(foto.fullPath, signedUrl);
+
+    return foto;
+  }
+
+  /**
+   * Resolve um único path para uma URL utilizável:
+   * - `null`/`undefined` → `fallback` (signed URL do `url`).
+   * - Já é uma URL completa (`http`) → devolve como está.
+   * - Raw path → assina via `obterUrlAssinada` (com cache).
+   */
+  private async resolvePath(
+    path: string | null | undefined,
+    fallback: string
+  ): Promise<string> {
+    if (!path) return fallback;
+    if (path.startsWith("http")) return path;
+    return this.storageApi.obterUrlAssinada(path);
+  }
+
   private mapToFoto(data: any): Foto {
     return {
       id: data.id,
       entradaId: data.entrada_id,
       url: data.url,
+      thumbPath: data.thumb_path ?? null,
+      fullPath: data.full_path ?? null,
       tipo: data.tipo,
       criadoEm: new Date(data.criado_em),
     };

@@ -27,12 +27,18 @@ const mockedStorageFrom = vi.mocked(supabase.storage.from);
 
 /**
  * Monta o mock do bucket de storage, expondo o spy de `createSignedUrl`.
+ * Por padrão devolve uma URL fixa independente do path; pode-se
+ * sobrescrever via `signedUrlFor` para devolver uma URL distinta por
+ * path (usado nos testes do ciclo 3 para verificar que cada path
+ * gera sua própria signed URL).
  */
-const buildBucket = () => {
-  const createSignedUrl = vi.fn().mockResolvedValue({
-    data: { signedUrl: "https://signed.example/foto.jpg" },
+const buildBucket = (signedUrlFor?: (path: string) => string) => {
+  const createSignedUrl = vi.fn(async (path: string) => ({
+    data: {
+      signedUrl: signedUrlFor ? signedUrlFor(path) : "https://signed.example/foto.jpg",
+    },
     error: null,
-  });
+  }));
   mockedStorageFrom.mockReturnValue({ createSignedUrl } as never);
   return { createSignedUrl };
 };
@@ -50,6 +56,19 @@ const buildFotoRow = (overrides: Record<string, unknown> = {}) => ({
   criado_em: "2025-01-01T00:00:00Z",
   ...overrides,
 });
+
+/**
+ * Helper para montar o mock de um `insert(...).select().single()` do
+ * Supabase. Devolve o `insert` spy para que o teste asserte o payload
+ * enviado ao `from("fotos")`.
+ */
+const mockInsertSingle = (row: ReturnType<typeof buildFotoRow>) => {
+  const single = vi.fn().mockResolvedValue({ data: row, error: null });
+  const select = vi.fn().mockReturnValue({ single });
+  const insert = vi.fn().mockReturnValue({ select });
+  mockedDbFrom.mockReturnValueOnce({ insert } as never);
+  return { insert, select, single };
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -390,6 +409,256 @@ describe("SupabaseFotoRepository — geração de signed URLs", () => {
         "user/entrada/moto/b.jpg",
         3600
       );
+    });
+  });
+});
+
+describe("SupabaseFotoRepository — persistência e mapeamento de thumbPath/fullPath", () => {
+  /**
+   * Ciclo 3 do plano .tdd/issue-8.md: o repositório precisa persistir
+   * os 2 paths (thumbPath + fullPath) introduzidos pela pipeline de
+   * variantes e devolvê-los tipados na Foto. Para fotos legadas
+   * (criadas antes da migration 24_split_foto_paths) sem thumb_path/
+   * full_path, ambos caem no `url` (já assinado) — preservando a
+   * compatibilidade.
+   */
+
+  describe("criar", () => {
+    it("persiste url, thumb_path e full_path no insert para fotos moto/status", async () => {
+      const { insert } = mockInsertSingle(
+        buildFotoRow({
+          thumb_path: "user/.../thumb.webp",
+          full_path: "user/.../full.webp",
+        })
+      );
+
+      await new SupabaseFotoRepository().criar({
+        entradaId: "entrada-1",
+        url: "user/.../moto/x.jpg",
+        thumbPath: "user/.../thumb.webp",
+        fullPath: "user/.../full.webp",
+        tipo: "moto",
+      });
+
+      expect(insert).toHaveBeenCalledWith({
+        entrada_id: "entrada-1",
+        url: "user/.../moto/x.jpg",
+        thumb_path: "user/.../thumb.webp",
+        full_path: "user/.../full.webp",
+        tipo: "moto",
+      });
+    });
+
+    it("persiste thumb_path: null e full_path com o path único para documentos", async () => {
+      const { insert } = mockInsertSingle(
+        buildFotoRow({
+          tipo: "documento",
+          url: "user/.../documento/x.pdf",
+          thumb_path: null,
+          full_path: "user/.../documento/x.pdf",
+        })
+      );
+
+      await new SupabaseFotoRepository().criar({
+        entradaId: "entrada-1",
+        url: "user/.../documento/x.pdf",
+        thumbPath: null,
+        fullPath: "user/.../documento/x.pdf",
+        tipo: "documento",
+      });
+
+      expect(insert).toHaveBeenCalledWith({
+        entrada_id: "entrada-1",
+        url: "user/.../documento/x.pdf",
+        thumb_path: null,
+        full_path: "user/.../documento/x.pdf",
+        tipo: "documento",
+      });
+    });
+
+    it("mapeia thumb_path/full_path do row retornado para Foto.thumbPath/fullPath", async () => {
+      mockInsertSingle(
+        buildFotoRow({
+          thumb_path: "user/.../thumb.webp",
+          full_path: "user/.../full.webp",
+        })
+      );
+
+      const foto = await new SupabaseFotoRepository().criar({
+        entradaId: "entrada-1",
+        url: "user/.../moto/x.jpg",
+        thumbPath: "user/.../thumb.webp",
+        fullPath: "user/.../full.webp",
+        tipo: "moto",
+      });
+
+      expect(foto.thumbPath).toBe("user/.../thumb.webp");
+      expect(foto.fullPath).toBe("user/.../full.webp");
+    });
+  });
+
+  describe("buscarPorId — mapeamento thumbPath/fullPath", () => {
+    it("mapeia thumb_path e full_path para Foto.thumbPath e Foto.fullPath (com signed URLs distintas)", async () => {
+      buildBucket(path => `https://signed.example/${path}`);
+      const row = buildFotoRow({
+        thumb_path: "user/.../thumb.webp",
+        full_path: "user/.../full.webp",
+      });
+
+      mockedDbFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({ data: row, error: null }),
+          }),
+        }),
+      } as never);
+
+      const foto = await new SupabaseFotoRepository().buscarPorId("foto-1");
+
+      expect(foto).not.toBeNull();
+      expect(foto!.thumbPath).toBe("https://signed.example/user/.../thumb.webp");
+      expect(foto!.fullPath).toBe("https://signed.example/user/.../full.webp");
+    });
+
+    it("cai no signed URL para thumbPath e fullPath em foto legada (thumb_path/full_path null)", async () => {
+      const { createSignedUrl } = buildBucket();
+      const row = buildFotoRow({
+        url: "user/.../legacy.jpg",
+        thumb_path: null,
+        full_path: null,
+      });
+
+      mockedDbFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({ data: row, error: null }),
+          }),
+        }),
+      } as never);
+
+      const foto = await new SupabaseFotoRepository().buscarPorId("foto-1");
+
+      // O thumb/full legado aponta para o MESMO signed URL do url.
+      expect(createSignedUrl).toHaveBeenCalledTimes(1);
+      expect(foto!.thumbPath).toBe("https://signed.example/foto.jpg");
+      expect(foto!.fullPath).toBe("https://signed.example/foto.jpg");
+    });
+
+    it("solicita signed URL também para thumb_path e full_path quando são paths (não http)", async () => {
+      const { createSignedUrl } = buildBucket();
+      const row = buildFotoRow({
+        thumb_path: "user/.../thumb.webp",
+        full_path: "user/.../full.webp",
+      });
+
+      mockedDbFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({ data: row, error: null }),
+          }),
+        }),
+      } as never);
+
+      await new SupabaseFotoRepository().buscarPorId("foto-1");
+
+      // Chamadas separadas para cada path distinto (url + thumb_path + full_path).
+      expect(createSignedUrl).toHaveBeenCalledTimes(3);
+      expect(createSignedUrl).toHaveBeenCalledWith(
+        "user/entrada/moto/foto.jpg",
+        3600
+      );
+      expect(createSignedUrl).toHaveBeenCalledWith(
+        "user/.../thumb.webp",
+        3600
+      );
+      expect(createSignedUrl).toHaveBeenCalledWith(
+        "user/.../full.webp",
+        3600
+      );
+    });
+  });
+
+  describe("buscarPorEntradaId — mapeamento thumbPath/fullPath", () => {
+    it("mapeia thumb_path/full_path para cada foto retornada", async () => {
+      buildBucket(path => `https://signed.example/${path}`);
+      const rows = [
+        buildFotoRow({
+          id: "f-1",
+          url: "user/entrada/moto/a.jpg",
+          thumb_path: "user/.../t1.webp",
+          full_path: "user/.../p1.webp",
+        }),
+        buildFotoRow({
+          id: "f-2",
+          url: "user/entrada/moto/legacy.jpg",
+          thumb_path: null,
+          full_path: null,
+          criado_em: "2025-01-02T00:00:00Z",
+        }),
+      ];
+
+      mockedDbFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            order: vi.fn().mockResolvedValue({ data: rows, error: null }),
+          }),
+        }),
+      } as never);
+
+      const fotos = await new SupabaseFotoRepository().buscarPorEntradaId(
+        "entrada-1"
+      );
+
+      expect(fotos).toHaveLength(2);
+      expect(fotos[0].thumbPath).toBe("https://signed.example/user/.../t1.webp");
+      expect(fotos[0].fullPath).toBe("https://signed.example/user/.../p1.webp");
+      // Foto legada: thumb e full caem no signed URL do url.
+      expect(fotos[1].thumbPath).toBe("https://signed.example/user/entrada/moto/legacy.jpg");
+      expect(fotos[1].fullPath).toBe("https://signed.example/user/entrada/moto/legacy.jpg");
+    });
+  });
+
+  describe("buscarPorEntradaIdETipo — mapeamento thumbPath/fullPath", () => {
+    it("mapeia thumb_path/full_path para cada foto retornada", async () => {
+      buildBucket(path => `https://signed.example/${path}`);
+      const rows = [
+        buildFotoRow({
+          id: "f-1",
+          tipo: "status",
+          url: "user/entrada/status/a.jpg",
+          thumb_path: "user/.../t1.webp",
+          full_path: "user/.../p1.webp",
+        }),
+        buildFotoRow({
+          id: "f-2",
+          tipo: "status",
+          url: "user/entrada/status/legacy.jpg",
+          thumb_path: null,
+          full_path: null,
+          criado_em: "2025-01-02T00:00:00Z",
+        }),
+      ];
+
+      mockedDbFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              order: vi.fn().mockResolvedValue({ data: rows, error: null }),
+            }),
+          }),
+        }),
+      } as never);
+
+      const fotos = await new SupabaseFotoRepository().buscarPorEntradaIdETipo(
+        "entrada-1",
+        "status"
+      );
+
+      expect(fotos).toHaveLength(2);
+      expect(fotos[0].thumbPath).toBe("https://signed.example/user/.../t1.webp");
+      expect(fotos[0].fullPath).toBe("https://signed.example/user/.../p1.webp");
+      expect(fotos[1].thumbPath).toBe("https://signed.example/user/entrada/status/legacy.jpg");
+      expect(fotos[1].fullPath).toBe("https://signed.example/user/entrada/status/legacy.jpg");
     });
   });
 });
