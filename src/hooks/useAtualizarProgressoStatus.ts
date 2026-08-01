@@ -12,6 +12,7 @@ export function useAtualizarProgressoStatus(useCase: AtualizarProgressoStatusUse
       status?: "pendente" | "alinhando" | "concluido";
       dataConclusao?: Date | null;
       formaPagamento?: "pix" | "credito" | "debito" | "boleto" | null;
+      statusEntrega?: "pendente" | "entregue" | "retirado";
     }
   ): Promise<boolean> => {
     setLoading(true);

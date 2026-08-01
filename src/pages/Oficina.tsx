@@ -312,6 +312,13 @@ export default function Oficina() {
 
     const sucesso = await atualizarProgresso(entradaId, {
       status: novoStatus,
+      // Reabrir = voltar pra oficina. Reseta `statusEntrega` pra
+      // 'pendente' junto com `status` — sem isso, o card fica
+      // preso na aba "Concluídos" (filtro server-side por
+      // statusEntrega) com botão "Iniciar" incoerente. O cenário
+      // "Iniciar" (pendente→alinhando) também reseta — a moto
+      // voltou pra dentro, não faz sentido manter "entregue".
+      statusEntrega: "pendente",
       dataConclusao: null,
       formaPagamento: null,
     });
