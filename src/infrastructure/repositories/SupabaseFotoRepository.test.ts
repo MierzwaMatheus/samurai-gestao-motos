@@ -274,4 +274,88 @@ describe("SupabaseFotoRepository — geração de signed URLs", () => {
       );
     });
   });
+
+  describe("cache de signed URLs (delegação urlCache via SupabaseStorageApi)", () => {
+    /**
+     * Verifica o encadeamento: SupabaseFotoRepository → SupabaseStorageApi.obterUrlAssinada
+     * (ciclo 2) → urlCache singleton (ciclo 1). Estes testes provam que o cache
+     * cobre os 3 pontos de uso no repositório (linhas 50, 73, 100) sem
+     * nenhuma duplicação desnecessária.
+     */
+
+    /**
+     * Helper para montar o mock da query de `buscarPorId` que retorna
+     * a mesma row em chamadas consecutivas (cada mockOnce consome uma vez).
+     */
+    const mockBuscarPorId = (row: ReturnType<typeof buildFotoRow>) => {
+      const eqChain = {
+        single: vi.fn().mockResolvedValue({ data: row, error: null }),
+      };
+      mockedDbFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue(eqChain),
+        }),
+      } as never);
+    };
+
+    it("chama createSignedUrl uma única vez quando o mesmo path é resolvido em duas buscas sequenciais", async () => {
+      const { createSignedUrl } = buildBucket();
+      const sharedPath = "user/entrada/moto/shared.jpg";
+      mockBuscarPorId(buildFotoRow({ url: sharedPath }));
+      mockBuscarPorId(buildFotoRow({ url: sharedPath }));
+
+      const repo = new SupabaseFotoRepository();
+      await repo.buscarPorId("foto-1");
+      await repo.buscarPorId("foto-1");
+
+      expect(createSignedUrl).toHaveBeenCalledTimes(1);
+      expect(createSignedUrl).toHaveBeenCalledWith(sharedPath, 3600);
+    });
+
+    it("deduplica chamadas paralelas para o mesmo path em buscarPorEntradaId", async () => {
+      const { createSignedUrl } = buildBucket();
+      const sharedPath = "user/entrada/moto/dup.jpg";
+      const rows = [
+        buildFotoRow({ id: "f-1", url: sharedPath }),
+        buildFotoRow({
+          id: "f-2",
+          url: sharedPath,
+          criado_em: "2025-01-02T00:00:00Z",
+        }),
+      ];
+
+      mockedDbFrom.mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            order: vi.fn().mockResolvedValue({ data: rows, error: null }),
+          }),
+        }),
+      } as never);
+
+      await new SupabaseFotoRepository().buscarPorEntradaId("entrada-1");
+
+      // 2 rows com o mesmo path → cache deve deduplicar para 1 chamada
+      expect(createSignedUrl).toHaveBeenCalledTimes(1);
+    });
+
+    it("chama createSignedUrl novamente para paths distintos (cache hit só para o mesmo path)", async () => {
+      const { createSignedUrl } = buildBucket();
+      mockBuscarPorId(buildFotoRow({ url: "user/entrada/moto/a.jpg" }));
+      mockBuscarPorId(buildFotoRow({ url: "user/entrada/moto/b.jpg" }));
+
+      const repo = new SupabaseFotoRepository();
+      await repo.buscarPorId("foto-1");
+      await repo.buscarPorId("foto-2");
+
+      expect(createSignedUrl).toHaveBeenCalledTimes(2);
+      expect(createSignedUrl).toHaveBeenCalledWith(
+        "user/entrada/moto/a.jpg",
+        3600
+      );
+      expect(createSignedUrl).toHaveBeenCalledWith(
+        "user/entrada/moto/b.jpg",
+        3600
+      );
+    });
+  });
 });
