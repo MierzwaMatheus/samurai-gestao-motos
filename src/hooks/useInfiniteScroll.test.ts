@@ -194,4 +194,44 @@ describe("useInfiniteScroll — ciclo 7 (IntersectionObserver)", () => {
     const observer = MockIntersectionObserver.instances.at(-1);
     expect(observer!.observed).toContain(sentinel);
   });
+
+  it("NÃO dispara onIntersect quando o array de entries vem vazio", () => {
+    const onIntersect = vi.fn();
+    const sentinel = makeSentinel();
+
+    renderHook(() =>
+      useInfiniteScroll(
+        { current: sentinel },
+        { onIntersect, hasMore: true, loading: false }
+      )
+    );
+
+    const observer = MockIntersectionObserver.instances.at(-1);
+    observer!.__trigger([]);
+
+    expect(onIntersect).not.toHaveBeenCalled();
+  });
+
+  it("atualiza o callback observado entre renders sem criar novo observer", () => {
+    const onIntersectA = vi.fn();
+    const onIntersectB = vi.fn();
+    const sentinel = makeSentinel();
+
+    const { rerender } = renderHook(
+      ({ cb }: { cb: () => void }) =>
+        useInfiniteScroll(
+          { current: sentinel },
+          { onIntersect: cb, hasMore: true, loading: false }
+        ),
+      { initialProps: { cb: onIntersectA } }
+    );
+
+    rerender({ cb: onIntersectB });
+
+    const observer = MockIntersectionObserver.instances.at(-1);
+    observer!.__trigger([{ isIntersecting: true }]);
+
+    expect(onIntersectA).not.toHaveBeenCalled();
+    expect(onIntersectB).toHaveBeenCalledTimes(1);
+  });
 });

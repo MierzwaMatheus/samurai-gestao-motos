@@ -363,4 +363,26 @@ describe("Orcamentos — ciclo 8 (scroll infinito + contador + reset)", () => {
     // O contador discreto aparece abaixo da lista quando há itens.
     expect(screen.getByText(/mostrando 3 de 25/i)).toBeInTheDocument();
   });
+
+  it("(e) exibe 'Fim da lista' quando hasMore=false", async () => {
+    mockUseOrcamentos({
+      orcamentos: [makeOrcamento("orc-1")],
+      total: 1,
+      hasMore: false,
+    });
+
+    render(<Orcamentos />);
+
+    expect(screen.getByText(/fim da lista/i)).toBeInTheDocument();
+  });
+
+  it("(f) oculta o sentinel e o contador quando não há orçamentos", async () => {
+    mockUseOrcamentos({ orcamentos: [], total: 0, hasMore: false });
+
+    render(<Orcamentos />);
+
+    expect(screen.queryByTestId("orcamentos-sentinel")).toBeNull();
+    expect(screen.queryByText(/mostrando 0 de 0/i)).toBeNull();
+    expect(screen.getByText(/nenhum orçamento ativo/i)).toBeInTheDocument();
+  });
 });

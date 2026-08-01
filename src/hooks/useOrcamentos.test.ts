@@ -99,7 +99,49 @@ describe("useOrcamentos — ciclo 5 (paginado + remoção N+1 duplicado)", () =>
     expect(servicoPersonalizadoRepo.buscarPorEntradaId).not.toHaveBeenCalled();
   });
 
-  it("mantém o total da resposta mais recente quando cargas concorrentes terminam fora de ordem", async () => {
+  it("ignora erros de respostas antigas para que o estado reflita a request mais recente", async () => {
+    const orcamentoRepo = buildOrcamentoRepo() as unknown as OrcamentoRepository;
+    let resolveOld!: (value: unknown) => void;
+    let resolveNew!: (value: unknown) => void;
+    const oldRequest = new Promise(resolve => {
+      resolveOld = resolve;
+    });
+    const newRequest = new Promise(resolve => {
+      resolveNew = resolve;
+    });
+
+    (orcamentoRepo.buscarPagina as ReturnType<typeof vi.fn>)
+      .mockReturnValueOnce(oldRequest)
+      .mockReturnValueOnce(newRequest);
+
+    const { result } = renderHook(() => useOrcamentos(orcamentoRepo, "ativo"));
+
+    act(() => {
+      void result.current.recarregar();
+      void result.current.recarregar();
+    });
+
+    resolveNew({
+      items: [makeOrcamento("orc-atual")],
+      total: 1,
+      page: 1,
+      pageSize: 10,
+    });
+    await act(async () => {
+      await newRequest;
+    });
+
+    resolveOld(Promise.reject(new Error("Falha de conexão")));
+    await act(async () => {
+      await oldRequest.catch(() => undefined);
+    });
+
+    expect(result.current.error).toBeNull();
+    expect(result.current.loading).toBe(false);
+    expect(result.current.total).toBe(1);
+  });
+
+  it("carregarMais incrementa page e concatena os itens retornados", async () => {
     const orcamentoRepo = buildOrcamentoRepo() as unknown as OrcamentoRepository;
     let resolveFirst!: (value: unknown) => void;
     let resolveSecond!: (value: unknown) => void;
