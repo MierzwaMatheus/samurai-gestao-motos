@@ -55,7 +55,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    // `scope: 'local'` limpa apenas a sessão deste client (localStorage)
+    // sem chamar o endpoint `/auth/v1/logout` do servidor. Evita o 403
+    // que o `scope: 'global'` (default) dispara quando o refresh
+    // token já está expirado/revogado. O usuário fica efetivamente
+    // deslogado (próximo page load trata como não-autenticado).
+    await supabase.auth.signOut({ scope: "local" });
   };
 
   return (
