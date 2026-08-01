@@ -557,3 +557,91 @@ describe("Oficina — ciclo 9 (scroll infinito + busca + reset sub-aba)", () => 
     ).toBeInTheDocument();
   });
 });
+
+// ============================================================================
+// Adicionar Foto de Status — toast mostra a mensagem real do hook
+// ----------------------------------------------------------------------------
+// Garante que o `toast.error` exibe a mensagem retornada pelo hook
+// (cobre os mutantes NoCoverage da linha `toast.error(adicionarFotoError
+// || "Erro ao adicionar foto")`).
+// ============================================================================
+describe("Oficina — toast de erro em Adicionar Foto de Status", () => {
+  it("exibe a mensagem real do hook (não o genérico) quando o upload falha", async () => {
+    const adicionarMock = vi.fn().mockResolvedValue(null);
+    useAdicionarFotoStatusMock.mockReturnValue({
+      adicionar: adicionarMock,
+      loading: false,
+      error: "imageVariants: thumb webp vazio (0 bytes) ao processar foto.jpg",
+    });
+
+    mockUseMotosOficina({
+      motos: [makeMoto("em-1")],
+      total: 1,
+      hasMore: false,
+    });
+
+    const { toast } = await import("sonner");
+
+    render(<Oficina />);
+
+    // Abre o modal
+    const abrir = await screen.findByRole("button", { name: /adicionar foto/i });
+    fireEvent.click(abrir);
+
+    // Seleciona arquivo
+    const fileInput = await screen.findByLabelText(/foto/i);
+    const file = new File(["x"], "foto.jpg", { type: "image/jpeg" });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    // Clica em Salvar
+    const salvar = await screen.findByRole("button", { name: /^salvar$/i });
+    fireEvent.click(salvar);
+
+    await waitFor(() => {
+      expect(adicionarMock).toHaveBeenCalledTimes(1);
+    });
+
+    // O toast exibe a mensagem REAL do hook, não o genérico.
+    expect(toast.error).toHaveBeenCalledWith(
+      "imageVariants: thumb webp vazio (0 bytes) ao processar foto.jpg"
+    );
+    // E NÃO com o genérico.
+    expect(toast.error).not.toHaveBeenCalledWith("Erro ao adicionar foto");
+  });
+
+  it("cai no genérico quando o hook retorna erro null (defesa em profundidade)", async () => {
+    const adicionarMock = vi.fn().mockResolvedValue(null);
+    useAdicionarFotoStatusMock.mockReturnValue({
+      adicionar: adicionarMock,
+      loading: false,
+      error: null, // sem erro definido (caso degenerado)
+    });
+
+    mockUseMotosOficina({
+      motos: [makeMoto("em-1")],
+      total: 1,
+      hasMore: false,
+    });
+
+    const { toast } = await import("sonner");
+
+    render(<Oficina />);
+
+    const abrir = await screen.findByRole("button", { name: /adicionar foto/i });
+    fireEvent.click(abrir);
+
+    const fileInput = await screen.findByLabelText(/foto/i);
+    const file = new File(["x"], "foto.jpg", { type: "image/jpeg" });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    const salvar = await screen.findByRole("button", { name: /^salvar$/i });
+    fireEvent.click(salvar);
+
+    await waitFor(() => {
+      expect(adicionarMock).toHaveBeenCalledTimes(1);
+    });
+
+    // Sem error no hook, cai no genérico.
+    expect(toast.error).toHaveBeenCalledWith("Erro ao adicionar foto");
+  });
+});

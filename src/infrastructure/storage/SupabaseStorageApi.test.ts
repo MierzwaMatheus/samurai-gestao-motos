@@ -605,6 +605,9 @@ describe("SupabaseStorageApi.uploadFoto — pipeline de 2 variantes (moto/status
     // Mata o mutante em SupabaseStorageApi.ts:95 (`if (thumbUpload.error)` →
     // `if (false)`). Sem essa asserção, o mutante sobrevive porque o teste
     // existente só observa o caminho de 1 upload (documento).
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
     const variantes = buildVariantesMock();
     const upload = vi
       .fn()
@@ -627,11 +630,23 @@ describe("SupabaseStorageApi.uploadFoto — pipeline de 2 variantes (moto/status
     await expect(
       api.uploadFoto(buildFile(), "entrada-1", "moto")
     ).rejects.toThrow("Erro ao fazer upload (thumb): erro no thumb");
+
+    // O console.error foi chamado com o path e o error object do
+    // Supabase (mata o mutante BlockStatement do `console.error(...)`).
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("thumb upload failed"),
+      expect.objectContaining({ path: expect.stringContaining("-thumb.webp") })
+    );
+
+    consoleErrorSpy.mockRestore();
   });
 
   it("lança erro quando fullUpload falha no pipeline de 2 variantes", async () => {
     // Mata o mutante em SupabaseStorageApi.ts:98 (`if (fullUpload.error)` →
     // `if (false)`).
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
     const variantes = buildVariantesMock();
     const upload = vi
       .fn()
@@ -654,6 +669,14 @@ describe("SupabaseStorageApi.uploadFoto — pipeline de 2 variantes (moto/status
     await expect(
       api.uploadFoto(buildFile(), "entrada-1", "status")
     ).rejects.toThrow("Erro ao fazer upload (full): erro no full");
+
+    // Mata o mutante BlockStatement do `console.error(...)` do full.
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("full upload failed"),
+      expect.objectContaining({ path: expect.stringContaining("-full.webp") })
+    );
+
+    consoleErrorSpy.mockRestore();
   });
 
   it("renomeia corretamente o arquivo com extensão de múltiplos caracteres (regex boundary)", async () => {

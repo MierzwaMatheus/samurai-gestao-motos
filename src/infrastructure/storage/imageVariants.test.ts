@@ -143,4 +143,30 @@ describe("gerarVariantes", () => {
       /webp vazio|0 bytes/i
     );
   });
+
+  it("lança erro quando APENAS a variante `thumb` volta vazia (full ok)", async () => {
+    // Caso assimétrico — testa especificamente o check de `thumb.size`.
+    // Sem este teste, os mutantes do `if (thumb.size === 0)` (linha
+    // 139) sobrevivem porque o teste "lança erro se o processor
+    // devolver um blob/variant webp vazio" deixa ambos vazios — o
+    // check do `full` (linha 144) joga o erro e mata o teste mesmo
+    // se o check do `thumb` for mutado para `{}` ou `false`.
+    const thumbVazio = new File([""], "thumb.webp", {
+      type: "image/webp",
+    });
+    const fullOk = new File(["conteudo-full"], "full.webp", {
+      type: "image/webp",
+    });
+    const processor: ImageVariantsProcessor = {
+      resizeToWebp: vi
+        .fn()
+        .mockImplementationOnce(async () => thumbVazio)
+        .mockImplementationOnce(async () => fullOk),
+    } as unknown as ImageVariantsProcessor;
+    const file = buildFile();
+
+    await expect(gerarVariantes(file, processor)).rejects.toThrow(
+      /thumb webp vazio/i
+    );
+  });
 });
