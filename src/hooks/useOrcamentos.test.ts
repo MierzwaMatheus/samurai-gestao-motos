@@ -99,6 +99,54 @@ describe("useOrcamentos — ciclo 5 (paginado + remoção N+1 duplicado)", () =>
     expect(servicoPersonalizadoRepo.buscarPorEntradaId).not.toHaveBeenCalled();
   });
 
+  it("mantém o total da resposta mais recente quando cargas concorrentes terminam fora de ordem", async () => {
+    const orcamentoRepo = buildOrcamentoRepo() as unknown as OrcamentoRepository;
+    let resolveFirst!: (value: unknown) => void;
+    let resolveSecond!: (value: unknown) => void;
+    const firstRequest = new Promise(resolve => {
+      resolveFirst = resolve;
+    });
+    const secondRequest = new Promise(resolve => {
+      resolveSecond = resolve;
+    });
+
+    (orcamentoRepo.buscarPagina as ReturnType<typeof vi.fn>)
+      .mockReturnValueOnce(firstRequest)
+      .mockReturnValueOnce(secondRequest);
+
+    const { result } = renderHook(() => useOrcamentos(orcamentoRepo, "ativo"));
+
+    act(() => {
+      void result.current.recarregar();
+      void result.current.recarregar();
+    });
+
+    resolveSecond({
+      items: [makeOrcamento("orc-atual")],
+      total: 42,
+      page: 1,
+      pageSize: 10,
+    });
+    await act(async () => {
+      await secondRequest;
+    });
+
+    resolveFirst({
+      items: Array.from({ length: 10 }, (_, index) =>
+        makeOrcamento(`orc-antigo-${index}`)
+      ),
+      total: 10,
+      page: 1,
+      pageSize: 10,
+    });
+    await act(async () => {
+      await firstRequest;
+    });
+
+    expect(result.current.total).toBe(42);
+    expect(result.current.orcamentos).toHaveLength(1);
+  });
+
   it("carregarMais incrementa page e concatena os itens retornados", async () => {
     const orcamentoRepo = buildOrcamentoRepo() as unknown as OrcamentoRepository;
     const tipoServicoRepo =

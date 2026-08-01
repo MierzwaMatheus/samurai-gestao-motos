@@ -49,9 +49,11 @@ export function useOrcamentos(
   // `carregarMais` em sequência).
   const pageRef = useRef(initialPage);
   pageRef.current = initialPage;
+  const requestRef = useRef(0);
 
   const carregarInterno = useCallback(
     async (proximaPage: number, append: boolean) => {
+      const requestId = ++requestRef.current;
       pageRef.current = proximaPage;
       setLoading(true);
       setError(null);
@@ -61,16 +63,20 @@ export function useOrcamentos(
           page: proximaPage,
           pageSize,
         });
+        if (requestId !== requestRef.current) return;
         setTotal(pagina.total);
         setOrcamentos((prev) =>
           append ? [...prev, ...pagina.items] : pagina.items
         );
       } catch (err) {
+        if (requestId !== requestRef.current) return;
         const mensagem =
           err instanceof Error ? err.message : "Erro ao carregar orçamentos";
         setError(mensagem);
       } finally {
-        setLoading(false);
+        if (requestId === requestRef.current) {
+          setLoading(false);
+        }
       }
     },
     [orcamentoRepo, status, pageSize]

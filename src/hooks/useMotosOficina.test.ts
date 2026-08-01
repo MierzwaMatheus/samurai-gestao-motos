@@ -192,6 +192,54 @@ describe("useMotosOficina — ciclo 6 (paginado + busca server-side debounced 30
     });
   });
 
+  it("mantém o total da busca mais recente quando respostas chegam fora de ordem", async () => {
+    const entradaRepo = buildEntradaRepo() as unknown as EntradaRepository;
+    let resolveFirst!: (value: unknown) => void;
+    let resolveSecond!: (value: unknown) => void;
+    const firstRequest = new Promise(resolve => {
+      resolveFirst = resolve;
+    });
+    const secondRequest = new Promise(resolve => {
+      resolveSecond = resolve;
+    });
+
+    (entradaRepo.buscarPagina as ReturnType<typeof vi.fn>)
+      .mockReturnValueOnce(firstRequest)
+      .mockReturnValueOnce(secondRequest);
+
+    const { result } = renderHook(() => useMotosOficina(entradaRepo));
+
+    act(() => {
+      void result.current.recarregar();
+      void result.current.recarregar();
+    });
+
+    resolveSecond({
+      items: [makeMotoCompleta("entrada-atual")],
+      total: 42,
+      page: 1,
+      pageSize: 10,
+    });
+    await act(async () => {
+      await secondRequest;
+    });
+
+    resolveFirst({
+      items: Array.from({ length: 10 }, (_, index) =>
+        makeMotoCompleta(`entrada-antiga-${index}`)
+      ),
+      total: 10,
+      page: 1,
+      pageSize: 10,
+    });
+    await act(async () => {
+      await firstRequest;
+    });
+
+    expect(result.current.total).toBe(42);
+    expect(result.current.motos).toHaveLength(1);
+  });
+
   it("debounce de 300ms colapsa mudanças rápidas de busca em uma única request", async () => {
     vi.useFakeTimers();
     const entradaRepo = buildEntradaRepo() as unknown as EntradaRepository;

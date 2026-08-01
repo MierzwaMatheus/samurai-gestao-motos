@@ -65,6 +65,7 @@ export function useMotosOficina(
   // `carregarMais()`. O ref só é atualizado quando uma página é de fato
   // carregada (dentro de `carregarInterno`).
   const pageRef = useRef(initialPage);
+  const requestRef = useRef(0);
 
   const carregarInterno = useCallback(
     async (
@@ -72,6 +73,7 @@ export function useMotosOficina(
       append: boolean,
       params: { busca?: string } = {}
     ) => {
+      const requestId = ++requestRef.current;
       pageRef.current = proximaPage;
       setLoading(true);
       setError(null);
@@ -84,16 +86,20 @@ export function useMotosOficina(
           statusEntrega,
           busca: params.busca,
         });
+        if (requestId !== requestRef.current) return;
         setTotal(pagina.total);
         setMotos((prev) =>
           append ? [...prev, ...pagina.items] : pagina.items
         );
       } catch (err) {
+        if (requestId !== requestRef.current) return;
         const mensagem =
           err instanceof Error ? err.message : "Erro ao carregar motos";
         setError(mensagem);
       } finally {
-        setLoading(false);
+        if (requestId === requestRef.current) {
+          setLoading(false);
+        }
       }
     },
     [entradaRepo, pageSize, tipo, status, statusEntrega]
