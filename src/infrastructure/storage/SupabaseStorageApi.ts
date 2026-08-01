@@ -8,6 +8,7 @@ import { supabase } from "@/infrastructure/supabase/client";
 import { obterSignedUrl as obterSignedUrlCacheada } from "@/infrastructure/storage/urlCache";
 import { consultarEspacoBucketCacheado } from "@/infrastructure/storage/espacoBucketCache";
 import { gerarVariantes } from "@/infrastructure/storage/imageVariants";
+import { sanitizeFilename } from "@/infrastructure/storage/filename";
 
 /**
  * Implementação do serviço de storage usando Supabase Storage
@@ -55,7 +56,12 @@ export class SupabaseStorageApi implements StorageApi {
     }
 
     const timestamp = Date.now();
-    const basePath = `${user.id}/${entradaId}/${tipo}/${timestamp}-${file.name}`;
+    // Sanitiza o filename para evitar caracteres problemáticos em
+    // paths do Storage (ex.: `~` em "0002~2.jpg" de backups do
+    // Windows, espaços, acentos, etc. — alguns backends rejeitam com
+    // HTTP 400 sem mensagem clara).
+    const safeName = sanitizeFilename(file.name);
+    const basePath = `${user.id}/${entradaId}/${tipo}/${timestamp}-${safeName}`;
 
     // Documento (CNH/CRLV): upload único, mantém legibilidade do scan.
     if (tipo === "documento") {
@@ -93,10 +99,31 @@ export class SupabaseStorageApi implements StorageApi {
     ]);
 
     if (thumbUpload.error) {
-      throw new Error(`Erro ao fazer upload: ${thumbUpload.error.message}`);
+      // Loga o erro completo do Supabase Storage (status, message,
+      // statusCode) para diagnóstico — o toast da UI muitas vezes
+      // esconde a causa raiz.
+      console.error(
+        "[SupabaseStorageApi.uploadFoto] thumb upload failed:",
+        {
+          path: thumbPath,
+          error: thumbUpload.error,
+        }
+      );
+      throw new Error(
+        `Erro ao fazer upload (thumb): ${thumbUpload.error.message}`
+      );
     }
     if (fullUpload.error) {
-      throw new Error(`Erro ao fazer upload: ${fullUpload.error.message}`);
+      console.error(
+        "[SupabaseStorageApi.uploadFoto] full upload failed:",
+        {
+          path: fullPath,
+          error: fullUpload.error,
+        }
+      );
+      throw new Error(
+        `Erro ao fazer upload (full): ${fullUpload.error.message}`
+      );
     }
 
     return { thumbPath, fullPath };

@@ -108,4 +108,39 @@ describe("gerarVariantes", () => {
       .calls[0];
     expect(recebido).toBe(original);
   });
+
+  it("lança erro se o processor devolver um blob/variant webp vazio (0 bytes)", async () => {
+    // Cenário: o Canvas do browser (createImageBitmap + toBlob) pode
+    // devolver um Blob com type image/webp mas size 0 para imagens
+    // inválidas / corrompidas / em formato não-suportado. Sem essa
+    // validação, o `File([blob], ...)` vira um arquivo de 0 bytes que
+    // o Supabase Storage rejeita silenciosamente com HTTP 400.
+    const thumbVazio = new File([""], "thumb.webp", { type: "image/webp" });
+    const processor = buildProcessorMock({
+      resizeToWebp: vi.fn(async () => thumbVazio),
+    });
+    const file = buildFile();
+
+    await expect(gerarVariantes(file, processor)).rejects.toThrow(
+      /webp vazio|0 bytes/i
+    );
+  });
+
+  it("lança erro se a variante `full` voltar vazia mesmo com `thumb` ok", async () => {
+    const thumb = new File(["conteudo"], "thumb.webp", {
+      type: "image/webp",
+    });
+    const fullVazio = new File([""], "full.webp", { type: "image/webp" });
+    const processor: ImageVariantsProcessor = {
+      resizeToWebp: vi
+        .fn()
+        .mockImplementationOnce(async () => thumb)
+        .mockImplementationOnce(async () => fullVazio),
+    } as unknown as ImageVariantsProcessor;
+    const file = buildFile();
+
+    await expect(gerarVariantes(file, processor)).rejects.toThrow(
+      /webp vazio|0 bytes/i
+    );
+  });
 });

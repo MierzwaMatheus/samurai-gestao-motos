@@ -131,5 +131,20 @@ export async function gerarVariantes(
     processor.resizeToWebp(file, THUMB_OPTS),
     processor.resizeToWebp(file, FULL_OPTS),
   ]);
+  // Validação defensiva: o Canvas do browser pode devolver um Blob
+  // com `type: "image/webp"` mas `size: 0` para imagens inválidas /
+  // corrompidas / em formato não-suportado. Sem esse check, o
+  // `File([blob], ...)` viraria um arquivo de 0 bytes que o
+  // Supabase Storage rejeita silenciosamente com HTTP 400.
+  if (thumb.size === 0) {
+    throw new Error(
+      `imageVariants: thumb webp vazio (0 bytes) ao processar ${file.name}`
+    );
+  }
+  if (full.size === 0) {
+    throw new Error(
+      `imageVariants: full webp vazio (0 bytes) ao processar ${file.name}`
+    );
+  }
   return { thumb, full };
 }

@@ -626,7 +626,7 @@ describe("SupabaseStorageApi.uploadFoto — pipeline de 2 variantes (moto/status
 
     await expect(
       api.uploadFoto(buildFile(), "entrada-1", "moto")
-    ).rejects.toThrow("Erro ao fazer upload: erro no thumb");
+    ).rejects.toThrow("Erro ao fazer upload (thumb): erro no thumb");
   });
 
   it("lança erro quando fullUpload falha no pipeline de 2 variantes", async () => {
@@ -653,7 +653,7 @@ describe("SupabaseStorageApi.uploadFoto — pipeline de 2 variantes (moto/status
 
     await expect(
       api.uploadFoto(buildFile(), "entrada-1", "status")
-    ).rejects.toThrow("Erro ao fazer upload: erro no full");
+    ).rejects.toThrow("Erro ao fazer upload (full): erro no full");
   });
 
   it("renomeia corretamente o arquivo com extensão de múltiplos caracteres (regex boundary)", async () => {
@@ -719,6 +719,32 @@ describe("SupabaseStorageApi.uploadFoto — pipeline de 2 variantes (moto/status
     expect(pathsEnviados).toHaveLength(2);
     expect(pathsEnviados[0]).toMatch(/-thumb\.webp$/);
     expect(pathsEnviados[1]).toMatch(/-full\.webp$/);
+  });
+
+  it("sanitiza caracteres especiais do filename no path (~ espaços acentos)", async () => {
+    // Cenário: arquivo "aizusu.cardozo-20250701-0002~2.jpg" (backup
+    // do Windows) — o `~` e qualquer caractere fora de [a-zA-Z0-9._-]
+    // vira `_` antes de entrar no path do bucket. Sem isso, o
+    // Supabase Storage local retorna 400 Bad Request sem corpo
+    // descritivo.
+    const { api, upload } = buildBucket();
+
+    const fileComTilde = new File(["x"], "aizusu-20250701-0002~2.jpg", {
+      type: "image/jpeg",
+    });
+
+    await api.uploadFoto(fileComTilde, "entrada-1", "moto");
+
+    const pathsEnviados = (upload.mock.calls as Array<[string, File]>).map(
+      ([path]) => path
+    );
+    // Nenhum path enviado deve conter `~` ou espaços.
+    for (const path of pathsEnviados) {
+      expect(path).not.toMatch(/[~ ]/);
+    }
+    // E o `_` (substituto) deve aparecer onde o `~` estava.
+    expect(pathsEnviados[0]).toMatch(/0002_2-thumb\.webp$/);
+    expect(pathsEnviados[1]).toMatch(/0002_2-full\.webp$/);
   });
 });
 
