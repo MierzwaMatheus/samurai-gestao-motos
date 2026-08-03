@@ -188,7 +188,7 @@ const restoreIntersectionObserver = () => {
 // Helpers
 // ============================================================================
 type OrcamentoMock = ReturnType<typeof makeOrcamento>;
-function makeOrcamento(id: string) {
+function makeOrcamento(id: string, fotoMoto?: { url: string; thumbPath?: string | null; fullPath?: string | null }) {
   return {
     id,
     entradaId: `entrada-${id}`,
@@ -202,6 +202,7 @@ function makeOrcamento(id: string) {
     frete: null,
     tiposServico: [],
     servicosPersonalizados: [],
+    fotoMoto,
   };
 }
 
@@ -384,5 +385,19 @@ describe("Orcamentos — ciclo 8 (scroll infinito + contador + reset)", () => {
     expect(screen.queryByTestId("orcamentos-sentinel")).toBeNull();
     expect(screen.queryByText(/mostrando 0 de 0/i)).toBeNull();
     expect(screen.getByText(/nenhum orçamento ativo/i)).toBeInTheDocument();
+  });
+
+  it("usa a thumb da foto da moto e cai na url para fotos legadas", () => {
+    mockUseOrcamentos({
+      orcamentos: [
+        makeOrcamento("nova", { url: "full.jpg", thumbPath: "thumb.webp" }),
+        makeOrcamento("legada", { url: "legacy.jpg", thumbPath: null }),
+      ],
+      total: 2,
+    });
+    render(<Orcamentos />);
+    const imagens = screen.getAllByRole("img");
+    expect(imagens[0]).toHaveAttribute("src", "thumb.webp");
+    expect(imagens[1]).toHaveAttribute("src", "legacy.jpg");
   });
 });

@@ -236,7 +236,7 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
           endereco: entrada?.endereco,
           cep: entrada?.cep,
           fotoMoto: entrada?.id
-            ? fotosMapFinal[entrada.id]?.url
+            ? fotosMapFinal[entrada.id]
             : undefined,
           dataOrcamento: entrada?.data_orcamento
             ? new Date(entrada.data_orcamento)
@@ -459,7 +459,7 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
           : undefined,
         endereco: entrada?.endereco,
         cep: entrada?.cep,
-        fotoMoto: entrada?.id ? fotosMap[entrada.id]?.url : undefined,
+        fotoMoto: entrada?.id ? fotosMap[entrada.id] : undefined,
         dataOrcamento: entrada?.data_orcamento
           ? new Date(entrada.data_orcamento)
           : undefined,
@@ -561,45 +561,27 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
    */
   private async buildFotosPorEntrada(
     fotos: any[]
-  ): Promise<Record<string, Pick<Foto, "url" | "thumbPath" | "fullPath">>> {
-    const fotosPorEntrada: Record<
-      string,
-      {
-        url: string;
-        thumbPath: string | null;
-        fullPath: string | null;
-      }
-    > = {};
+  ): Promise<Record<string, Foto>> {
+    const fotosPorEntrada: Record<string, any> = {};
     for (const foto of fotos) {
-      if (!fotosPorEntrada[foto.entrada_id]) {
-        fotosPorEntrada[foto.entrada_id] = {
-          url: foto.url,
-          thumbPath: foto.thumb_path ?? null,
-          fullPath: foto.full_path ?? null,
-        };
-      }
+      if (!fotosPorEntrada[foto.entrada_id]) fotosPorEntrada[foto.entrada_id] = foto;
     }
     const fotosAssinadas = await Promise.all(
-      Object.entries(fotosPorEntrada).map(async ([entradaId, paths]) => {
-        const url = paths.url.startsWith("http")
-          ? paths.url
-          : await this.storageApi.obterUrlAssinada(paths.url);
-
-        const thumbPath =
-          paths.thumbPath && !paths.thumbPath.startsWith("http")
-            ? await this.storageApi.obterUrlAssinada(paths.thumbPath)
-            : paths.thumbPath;
-        const fullPath =
-          paths.fullPath && !paths.fullPath.startsWith("http")
-            ? await this.storageApi.obterUrlAssinada(paths.fullPath)
-            : paths.fullPath;
-
-        const foto: Pick<Foto, "url" | "thumbPath" | "fullPath"> = {
+      Object.entries(fotosPorEntrada).map(async ([entradaId, raw]) => {
+        const paths = raw as any;
+        const url = paths.url.startsWith("http") ? paths.url : await this.storageApi.obterUrlAssinada(paths.url);
+        const thumbPath = paths.thumb_path && !paths.thumb_path.startsWith("http") ? await this.storageApi.obterUrlAssinada(paths.thumb_path) : paths.thumb_path ?? null;
+        const fullPath = paths.full_path && !paths.full_path.startsWith("http") ? await this.storageApi.obterUrlAssinada(paths.full_path) : paths.full_path ?? null;
+        const foto: Foto = {
+          id: paths.id ?? `${entradaId}-moto`,
+          entradaId,
+          tipo: "moto",
+          criadoEm: paths.criado_em ? new Date(paths.criado_em) : new Date(0),
           url,
           thumbPath,
           fullPath,
         };
-        return [entradaId, foto];
+        return [entradaId, foto] as const;
       })
     );
     return Object.fromEntries(fotosAssinadas);

@@ -181,7 +181,7 @@ export interface OrcamentoCompleto extends Orcamento {
   finalNumeroQuadro?: string;
   descricao?: string;
   frete: number | null; // null quando for retirada
-  fotoMoto?: string; // URL da primeira foto do tipo "moto"
+  fotoMoto?: Foto; // Foto da primeira foto do tipo "moto"
   endereco?: string;
   cep?: string;
   valorCobrado?: number;

@@ -300,7 +300,7 @@ export default function Orcamentos() {
                       {orcamento.fotoMoto ? (
                         <div className="shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden border border-foreground/10 bg-foreground/5">
                           <img
-                            src={orcamento.fotoMoto}
+                            src={orcamento.fotoMoto.thumbPath ?? orcamento.fotoMoto.url}
                             alt={orcamento.moto}
                             className="w-full h-full object-cover"
                             onError={e => {

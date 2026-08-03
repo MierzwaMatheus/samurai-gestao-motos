@@ -332,7 +332,7 @@ describe("SupabaseOrcamentoRepository — geração de signed URLs", () => {
       );
     });
 
-    it("carrega thumb_path/full_path, assina os 3 paths e fotoMoto é a URL assinada (Foto nova)", async () => {
+    it("carrega thumb_path/full_path, assina os 3 paths e fotoMoto é uma Foto completa (Foto nova)", async () => {
       const { createSignedUrl } = buildBucket();
       const { fotosChain } = setupBuscarCompletosPorStatus([
         {
@@ -353,7 +353,7 @@ describe("SupabaseOrcamentoRepository — geração de signed URLs", () => {
         "entrada_id, url, thumb_path, full_path"
       );
       // (b/c) Foto completa com thumbPath/fullPath assinados
-      // (verificado via createSignedUrl) e fotoMoto é a URL assinada do `url`
+      // (verificado via createSignedUrl) e fotoMoto é a Foto completa
       expect(createSignedUrl).toHaveBeenCalledTimes(3);
       expect(createSignedUrl).toHaveBeenCalledWith(
         "user/entrada/moto/nova.jpg",
@@ -367,9 +367,11 @@ describe("SupabaseOrcamentoRepository — geração de signed URLs", () => {
         "user/entrada/moto/nova-full.webp",
         3600
       );
-      expect(orcamentos[0].fotoMoto).toBe(
-        "https://signed.example/moto.jpg"
-      );
+      expect(orcamentos[0].fotoMoto).toMatchObject({
+        url: "https://signed.example/moto.jpg",
+        thumbPath: "https://signed.example/moto.jpg",
+        fullPath: "https://signed.example/moto.jpg",
+      });
     });
 
     it("foto legada (sem thumb_path/full_path) só assina o url (cobre fallback)", async () => {
@@ -397,9 +399,11 @@ describe("SupabaseOrcamentoRepository — geração de signed URLs", () => {
         "user/entrada/moto/legada.jpg",
         3600
       );
-      expect(orcamentos[0].fotoMoto).toBe(
-        "https://signed.example/moto.jpg"
-      );
+      expect(orcamentos[0].fotoMoto).toMatchObject({
+        url: "https://signed.example/moto.jpg",
+        thumbPath: null,
+        fullPath: null,
+      });
     });
   });
 
@@ -488,11 +492,12 @@ describe("SupabaseOrcamentoRepository — geração de signed URLs", () => {
       expect(fotosChain.select).toHaveBeenCalledWith(
         "entrada_id, url, thumb_path, full_path"
       );
-      // (b/c) fotoMoto é a URL assinada do `url` (Foto completa
-      // assinada internamente — verificada via createSignedUrl)
-      expect(pagina.items[0].fotoMoto).toBe(
-        "https://signed.example/moto.jpg"
-      );
+      // (b/c) fotoMoto é a Foto completa com paths assinados
+      expect(pagina.items[0].fotoMoto).toMatchObject({
+        url: "https://signed.example/moto.jpg",
+        thumbPath: "https://signed.example/moto.jpg",
+        fullPath: "https://signed.example/moto.jpg",
+      });
       expect(createSignedUrl).toHaveBeenCalledTimes(3);
       expect(createSignedUrl).toHaveBeenCalledWith(
         "user/entrada/moto/nova.jpg",
@@ -590,9 +595,11 @@ describe("SupabaseOrcamentoRepository — geração de signed URLs", () => {
         "user/entrada/moto/legada.jpg",
         3600
       );
-      expect(pagina.items[0].fotoMoto).toBe(
-        "https://signed.example/moto.jpg"
-      );
+      expect(pagina.items[0].fotoMoto).toMatchObject({
+        url: "https://signed.example/moto.jpg",
+        thumbPath: null,
+        fullPath: null,
+      });
     });
   });
 });
