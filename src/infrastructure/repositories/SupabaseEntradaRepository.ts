@@ -3,7 +3,7 @@ import {
   EntradaRepository,
 } from "@/domain/interfaces/EntradaRepository";
 import { Pagina } from "@/domain/interfaces/OrcamentoRepository";
-import { Entrada, MotoCompleta } from "@shared/types";
+import { Entrada, Foto, MotoCompleta } from "@shared/types";
 import { supabase } from "@/infrastructure/supabase/client";
 import { SupabaseStorageApi } from "@/infrastructure/storage/SupabaseStorageApi";
 
@@ -242,7 +242,7 @@ export class SupabaseEntradaRepository implements EntradaRepository {
           : Promise.resolve({ data: [], error: null }),
         supabase
           .from("fotos")
-          .select("entrada_id, url, thumb_path, full_path")
+          .select("id, entrada_id, url, thumb_path, full_path, tipo, criado_em")
           .in("entrada_id", entradaIds)
           .eq("tipo", "moto")
           .order("criado_em", { ascending: false }),
@@ -287,27 +287,41 @@ export class SupabaseEntradaRepository implements EntradaRepository {
       );
     }
 
-    const fotosPorEntrada: Record<string, { url: string; thumbPath: string | null; fullPath: string | null }> = {};
+    const fotosPorEntrada: Record<string, Foto[]> = {};
     for (const foto of fotosResult.data || []) {
       if (!fotosPorEntrada[foto.entrada_id]) {
-        fotosPorEntrada[foto.entrada_id] = {
-          url: foto.url,
-          thumbPath: foto.thumb_path ?? null,
-          fullPath: foto.full_path ?? null,
-        };
+        fotosPorEntrada[foto.entrada_id] = [];
       }
+      fotosPorEntrada[foto.entrada_id].push({
+        id: foto.id,
+        entradaId: foto.entrada_id,
+        url: foto.url,
+        thumbPath: foto.thumb_path ?? null,
+        fullPath: foto.full_path ?? null,
+        tipo: foto.tipo,
+        criadoEm: new Date(foto.criado_em),
+      });
     }
     const fotosAssinadas = await Promise.all(
-      Object.entries(fotosPorEntrada).map(async ([entradaId, foto]) => [
-        entradaId,
-        {
-          url: foto.url.startsWith("http")
-            ? foto.url
-            : await this.storageApi.obterUrlAssinada(foto.url),
-          thumbPath: foto.thumbPath,
-          fullPath: foto.fullPath,
-        },
-      ])
+      Object.entries(fotosPorEntrada).map(async ([entradaId, fotos]) => {
+        const fotosComUrls = await Promise.all(
+          fotos.map(async (foto) => {
+            const url = foto.url.startsWith("http")
+              ? foto.url
+              : await this.storageApi.obterUrlAssinada(foto.url);
+            const thumbPath =
+              foto.thumbPath && !foto.thumbPath.startsWith("http")
+                ? await this.storageApi.obterUrlAssinada(foto.thumbPath)
+                : foto.thumbPath;
+            const fullPath =
+              foto.fullPath && !foto.fullPath.startsWith("http")
+                ? await this.storageApi.obterUrlAssinada(foto.fullPath)
+                : foto.fullPath;
+            return { ...foto, url, thumbPath, fullPath } as Foto;
+          })
+        );
+        return [entradaId, fotosComUrls] as const;
+      })
     );
     const fotosMap = Object.fromEntries(fotosAssinadas);
 
@@ -401,7 +415,7 @@ export class SupabaseEntradaRepository implements EntradaRepository {
           observacao: foto.observacao,
           progresso: foto.progresso,
         })),
-        fotos: entrada.id && fotosMap[entrada.id] ? [fotosMap[entrada.id]] : [],
+        fotos: entrada.id && fotosMap[entrada.id] ? fotosMap[entrada.id] : [],
         tiposServico: servicosPorEntrada[entrada.id] || [],
         servicosPersonalizados: [],
       } as MotoCompleta;

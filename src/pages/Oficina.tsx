@@ -44,7 +44,7 @@ import { AtualizarProgressoStatusUseCase } from "@/domain/usecases/AtualizarProg
 import { useAdicionarFotoStatus } from "@/hooks/useAdicionarFotoStatus";
 import { useAtualizarProgressoStatus } from "@/hooks/useAtualizarProgressoStatus";
 import { useDeletarEntrada } from "@/hooks/useDeletarEntrada";
-import { Foto, MotoCompleta } from "@shared/types";
+import { MotoCompleta } from "@shared/types";
 import GaleriaFotos from "@/components/GaleriaFotos";
 import GaleriaFotosMoto from "@/components/GaleriaFotosMoto";
 import { HistoryModal } from "@/components/HistoryModal";
@@ -730,17 +730,7 @@ export default function Oficina() {
             )}
           </button>
           {mostrarGaleriaMoto[moto.entradaId] && (
-            <GaleriaFotosMoto
-              fotos={moto.fotos.map<Foto>((url) => ({
-                id: `${moto.entradaId}-moto`,
-                entradaId: moto.entradaId,
-                url,
-                thumbPath: null,
-                fullPath: null,
-                tipo: "moto",
-                criadoEm: new Date(0),
-              }))}
-            />
+            <GaleriaFotosMoto fotos={moto.fotos} />
           )}
         </div>
       )}

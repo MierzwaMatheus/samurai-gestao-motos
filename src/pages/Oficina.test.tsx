@@ -120,8 +120,23 @@ vi.mock("@/components/HistoryModal", () => ({
 vi.mock("@/components/GaleriaFotos", () => ({
   default: () => null,
 }));
+
+// ============================================================================
+// GaleriaFotosMoto — captura de props
+// ----------------------------------------------------------------------------
+// `GaleriaFotosMoto` é o consumidor final de `moto.fotos`. Para validar
+// que a página propaga `Foto[]` (com thumbPath/fullPath) ao invés de
+// embrulhar `string` num `Foto` com thumbPath: null, mockamos o
+// componente com um spy que retém as props recebidas. Usamos
+// `vi.hoisted` para que o spy seja acessível dentro do `vi.mock`
+// (hoisted) e nos testes (escopo normal).
+// ============================================================================
+const galeriaFotosMotoSpy = vi.hoisted(() => vi.fn(() => null));
 vi.mock("@/components/GaleriaFotosMoto", () => ({
-  default: () => null,
+  default: (props: unknown) => {
+    galeriaFotosMotoSpy(props);
+    return null;
+  },
 }));
 
 // Dependências externas (evitam requests reais e warnings de DOM).
@@ -643,5 +658,120 @@ describe("Oficina — toast de erro em Adicionar Foto de Status", () => {
 
     // Sem error no hook, cai no genérico.
     expect(toast.error).toHaveBeenCalledWith("Erro ao adicionar foto");
+  });
+});
+
+// ============================================================================
+// Ciclo 3 — `MotoCompleta.fotos` migra para `Foto[]` + `Oficina` consome
+// ----------------------------------------------------------------------------
+// A página não deve mais embrulhar `string` num `Foto` com
+// `thumbPath: null`/`fullPath: null`; ela propaga os `Foto[]` que o
+// `SupabaseEntradaRepository.buscarPagina` devolve (com `thumbPath`/
+// `fullPath` populados ou null no caso de foto legada).
+// ============================================================================
+describe("Oficina — ciclo 3 (galeria de fotos da moto consome Foto[])", () => {
+  beforeEach(() => {
+    // Limpa o spy entre testes para que `mock.calls` reflita apenas
+    // o cenário atual.
+    galeriaFotosMotoSpy.mockClear();
+  });
+
+  it("passa Foto[] com thumbPath populado para GaleriaFotosMoto (foto nova)", async () => {
+    // Foto NOVA — thumbPath/fullPath populados pelo repositório.
+    const fotoNova = {
+      id: "foto-1",
+      entradaId: "entrada-em-1",
+      url: "https://signed.example/full.webp",
+      thumbPath: "https://signed.example/thumb.webp",
+      fullPath: "https://signed.example/full.webp",
+      tipo: "moto" as const,
+      criadoEm: new Date("2025-01-01T00:00:00Z"),
+    };
+    const moto = makeMoto("em-1");
+    moto.fotos = [fotoNova];
+
+    mockUseMotosOficina({
+      motos: [moto],
+      total: 1,
+      hasMore: false,
+    });
+
+    render(<Oficina />);
+
+    // Abre a galeria de fotos do orçamento (o nome do botão é
+    // "{N} foto(s) do orçamento" — usamos expressão regular para
+    // tolerar "1 foto(s)" embora convenção pt-BR sugeriria "1 foto").
+    const toggle = await screen.findByRole("button", {
+      name: /foto\(s\) do orçamento/i,
+    });
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(galeriaFotosMotoSpy).toHaveBeenCalled();
+    });
+
+    const lastCall = galeriaFotosMotoSpy.mock.calls.at(-1)?.[0] as {
+      fotos: Array<{ id: string; thumbPath: string | null; fullPath: string | null; tipo: string }>;
+    };
+    expect(lastCall).toBeDefined();
+    expect(lastCall.fotos).toHaveLength(1);
+    // thumbPath/fullPath CHEGARAM ao GaleriaFotosMoto (não foram
+    // sobrescritos para null pelo embrulho de string→Foto do código
+    // legado).
+    expect(lastCall.fotos[0]).toEqual(
+      expect.objectContaining({
+        id: "foto-1",
+        thumbPath: "https://signed.example/thumb.webp",
+        fullPath: "https://signed.example/full.webp",
+        tipo: "moto",
+      })
+    );
+  });
+
+  it("passa Foto[] com thumbPath/fullPath null para fotos legadas", async () => {
+    // Foto LEGADA — sem pipeline de 2 variantes. O repositório devolve
+    // `thumbPath: null` / `fullPath: null`; a GaleriaFotosMoto cai no
+    // `thumbPath ?? url` para o fallback.
+    const fotoLegada = {
+      id: "foto-legada",
+      entradaId: "entrada-em-1",
+      url: "https://signed.example/legada.jpg",
+      thumbPath: null,
+      fullPath: null,
+      tipo: "moto" as const,
+      criadoEm: new Date("2025-01-01T00:00:00Z"),
+    };
+    const moto = makeMoto("em-1");
+    moto.fotos = [fotoLegada];
+
+    mockUseMotosOficina({
+      motos: [moto],
+      total: 1,
+      hasMore: false,
+    });
+
+    render(<Oficina />);
+
+    const toggle = await screen.findByRole("button", {
+      name: /foto\(s\) do orçamento/i,
+    });
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(galeriaFotosMotoSpy).toHaveBeenCalled();
+    });
+
+    const lastCall = galeriaFotosMotoSpy.mock.calls.at(-1)?.[0] as {
+      fotos: Array<{ id: string; thumbPath: string | null; fullPath: string | null; tipo: string }>;
+    };
+    expect(lastCall.fotos).toHaveLength(1);
+    expect(lastCall.fotos[0]).toEqual(
+      expect.objectContaining({
+        id: "foto-legada",
+        thumbPath: null,
+        fullPath: null,
+        tipo: "moto",
+      })
+    );
   });
 });

@@ -206,7 +206,13 @@ export interface MotoCompleta extends Moto {
   formaPagamento?: FormaPagamento | null;
   statusPagamento?: StatusPagamento | null;
   fotosStatus?: FotoStatus[];
-  fotos: string[]; // Legado - fotos do tipo "moto"
+  /**
+   * Fotos do tipo "moto" (cadastradas no orçamento). Cada entrada é
+   * `Foto` completa — com `thumbPath`/`fullPath` quando a foto passou
+   * pela pipeline de 2 variantes; `null` em fotos legadas anteriores
+   * a essa pipeline (consumers caem no `url`).
+   */
+  fotos: Foto[];
   tiposServico?: TipoServicoComQuantidade[];
   servicosPersonalizados?: ServicoPersonalizado[];
 }

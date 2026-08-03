@@ -314,12 +314,90 @@ describe("SupabaseEntradaRepository — paginação", () => {
     });
 
     expect(fotosChain.select).toHaveBeenCalledWith(
-      "entrada_id, url, thumb_path, full_path"
+      "id, entrada_id, url, thumb_path, full_path, tipo, criado_em"
     );
     expect(pagina.items[0].fotosStatus).toMatchObject([
       { thumbPath: "thumbs/nova.webp", fullPath: "full/nova.webp" },
       { thumbPath: null, fullPath: null },
     ]);
+  });
+
+  it("retorna moto.fotos como Foto[] com thumbPath/fullPath assinados quando há foto nova", async () => {
+    // Após o ciclo 3, `MotoCompleta.fotos` migra de `string[]` para
+    // `Foto[]` e o repositório devolve cada foto da tabela `fotos`
+    // (tipo 'moto') já com `url`/`thumbPath`/`fullPath` assinados.
+    // Cobre o ramo "foto nova com pipeline de 2 variantes".
+    buildBucket();
+    setupPagedEntradas({
+      fotos: [
+        {
+          id: "foto-nova",
+          entrada_id: "entrada-1",
+          url: "user/entrada-1/moto/1234-foto.webp",
+          thumb_path: "user/entrada-1/moto/1234-foto-thumb.webp",
+          full_path: "user/entrada-1/moto/1234-foto-full.webp",
+          tipo: "moto",
+          criado_em: "2025-01-02T00:00:00Z",
+        },
+      ],
+    });
+
+    const pagina = await new SupabaseEntradaRepository().buscarPagina({
+      page: 1,
+      pageSize: 10,
+    });
+
+    // Foto com shape completo (Foto) — não string crua
+    expect(pagina.items[0].fotos).toHaveLength(1);
+    expect(pagina.items[0].fotos[0]).toEqual(
+      expect.objectContaining({
+        id: "foto-nova",
+        entradaId: "entrada-1",
+        tipo: "moto",
+        // 3 caminhos foram assinados em paralelo (url + thumb + full)
+        url: "https://signed.example/moto.jpg",
+        thumbPath: "https://signed.example/moto.jpg",
+        fullPath: "https://signed.example/moto.jpg",
+        criadoEm: new Date("2025-01-02T00:00:00Z"),
+      })
+    );
+  });
+
+  it("retorna moto.fotos como Foto[] com thumbPath/fullPath null para fotos legadas", async () => {
+    // Cobre o ramo "foto legada sem pipeline de 2 variantes" — os
+    // campos `thumb_path`/`full_path` não existem no banco. Devolvemos
+    // um `Foto` com esses campos `null`; o consumer (GaleriaFotosMoto)
+    // faz fallback para `url` via `thumbPath ?? url`.
+    buildBucket();
+    setupPagedEntradas({
+      fotos: [
+        {
+          id: "foto-legada",
+          entrada_id: "entrada-1",
+          url: "user/entrada-1/moto/legada.jpg",
+          // sem thumb_path, sem full_path
+          tipo: "moto",
+          criado_em: "2025-01-03T00:00:00Z",
+        },
+      ],
+    });
+
+    const pagina = await new SupabaseEntradaRepository().buscarPagina({
+      page: 1,
+      pageSize: 10,
+    });
+
+    expect(pagina.items[0].fotos).toHaveLength(1);
+    expect(pagina.items[0].fotos[0]).toEqual(
+      expect.objectContaining({
+        id: "foto-legada",
+        entradaId: "entrada-1",
+        tipo: "moto",
+        url: "https://signed.example/moto.jpg",
+        thumbPath: null,
+        fullPath: null,
+      })
+    );
   });
 
   it("lê e regrava thumb/full no JSONB de fotos de status", async () => {
