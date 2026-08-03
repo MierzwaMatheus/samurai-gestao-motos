@@ -73,6 +73,9 @@ const buildQueryChain = <T>(terminal: T) => {
  * - 1 orçamento ativo;
  * - 1 entrada com cliente + moto;
  * - N fotos da moto (`tipo: moto`).
+ *
+ * Retorna a `fotosChain` para que testes possam asserir sobre os
+ * argumentos de `select`/etc.
  */
 const setupBuscarCompletosPorStatus = (
   fotos: Array<Record<string, unknown>>
@@ -116,6 +119,9 @@ const setupBuscarCompletosPorStatus = (
   // rpc: atualizar_orcamentos_expirados → sucesso silencioso
   mockedRpc.mockResolvedValue({ data: null, error: null });
 
+  // Mantém referência à chain de fotos para asserções diretas.
+  const fotosChain = buildQueryChain({ data: fotos, error: null });
+
   // Despacha por nome de tabela para tornar a ordem de `.from(...)`
   // irrelevante — fica mais robusto contra refactors que reordenem
   // queries.
@@ -133,10 +139,12 @@ const setupBuscarCompletosPorStatus = (
       return buildQueryChain({ data: motos, error: null });
     }
     if (table === "fotos") {
-      return buildQueryChain({ data: fotos, error: null });
+      return fotosChain;
     }
     return buildQueryChain({ data: null, error: null });
   }) as never);
+
+  return { fotosChain };
 };
 
 beforeEach(() => {
@@ -321,6 +329,269 @@ describe("SupabaseOrcamentoRepository — geração de signed URLs", () => {
       expect(createSignedUrl).toHaveBeenCalledWith(
         "user/entrada/moto/b.jpg",
         3600
+      );
+    });
+
+    it("carrega thumb_path/full_path, assina os 3 paths e fotoMoto é a URL assinada (Foto nova)", async () => {
+      const { createSignedUrl } = buildBucket();
+      const { fotosChain } = setupBuscarCompletosPorStatus([
+        {
+          entrada_id: "entrada-1",
+          url: "user/entrada/moto/nova.jpg",
+          thumb_path: "user/entrada/moto/nova-thumb.webp",
+          full_path: "user/entrada/moto/nova-full.webp",
+        },
+      ]);
+
+      const orcamentos =
+        await new SupabaseOrcamentoRepository().buscarCompletosPorStatus(
+          "ativo"
+        );
+
+      // (a) select da query de fotos carrega as 3 colunas
+      expect(fotosChain.select).toHaveBeenCalledWith(
+        "entrada_id, url, thumb_path, full_path"
+      );
+      // (b/c) Foto completa com thumbPath/fullPath assinados
+      // (verificado via createSignedUrl) e fotoMoto é a URL assinada do `url`
+      expect(createSignedUrl).toHaveBeenCalledTimes(3);
+      expect(createSignedUrl).toHaveBeenCalledWith(
+        "user/entrada/moto/nova.jpg",
+        3600
+      );
+      expect(createSignedUrl).toHaveBeenCalledWith(
+        "user/entrada/moto/nova-thumb.webp",
+        3600
+      );
+      expect(createSignedUrl).toHaveBeenCalledWith(
+        "user/entrada/moto/nova-full.webp",
+        3600
+      );
+      expect(orcamentos[0].fotoMoto).toBe(
+        "https://signed.example/moto.jpg"
+      );
+    });
+
+    it("foto legada (sem thumb_path/full_path) só assina o url (cobre fallback)", async () => {
+      const { createSignedUrl } = buildBucket();
+      const { fotosChain } = setupBuscarCompletosPorStatus([
+        {
+          entrada_id: "entrada-1",
+          url: "user/entrada/moto/legada.jpg",
+          // thumb_path e full_path ausentes (legado)
+        },
+      ]);
+
+      const orcamentos =
+        await new SupabaseOrcamentoRepository().buscarCompletosPorStatus(
+          "ativo"
+        );
+
+      // O select continua pedindo as 3 colunas (serão `null` no legado)
+      expect(fotosChain.select).toHaveBeenCalledWith(
+        "entrada_id, url, thumb_path, full_path"
+      );
+      // Foto legada: só `url` é assinado (não há thumb_path/full_path)
+      expect(createSignedUrl).toHaveBeenCalledTimes(1);
+      expect(createSignedUrl).toHaveBeenCalledWith(
+        "user/entrada/moto/legada.jpg",
+        3600
+      );
+      expect(orcamentos[0].fotoMoto).toBe(
+        "https://signed.example/moto.jpg"
+      );
+    });
+  });
+
+  describe("buscarPagina", () => {
+    it("carrega thumb_path/full_path na query de fotos e assina os 3 paths por entrada", async () => {
+      const { createSignedUrl } = buildBucket();
+
+      // Pega as chains pré-construídas para reusar no dispatcher
+      const clienteId = "11111111-1111-4111-8111-111111111111";
+      const motoId = "22222222-2222-4222-8222-222222222222";
+
+      const orcamentosChain = buildQueryChain({
+        data: [
+          {
+            id: "orc-1",
+            entrada_id: "entrada-1",
+            valor: "100",
+            data_expiracao: "2099-01-01T00:00:00Z",
+            status: "ativo",
+            criado_em: "2025-01-01T00:00:00Z",
+            atualizado_em: "2025-01-01T00:00:00Z",
+          },
+        ],
+        error: null,
+      });
+      const countChain = buildQueryChain({
+        data: null,
+        error: null,
+        count: 1,
+      });
+      const entradasChain = buildQueryChain({
+        data: [
+          {
+            id: "entrada-1",
+            cliente_id: clienteId,
+            moto_id: motoId,
+            descricao: "Revisão",
+          },
+        ],
+        error: null,
+      });
+      const clientesChain = buildQueryChain({
+        data: [{ id: clienteId, nome: "Cliente", telefone: "123" }],
+        error: null,
+      });
+      const motosChain = buildQueryChain({
+        data: [{ id: motoId, modelo: "CG", placa: "ABC1D23" }],
+        error: null,
+      });
+      const fotosChain = buildQueryChain({
+        data: [
+          {
+            entrada_id: "entrada-1",
+            url: "user/entrada/moto/nova.jpg",
+            thumb_path: "user/entrada/moto/nova-thumb.webp",
+            full_path: "user/entrada/moto/nova-full.webp",
+          },
+        ],
+        error: null,
+      });
+      const vinculosChain = buildQueryChain({ data: [], error: null });
+      const tiposChain = buildQueryChain({ data: [], error: null });
+
+      let orcamentosQuery = 0;
+      mockedDbFrom.mockImplementation(((table: string) => {
+        if (table === "orcamentos") {
+          orcamentosQuery += 1;
+          return orcamentosQuery === 1 ? orcamentosChain : countChain;
+        }
+        if (table === "entradas") return entradasChain;
+        if (table === "clientes") return clientesChain;
+        if (table === "motos") return motosChain;
+        if (table === "fotos") return fotosChain;
+        if (table === "entradas_tipos_servico") return vinculosChain;
+        if (table === "tipos_servico") return tiposChain;
+        return buildQueryChain({ data: [], error: null });
+      }) as never);
+
+      const pagina = await new SupabaseOrcamentoRepository().buscarPagina({
+        page: 1,
+        pageSize: 10,
+        status: "ativo",
+      });
+
+      // (a) select da query de fotos carrega thumb_path/full_path
+      expect(fotosChain.select).toHaveBeenCalledWith(
+        "entrada_id, url, thumb_path, full_path"
+      );
+      // (b/c) fotoMoto é a URL assinada do `url` (Foto completa
+      // assinada internamente — verificada via createSignedUrl)
+      expect(pagina.items[0].fotoMoto).toBe(
+        "https://signed.example/moto.jpg"
+      );
+      expect(createSignedUrl).toHaveBeenCalledTimes(3);
+      expect(createSignedUrl).toHaveBeenCalledWith(
+        "user/entrada/moto/nova.jpg",
+        3600
+      );
+      expect(createSignedUrl).toHaveBeenCalledWith(
+        "user/entrada/moto/nova-thumb.webp",
+        3600
+      );
+      expect(createSignedUrl).toHaveBeenCalledWith(
+        "user/entrada/moto/nova-full.webp",
+        3600
+      );
+    });
+
+    it("foto legada em buscarPagina: só url é assinado (fallback)", async () => {
+      const { createSignedUrl } = buildBucket();
+
+      const clienteId = "11111111-1111-4111-8111-111111111111";
+      const motoId = "22222222-2222-4222-8222-222222222222";
+
+      const orcamentosChain = buildQueryChain({
+        data: [
+          {
+            id: "orc-1",
+            entrada_id: "entrada-1",
+            valor: "100",
+            data_expiracao: "2099-01-01T00:00:00Z",
+            status: "ativo",
+            criado_em: "2025-01-01T00:00:00Z",
+            atualizado_em: "2025-01-01T00:00:00Z",
+          },
+        ],
+        error: null,
+      });
+      const countChain = buildQueryChain({
+        data: null,
+        error: null,
+        count: 1,
+      });
+      const entradasChain = buildQueryChain({
+        data: [
+          {
+            id: "entrada-1",
+            cliente_id: clienteId,
+            moto_id: motoId,
+            descricao: "Revisão",
+          },
+        ],
+        error: null,
+      });
+      const clientesChain = buildQueryChain({
+        data: [{ id: clienteId, nome: "Cliente", telefone: "123" }],
+        error: null,
+      });
+      const motosChain = buildQueryChain({
+        data: [{ id: motoId, modelo: "CG", placa: "ABC1D23" }],
+        error: null,
+      });
+      const fotosChain = buildQueryChain({
+        data: [
+          {
+            entrada_id: "entrada-1",
+            url: "user/entrada/moto/legada.jpg",
+          },
+        ],
+        error: null,
+      });
+      const vinculosChain = buildQueryChain({ data: [], error: null });
+      const tiposChain = buildQueryChain({ data: [], error: null });
+
+      let orcamentosQuery = 0;
+      mockedDbFrom.mockImplementation(((table: string) => {
+        if (table === "orcamentos") {
+          orcamentosQuery += 1;
+          return orcamentosQuery === 1 ? orcamentosChain : countChain;
+        }
+        if (table === "entradas") return entradasChain;
+        if (table === "clientes") return clientesChain;
+        if (table === "motos") return motosChain;
+        if (table === "fotos") return fotosChain;
+        if (table === "entradas_tipos_servico") return vinculosChain;
+        if (table === "tipos_servico") return tiposChain;
+        return buildQueryChain({ data: [], error: null });
+      }) as never);
+
+      const pagina = await new SupabaseOrcamentoRepository().buscarPagina({
+        page: 1,
+        pageSize: 10,
+        status: "ativo",
+      });
+
+      expect(createSignedUrl).toHaveBeenCalledTimes(1);
+      expect(createSignedUrl).toHaveBeenCalledWith(
+        "user/entrada/moto/legada.jpg",
+        3600
+      );
+      expect(pagina.items[0].fotoMoto).toBe(
+        "https://signed.example/moto.jpg"
       );
     });
   });

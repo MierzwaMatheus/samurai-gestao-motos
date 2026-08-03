@@ -4,7 +4,7 @@ import {
   Pagina,
 } from "@/domain/interfaces/OrcamentoRepository";
 import { TipoServicoRepository } from "@/domain/interfaces/TipoServicoRepository";
-import { Orcamento, OrcamentoCompleto } from "@shared/types";
+import { Foto, Orcamento, OrcamentoCompleto } from "@shared/types";
 import { supabase } from "@/infrastructure/supabase/client";
 import { SupabaseStorageApi } from "@/infrastructure/storage/SupabaseStorageApi";
 
@@ -161,39 +161,28 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
       const motos = motosResult.data || [];
 
       // Busca fotos para todas as entradas de uma vez
-      let fotosMap: Record<string, string> = {};
+      let fotosMapFinal: Record<
+        string,
+        Pick<Foto, "url" | "thumbPath" | "fullPath">
+      > = {};
 
       if (entradaIds.length > 0) {
         const { data: fotos, error: fotosError } = await supabase
           .from("fotos")
-          .select("entrada_id, url")
+          .select("entrada_id, url, thumb_path, full_path")
           .in("entrada_id", entradaIds)
           .eq("tipo", "moto")
           .order("criado_em", { ascending: false });
 
         if (!fotosError && fotos) {
-          // Cria mapa de entrada_id -> primeira foto
-          fotos.forEach((foto: any) => {
-            if (!fotosMap[foto.entrada_id]) {
-              fotosMap[foto.entrada_id] = foto.url;
-            }
-          });
+          // Deduplica por entrada_id (mantém a primeira = mais recente)
+          // e assina os 3 paths (url, thumb_path, full_path) em
+          // paralelo. Fotos legadas sem thumb_path/full_path mantêm
+          // `null` nesses campos — o consumer (ciclo 4) faz fallback
+          // para `url`.
+          fotosMapFinal = await this.buildFotosPorEntrada(fotos);
         }
       }
-
-      // Gera URLs assinadas para as fotos (se necessário) em paralelo
-      const fotosComUrls = await Promise.all(
-        Object.entries(fotosMap).map(async ([entradaId, url]) => {
-          // Se não é URL completa, gera URL assinada
-          if (!url.startsWith("http")) {
-            const signedUrl = await this.storageApi.obterUrlAssinada(url);
-            return [entradaId, signedUrl];
-          }
-          return [entradaId, url];
-        })
-      );
-
-      const fotosMapFinal = Object.fromEntries(fotosComUrls);
 
       // Cria mapas para acesso rápido
       const entradasMap = new Map(entradas?.map((e: any) => [e.id, e]) || []);
@@ -246,7 +235,9 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
             : undefined,
           endereco: entrada?.endereco,
           cep: entrada?.cep,
-          fotoMoto: entrada?.id ? fotosMapFinal[entrada.id] : undefined,
+          fotoMoto: entrada?.id
+            ? fotosMapFinal[entrada.id]?.url
+            : undefined,
           dataOrcamento: entrada?.data_orcamento
             ? new Date(entrada.data_orcamento)
             : undefined,
@@ -341,7 +332,7 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
           : Promise.resolve({ data: [], error: null }),
         supabase
           .from("fotos")
-          .select("entrada_id, url")
+          .select("entrada_id, url, thumb_path, full_path")
           .in("entrada_id", entradaIds)
           .eq("tipo", "moto")
           .order("criado_em", { ascending: false }),
@@ -388,20 +379,14 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
       );
     }
 
-    const fotosPorEntrada: Record<string, string> = {};
-    for (const foto of fotosResult.data || []) {
-      if (!fotosPorEntrada[foto.entrada_id]) {
-        fotosPorEntrada[foto.entrada_id] = foto.url;
-      }
-    }
-    const fotosAssinadas = await Promise.all(
-      Object.entries(fotosPorEntrada).map(async ([entradaId, url]) => [
-        entradaId,
-        url.startsWith("http")
-          ? url
-          : await this.storageApi.obterUrlAssinada(url),
-      ])
-    );
+    // Deduplica por entrada_id (mantém a primeira = mais recente) e
+    // assina os 3 paths (url, thumb_path, full_path) em paralelo.
+    // Fotos legadas sem thumb_path/full_path mantêm `null` nesses
+    // campos — o consumer (ciclo 4) faz fallback para `url`.
+    const fotosMap: Record<
+      string,
+      Pick<Foto, "url" | "thumbPath" | "fullPath">
+    > = await this.buildFotosPorEntrada(fotosResult.data || []);
 
     const entradasMap = new Map(
       (entradas || []).map((entrada: any) => [entrada.id, entrada])
@@ -412,7 +397,6 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
     const motosMap = new Map(
       (motosResult.data || []).map((moto: any) => [moto.id, moto])
     );
-    const fotosMap = Object.fromEntries(fotosAssinadas);
     const tiposMap = new Map(
       (tiposResult.data || []).map((tipo: any) => [tipo.id, tipo])
     );
@@ -475,7 +459,7 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
           : undefined,
         endereco: entrada?.endereco,
         cep: entrada?.cep,
-        fotoMoto: entrada?.id ? fotosMap[entrada.id] : undefined,
+        fotoMoto: entrada?.id ? fotosMap[entrada.id]?.url : undefined,
         dataOrcamento: entrada?.data_orcamento
           ? new Date(entrada.data_orcamento)
           : undefined,
@@ -565,5 +549,59 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
       criadoEm: new Date(data.criado_em),
       atualizadoEm: new Date(data.atualizado_em),
     };
+  }
+
+  /**
+   * Deduplica fotos por `entrada_id` (mantém a primeira ocorrência,
+   * que é a mais recente graças ao `order("criado_em", desc)` da
+   * query) e assina os 3 paths (`url`, `thumb_path`, `full_path`) em
+   * paralelo. Fotos legadas (sem `thumb_path`/`full_path`) retornam
+   * `null` nesses campos — o consumer (ciclo 4) faz fallback para
+   * `url`. Já é URL completa (`http`) → mantém como está.
+   */
+  private async buildFotosPorEntrada(
+    fotos: any[]
+  ): Promise<Record<string, Pick<Foto, "url" | "thumbPath" | "fullPath">>> {
+    const fotosPorEntrada: Record<
+      string,
+      {
+        url: string;
+        thumbPath: string | null;
+        fullPath: string | null;
+      }
+    > = {};
+    for (const foto of fotos) {
+      if (!fotosPorEntrada[foto.entrada_id]) {
+        fotosPorEntrada[foto.entrada_id] = {
+          url: foto.url,
+          thumbPath: foto.thumb_path ?? null,
+          fullPath: foto.full_path ?? null,
+        };
+      }
+    }
+    const fotosAssinadas = await Promise.all(
+      Object.entries(fotosPorEntrada).map(async ([entradaId, paths]) => {
+        const url = paths.url.startsWith("http")
+          ? paths.url
+          : await this.storageApi.obterUrlAssinada(paths.url);
+
+        const thumbPath =
+          paths.thumbPath && !paths.thumbPath.startsWith("http")
+            ? await this.storageApi.obterUrlAssinada(paths.thumbPath)
+            : paths.thumbPath;
+        const fullPath =
+          paths.fullPath && !paths.fullPath.startsWith("http")
+            ? await this.storageApi.obterUrlAssinada(paths.fullPath)
+            : paths.fullPath;
+
+        const foto: Pick<Foto, "url" | "thumbPath" | "fullPath"> = {
+          url,
+          thumbPath,
+          fullPath,
+        };
+        return [entradaId, foto];
+      })
+    );
+    return Object.fromEntries(fotosAssinadas);
   }
 }
