@@ -48,6 +48,7 @@ const buildQueryChain = <T>(terminal: T) => {
 
   for (const method of [
     "select",
+    "update",
     "eq",
     "in",
     "neq",
@@ -75,7 +76,13 @@ const buildQueryChain = <T>(terminal: T) => {
  * por nome de tabela. `entradas` alterna entre o chain da página principal
  * (1ª chamada) e o chain da contagem exata (2ª chamada).
  */
-const setupPagedEntradas = () => {
+const setupPagedEntradas = ({
+  fotosStatus,
+  fotos = [],
+}: {
+  fotosStatus?: unknown;
+  fotos?: any[];
+} = {}) => {
   const clienteId = "11111111-1111-4111-8111-111111111111";
   const motoId = "22222222-2222-4222-8222-222222222222";
 
@@ -93,6 +100,7 @@ const setupPagedEntradas = () => {
         criado_em: "2025-01-01T00:00:00Z",
         atualizado_em: "2025-01-01T00:00:00Z",
         frete: null,
+        fotos_status: fotosStatus,
       },
     ],
     error: null,
@@ -112,7 +120,7 @@ const setupPagedEntradas = () => {
     data: [{ id: motoId, modelo: "CG", placa: "ABC1D23" }],
     error: null,
   });
-  const fotosChain = buildQueryChain({ data: [], error: null });
+  const fotosChain = buildQueryChain({ data: fotos, error: null });
   const vinculosChain = buildQueryChain({ data: [], error: null });
   const tiposChain = buildQueryChain({ data: [], error: null });
 
@@ -277,6 +285,88 @@ describe("SupabaseEntradaRepository — paginação", () => {
     });
 
     expect(entradasChain.or).not.toHaveBeenCalled();
+  });
+
+  it("propaga thumb/full nas fotos de status e mantém null nas fotos legadas", async () => {
+    buildBucket();
+    const { fotosChain } = setupPagedEntradas({
+      fotosStatus: [
+        {
+          url: "nova.jpg",
+          thumbPath: "thumbs/nova.webp",
+          fullPath: "full/nova.webp",
+          data: "2025-01-02T00:00:00Z",
+          observacao: "Nova",
+          progresso: 50,
+        },
+        {
+          url: "legada.jpg",
+          data: "2025-01-03T00:00:00Z",
+          observacao: "Legada",
+          progresso: 60,
+        },
+      ],
+    });
+
+    const pagina = await new SupabaseEntradaRepository().buscarPagina({
+      page: 1,
+      pageSize: 10,
+    });
+
+    expect(fotosChain.select).toHaveBeenCalledWith(
+      "entrada_id, url, thumb_path, full_path"
+    );
+    expect(pagina.items[0].fotosStatus).toMatchObject([
+      { thumbPath: "thumbs/nova.webp", fullPath: "full/nova.webp" },
+      { thumbPath: null, fullPath: null },
+    ]);
+  });
+
+  it("lê e regrava thumb/full no JSONB de fotos de status", async () => {
+    const returnedRow = {
+      id: "entrada-1",
+      tipo: "entrada",
+      cliente_id: "cliente-1",
+      moto_id: "moto-1",
+      status: "pendente",
+      progresso: 0,
+      fotos_status: [
+        {
+          url: "nova.jpg",
+          thumbPath: "thumbs/nova.webp",
+          fullPath: "full/nova.webp",
+          data: "2025-01-02T00:00:00Z",
+          progresso: 50,
+        },
+        {
+          url: "legada.jpg",
+          data: "2025-01-03T00:00:00Z",
+          progresso: 60,
+        },
+      ],
+      criado_em: "2025-01-01T00:00:00Z",
+      atualizado_em: "2025-01-01T00:00:00Z",
+    };
+    const chain = buildQueryChain({ data: returnedRow, error: null });
+    mockedDbFrom.mockReturnValue(chain);
+
+    const entrada = await new SupabaseEntradaRepository().atualizar("entrada-1", {
+      fotosStatus: returnedRow.fotos_status.map(foto => ({
+        ...foto,
+        data: new Date(foto.data),
+        observacao: undefined,
+      })),
+    } as never);
+
+    const payload = chain.update.mock.calls[0][0];
+    expect(JSON.parse(payload.fotos_status)).toMatchObject([
+      { thumbPath: "thumbs/nova.webp", fullPath: "full/nova.webp" },
+      { thumbPath: null, fullPath: null },
+    ]);
+    expect(entrada.fotosStatus).toMatchObject([
+      { thumbPath: "thumbs/nova.webp", fullPath: "full/nova.webp" },
+      { thumbPath: null, fullPath: null },
+    ]);
   });
 
   it("lança erro com mensagem clara quando a query principal falha", async () => {

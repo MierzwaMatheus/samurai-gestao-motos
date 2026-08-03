@@ -242,7 +242,7 @@ export class SupabaseEntradaRepository implements EntradaRepository {
           : Promise.resolve({ data: [], error: null }),
         supabase
           .from("fotos")
-          .select("entrada_id, url")
+          .select("entrada_id, url, thumb_path, full_path")
           .in("entrada_id", entradaIds)
           .eq("tipo", "moto")
           .order("criado_em", { ascending: false }),
@@ -287,18 +287,26 @@ export class SupabaseEntradaRepository implements EntradaRepository {
       );
     }
 
-    const fotosPorEntrada: Record<string, string> = {};
+    const fotosPorEntrada: Record<string, { url: string; thumbPath: string | null; fullPath: string | null }> = {};
     for (const foto of fotosResult.data || []) {
       if (!fotosPorEntrada[foto.entrada_id]) {
-        fotosPorEntrada[foto.entrada_id] = foto.url;
+        fotosPorEntrada[foto.entrada_id] = {
+          url: foto.url,
+          thumbPath: foto.thumb_path ?? null,
+          fullPath: foto.full_path ?? null,
+        };
       }
     }
     const fotosAssinadas = await Promise.all(
-      Object.entries(fotosPorEntrada).map(async ([entradaId, url]) => [
+      Object.entries(fotosPorEntrada).map(async ([entradaId, foto]) => [
         entradaId,
-        url.startsWith("http")
-          ? url
-          : await this.storageApi.obterUrlAssinada(url),
+        {
+          url: foto.url.startsWith("http")
+            ? foto.url
+            : await this.storageApi.obterUrlAssinada(foto.url),
+          thumbPath: foto.thumbPath,
+          fullPath: foto.fullPath,
+        },
       ])
     );
     const fotosMap = Object.fromEntries(fotosAssinadas);
@@ -387,6 +395,8 @@ export class SupabaseEntradaRepository implements EntradaRepository {
         statusPagamento: entrada.status_pagamento || null,
         fotosStatus: fotosStatus.map((foto: any) => ({
           url: foto.url,
+          thumbPath: foto.thumbPath ?? null,
+          fullPath: foto.fullPath ?? null,
           data: new Date(foto.data),
           observacao: foto.observacao,
           progresso: foto.progresso,
@@ -444,6 +454,8 @@ export class SupabaseEntradaRepository implements EntradaRepository {
       updateData.fotos_status = JSON.stringify(
         dados.fotosStatus.map(foto => ({
           url: foto.url,
+          thumbPath: foto.thumbPath ?? null,
+          fullPath: foto.fullPath ?? null,
           data: foto.data.toISOString(),
           observacao: foto.observacao,
           progresso: foto.progresso,
@@ -527,6 +539,8 @@ export class SupabaseEntradaRepository implements EntradaRepository {
       tipoPreco: data.tipo_preco,
       fotosStatus: fotosStatus.map((foto: any) => ({
         url: foto.url,
+        thumbPath: foto.thumbPath ?? null,
+        fullPath: foto.fullPath ?? null,
         data: new Date(foto.data),
         observacao: foto.observacao,
         progresso: foto.progresso,
