@@ -456,4 +456,40 @@ describe("SupabaseEntradaRepository — paginação", () => {
       new SupabaseEntradaRepository().buscarPagina({ page: 1, pageSize: 10 })
     ).rejects.toThrow(/Erro ao buscar entradas.*boom/);
   });
+
+  // ==========================================================================
+  // Mata mutantes de boundary em `startsWith("http")` vs `endsWith("http")`:
+  // se a URL/thumbPath/fullPath já é uma URL completa (`http...`), o
+  // repositório NÃO deve chamar `obterUrlAssinada` novamente.
+  // ==========================================================================
+  it("NÃO re-assina url/thumbPath/fullPath quando já são URLs completas (startsWith 'http')", async () => {
+    const { createSignedUrl } = buildBucket();
+    setupPagedEntradas({
+      fotos: [
+        {
+          id: "foto-assinada",
+          entrada_id: "entrada-1",
+          // já é URL completa — qualquer chamada extra a
+          // `obterUrlAssinada` é desperdício e pode quebrar a URL.
+          url: "https://signed.example/full.webp",
+          thumb_path: "https://signed.example/thumb.webp",
+          full_path: "https://signed.example/full.webp",
+          tipo: "moto",
+          criado_em: "2025-01-02T00:00:00Z",
+        },
+      ],
+    });
+
+    await new SupabaseEntradaRepository().buscarPagina({
+      page: 1,
+      pageSize: 10,
+    });
+
+    // Como url/thumbPath/fullPath já começam com "http", o repositório
+    // deve usar os valores como estão — zero chamadas a
+    // `obterUrlAssinada`. Se um mutante trocar `startsWith("http")`
+    // por `endsWith("http")`, esses URLs não serão mais reconhecidas
+    // e createSignedUrl será chamado 3 vezes (ou mais).
+    expect(createSignedUrl).not.toHaveBeenCalled();
+  });
 });

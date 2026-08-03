@@ -405,6 +405,161 @@ describe("SupabaseOrcamentoRepository — geração de signed URLs", () => {
         fullPath: null,
       });
     });
+
+    // ==========================================================================
+    // Mata mutantes de boundary: `startsWith("http")` ↔ `endsWith("http")`.
+    // Quando url/thumb_path/full_path já é URL completa (`http...`), o
+    // repositório NÃO deve chamar `obterUrlAssinada` — se chamar, está
+    // quebrando o invariante (URLs já assinadas não devem ser re-assinadas).
+    // ==========================================================================
+    it("NÃO re-assina url/thumb_path/full_path quando já começam com 'http'", async () => {
+      const { createSignedUrl } = buildBucket();
+      setupBuscarCompletosPorStatus([
+        {
+          entrada_id: "entrada-1",
+          // já são URLs completas (vinham do cache/banco prontas)
+          url: "https://signed.example/full.webp",
+          thumb_path: "https://signed.example/thumb.webp",
+          full_path: "https://signed.example/full.webp",
+        },
+      ]);
+
+      await new SupabaseOrcamentoRepository().buscarCompletosPorStatus("ativo");
+
+      // Como url/thumb_path/full_path já começam com "http", nenhuma
+      // chamada extra a `obterUrlAssinada` deve ocorrer. Se um mutante
+      // trocar `startsWith("http")` por `endsWith("http")`, essas URLs
+      // não serão reconhecidas e `createSignedUrl` será chamado 3x.
+      expect(createSignedUrl).not.toHaveBeenCalled();
+    });
+
+    // ==========================================================================
+    // Mata o mutante `paths.id ?? fallback` → `paths.id && fallback`:
+    // quando o `id` da foto está definido no banco, o `Foto.id` retornado
+    // deve ser o id real do banco, NÃO o fallback `${entradaId}-moto`.
+    // ==========================================================================
+    it("Foto.id recebe o id do banco quando ele existe (não o fallback)", async () => {
+      buildBucket();
+      setupBuscarCompletosPorStatus([
+        {
+          id: "foto-real-id-123",
+          entrada_id: "entrada-1",
+          url: "user/entrada/moto/nova.jpg",
+          thumb_path: "user/entrada/moto/nova-thumb.webp",
+          full_path: "user/entrada/moto/nova-full.webp",
+        },
+      ]);
+
+      const orcamentos =
+        await new SupabaseOrcamentoRepository().buscarCompletosPorStatus(
+          "ativo"
+        );
+
+      // Com `paths.id ?? fallback`, foto.id deve ser o id real
+      // ("foto-real-id-123"). Com `paths.id && fallback`, viria o
+      // fallback (string não-vazia) e o id real seria perdido.
+      expect(orcamentos[0].fotoMoto.id).toBe("foto-real-id-123");
+    });
+
+    // ==========================================================================
+    // Mata o mutante `if (!fotosPorEntrada[foto.entrada_id])` → `if (true)`:
+    // garante que a deduplicação por entrada_id funciona — quando há
+    // múltiplas fotos para a mesma entrada (após `order criado_em desc`),
+    // só a primeira (mais recente) deve ser usada.
+    // ==========================================================================
+    it("deduplica fotos por entrada_id mantendo a primeira ocorrência", async () => {
+      const { createSignedUrl } = buildBucket();
+      setupBuscarCompletosPorStatus([
+        {
+          id: "foto-recente",
+          entrada_id: "entrada-1",
+          url: "user/entrada/moto/recente.jpg",
+          thumb_path: "user/entrada/moto/recente-thumb.webp",
+          full_path: "user/entrada/moto/recente-full.webp",
+        },
+        // Segunda foto para a mesma entrada — deve ser IGNORADA pela
+        // deduplicação. Se o mutante `if (true)` for aplicado, esta
+        // foto sobrescreverá a primeira e `createSignedUrl` será
+        // chamado 3x adicionais (3 + 3 = 6).
+        {
+          id: "foto-antiga",
+          entrada_id: "entrada-1",
+          url: "user/entrada/moto/antiga.jpg",
+          thumb_path: "user/entrada/moto/antiga-thumb.webp",
+          full_path: "user/entrada/moto/antiga-full.webp",
+        },
+      ]);
+
+      const orcamentos =
+        await new SupabaseOrcamentoRepository().buscarCompletosPorStatus(
+          "ativo"
+        );
+
+      // Foto recente vence (3 chamadas — url/thumb/full da foto recente)
+      expect(createSignedUrl).toHaveBeenCalledTimes(3);
+      expect(createSignedUrl).toHaveBeenCalledWith(
+        "user/entrada/moto/recente.jpg",
+        3600
+      );
+      expect(createSignedUrl).not.toHaveBeenCalledWith(
+        "user/entrada/moto/antiga.jpg",
+        3600
+      );
+      // E o id da Foto retornada é o da foto recente (não da antiga)
+      expect(orcamentos[0].fotoMoto.id).toBe("foto-recente");
+    });
+
+    // ==========================================================================
+    // Mata o mutante `entrada?.id` → `entrada.id`: quando o orcamento
+    // referencia uma entrada que não existe (FK quebrada, dado legado),
+    // o repositório não pode quebrar — `fotoMoto` deve ser `undefined`.
+    // ==========================================================================
+    it("fotoMoto é undefined quando o orcamento referencia entrada inexistente", async () => {
+      buildBucket();
+      // setup padrão tem apenas entrada-1; orcamento aponta para
+      // entrada-fantasma — entradasMap.get(orc.entrada_id) = undefined
+      mockedDbFrom.mockImplementation(((table: string) => {
+        if (table === "orcamentos") {
+          return buildQueryChain({
+            data: [
+              {
+                id: "orc-fantasma",
+                entrada_id: "entrada-fantasma",
+                valor: 100,
+                data_expiracao: "2099-01-01T00:00:00Z",
+                status: "ativo",
+                criado_em: "2025-01-01T00:00:00Z",
+                atualizado_em: "2025-01-01T00:00:00Z",
+              },
+            ],
+            error: null,
+          });
+        }
+        if (table === "entradas") {
+          return buildQueryChain({ data: [], error: null }); // vazio
+        }
+        if (table === "clientes") {
+          return buildQueryChain({ data: [], error: null });
+        }
+        if (table === "motos") {
+          return buildQueryChain({ data: [], error: null });
+        }
+        if (table === "fotos") {
+          return buildQueryChain({ data: [], error: null });
+        }
+        return buildQueryChain({ data: null, error: null });
+      }) as never);
+
+      const orcamentos =
+        await new SupabaseOrcamentoRepository().buscarCompletosPorStatus(
+          "ativo"
+        );
+
+      // Se o mutante `entrada?.id` → `entrada.id` for aplicado, o código
+      // lança TypeError (cannot read .id of undefined). Sem mutante,
+      // simplesmente devolve `undefined` para `fotoMoto`.
+      expect(orcamentos[0].fotoMoto).toBeUndefined();
+    });
   });
 
   describe("buscarPagina", () => {
