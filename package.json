@@ -5,6 +5,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "vite --host",
+    "dev:cloud": "vite --host --mode dev",
     "build": "vite build",
     "start": "NODE_ENV=production vite preview --host",
     "preview": "vite preview --host",
