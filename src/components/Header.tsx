@@ -25,11 +25,17 @@ function StorageBar() {
     // restaurada do localStorage) — o `supabase.functions.invoke`
     // sai sem Authorization header e a função `consultar-uso-storage`
     // retorna 401 (gera erro no console e no StorageManager).
+    //
+    // Issue #14: removido `setInterval(carregarInfo, 30000)`. Antes,
+    // o StorageBar em TODAS as páginas fazia polling a cada 30s da
+    // Edge Function `consultar-uso-storage` (que varre `storage.objects`
+    // pra agregar bytes), mesmo com o usuário navegando sem interagir
+    // com storage. Agora: 1 chamada no mount (mostra a barra com %
+    // atual) + atualizações só via `StorageManager` (modal recarrega
+    // no on-open). Reduz ~uso da Edge Function em ~99% durante
+    // uma sessão típica.
     if (authLoading || !user) return;
-
     carregarInfo();
-    const interval = setInterval(carregarInfo, 30000);
-    return () => clearInterval(interval);
   }, [carregarInfo, user, authLoading]);
 
   return (
