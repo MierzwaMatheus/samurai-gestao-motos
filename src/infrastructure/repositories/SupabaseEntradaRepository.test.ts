@@ -400,6 +400,69 @@ describe("SupabaseEntradaRepository — paginação", () => {
     );
   });
 
+  it("tolerância a falhas: signed URL com 400 não derruba a página inteira", async () => {
+    // Bug observado em prod em 2026-08-05: uma foto cujo `obterUrlAssinada`
+    // falha (ex.: 400 Bad Request por causa de caractere incomum no path)
+    // faz o `Promise.all` em `buscarPagina` rejeitar, e o `useMotosOficina`
+    // nunca chama `setMotos` — `oficinaConcluidos.motos` permanece `[]`,
+    // mostrando "Nenhum serviço concluído" mesmo com 241 entradas reais.
+    //
+    // Esperado: a página continua renderizando as outras fotos. A foto
+    // problemática cai num fallback (path cru) em vez de quebrar tudo.
+    const createSignedUrl = vi.fn().mockImplementation((path: string) => {
+      if (path.includes("quebrada")) {
+        return Promise.resolve({
+          data: null,
+          error: { message: "400 Bad Request", statusCode: "400" },
+        });
+      }
+      return Promise.resolve({
+        data: { signedUrl: `https://signed.example/${path}` },
+        error: null,
+      });
+    });
+    mockedStorageFrom.mockReturnValue({ createSignedUrl } as never);
+
+    setupPagedEntradas({
+      fotos: [
+        {
+          id: "foto-boa",
+          entrada_id: "entrada-1",
+          url: "user/entrada-1/moto/boa.jpg",
+          tipo: "moto",
+          criado_em: "2025-01-02T00:00:00Z",
+        },
+        {
+          id: "foto-quebrada",
+          entrada_id: "entrada-1",
+          url: "user/entrada-1/moto/quebrada.jpg",
+          tipo: "moto",
+          criado_em: "2025-01-02T00:00:00Z",
+        },
+      ],
+    });
+
+    const pagina = await new SupabaseEntradaRepository().buscarPagina({
+      page: 1,
+      pageSize: 10,
+    });
+
+    // A página vem — Promise.all não rejeitou por causa da foto quebrada
+    expect(pagina.items).toHaveLength(1);
+    expect(pagina.items[0].fotos).toHaveLength(2);
+
+    // A foto "boa" recebeu a URL assinada normalmente
+    expect(pagina.items[0].fotos[0].url).toBe(
+      "https://signed.example/user/entrada-1/moto/boa.jpg"
+    );
+
+    // A foto "quebrada" caiu pro fallback (path cru) — não bloqueou as outras
+    expect(pagina.items[0].fotos[1].id).toBe("foto-quebrada");
+    expect(pagina.items[0].fotos[1].url).toBe(
+      "user/entrada-1/moto/quebrada.jpg"
+    );
+  });
+
   it("lê e regrava thumb/full no JSONB de fotos de status", async () => {
     const returnedRow = {
       id: "entrada-1",
