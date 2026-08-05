@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { StorageApi } from "@/domain/interfaces/StorageApi";
-import { useStorageInfo } from "@/hooks/useStorageInfo";
+import { useStorageInfoContext } from "@/contexts/StorageInfoContext";
 import { useLimparStorage } from "@/hooks/useLimparStorage";
 import { ConsultarEspacoStorageUseCase } from "@/domain/usecases/ConsultarEspacoStorageUseCase";
 import {
@@ -32,7 +32,10 @@ export function StorageManager({ storageApi, children }: StorageManagerProps) {
   const [dataInicio, setDataInicio] = useState<string>("");
   const [dataFim, setDataFim] = useState<string>("");
 
-  const { info, loading, error, carregarInfo } = useStorageInfo(storageApi);
+  // Issue #14b: consome do Context singleton. A função `carregarInfo`
+  // é deduplicada via `inFlightRef` no Provider — se o `StorageBar`
+  // também chamou, o StorageManager reusa a Promise.
+  const { info, loading, error, carregarInfo } = useStorageInfoContext();
   const {
     preview,
     resultado,

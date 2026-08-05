@@ -13,7 +13,9 @@ import { Relatorios } from "@/pages/Relatorios";
 import { Route, Switch, useLocation } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { StorageInfoProvider } from "./contexts/StorageInfoContext";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { SupabaseStorageApi } from "./infrastructure/storage/SupabaseStorageApi";
 import { Loader2 } from "lucide-react";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -116,10 +118,12 @@ function App() {
           defaultTheme="light"
           switchable
         >
-          <TooltipProvider>
-            <Toaster />
-            <Router />
-          </TooltipProvider>
+          <StorageInfoProvider storageApi={new SupabaseStorageApi()}>
+            <TooltipProvider>
+              <Toaster />
+              <Router />
+            </TooltipProvider>
+          </StorageInfoProvider>
         </ThemeProvider>
       </AuthProvider>
     </ErrorBoundary>

@@ -33,8 +33,20 @@ vi.mock("wouter", () => ({
 
 import Header from "@/components/Header";
 import { useAuth } from "@/contexts/AuthContext";
+import { StorageInfoProvider } from "@/contexts/StorageInfoContext";
 
 const useAuthMock = vi.mocked(useAuth);
+
+// Helper: renderiza o Header dentro do Provider necessário. O Header
+// consome `useStorageInfoContext` (issue #14b) — sem o Provider o
+// `useStorageInfoContext` joga.
+function renderWithProviders(ui: React.ReactNode) {
+  return render(
+    <StorageInfoProvider storageApi={{} as never}>
+      {ui}
+    </StorageInfoProvider>
+  );
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -57,7 +69,7 @@ describe("Header — StorageBar (chamada de consultar-uso-storage)", () => {
       signOut: vi.fn(),
     });
 
-    render(<Header title="Oficina" />);
+    renderWithProviders(<Header title="Oficina" />);
 
     // A barra de storage renderiza um placeholder enquanto carrega.
     // Verificamos que nenhuma chamada de rede sai (não temos como
@@ -76,7 +88,7 @@ describe("Header — StorageBar (chamada de consultar-uso-storage)", () => {
       signOut: vi.fn(),
     });
 
-    render(<Header title="Oficina" />);
+    renderWithProviders(<Header title="Oficina" />);
 
     expect(screen.getByText("...")).toBeInTheDocument();
   });
@@ -94,7 +106,7 @@ describe("Header — handleLogout (botão Sair)", () => {
       signOut,
     });
 
-    render(<Header title="Oficina" />);
+    renderWithProviders(<Header title="Oficina" />);
 
     const botaoSair = screen.getByTitle("Sair");
     fireEvent.click(botaoSair);
@@ -126,7 +138,7 @@ describe("Header — handleLogout (botão Sair)", () => {
       .spyOn(console, "error")
       .mockImplementation(() => {});
 
-    render(<Header title="Oficina" />);
+    renderWithProviders(<Header title="Oficina" />);
 
     const botaoSair = screen.getByTitle("Sair");
     fireEvent.click(botaoSair);

@@ -5,8 +5,7 @@ import { Button } from "./ui/button";
 import { useLocation } from "wouter";
 import { StorageManager } from "./StorageManager";
 import { SupabaseStorageApi } from "@/infrastructure/storage/SupabaseStorageApi";
-import { useStorageInfo } from "@/hooks/useStorageInfo";
-import { useEffect } from "react";
+import { useStorageInfoContext } from "@/contexts/StorageInfoContext";
 
 interface HeaderProps {
   title: string;
@@ -15,28 +14,11 @@ interface HeaderProps {
 const storageApi = new SupabaseStorageApi();
 
 function StorageBar() {
-  const { info, loading, carregarInfo } = useStorageInfo(storageApi);
-  const { user, loading: authLoading } = useAuth();
-
-  useEffect(() => {
-    // Só chama a edge function quando o usuário está autenticado. Sem
-    // essa guarda, o useEffect de mount dispara `carregarInfo()`
-    // ANTES do `AuthContext` terminar `getSession()` (sessão sendo
-    // restaurada do localStorage) — o `supabase.functions.invoke`
-    // sai sem Authorization header e a função `consultar-uso-storage`
-    // retorna 401 (gera erro no console e no StorageManager).
-    //
-    // Issue #14: removido `setInterval(carregarInfo, 30000)`. Antes,
-    // o StorageBar em TODAS as páginas fazia polling a cada 30s da
-    // Edge Function `consultar-uso-storage` (que varre `storage.objects`
-    // pra agregar bytes), mesmo com o usuário navegando sem interagir
-    // com storage. Agora: 1 chamada no mount (mostra a barra com %
-    // atual) + atualizações só via `StorageManager` (modal recarrega
-    // no on-open). Reduz ~uso da Edge Function em ~99% durante
-    // uma sessão típica.
-    if (authLoading || !user) return;
-    carregarInfo();
-  }, [carregarInfo, user, authLoading]);
+  // Issue #14b: consome do Context singleton (criado pelo Provider no
+  // App). Garante 1 chamada real por sessão de 5min, independente
+  // de quantos componentes (StorageBar + StorageManager + futuras)
+  // consumirem o estado.
+  const { info, loading: _loading } = useStorageInfoContext();
 
   return (
     <StorageManager storageApi={storageApi}>
