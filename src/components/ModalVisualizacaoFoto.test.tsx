@@ -1,7 +1,23 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
 
 import ModalVisualizacaoFoto from "@/components/ModalVisualizacaoFoto";
+import { _clearUrlCache } from "@/infrastructure/storage/urlCache";
+import type { Foto } from "@shared/types";
+
+// Mock do cliente Supabase: o modal faz obterSignedUrl (via urlCache).
+// Controlamos o retorno de createSignedUrl para testes com paths crus.
+vi.mock("@/infrastructure/supabase/client", () => {
+  const from = vi.fn();
+  return {
+    supabase: {
+      auth: { getUser: vi.fn() },
+      storage: { from },
+    },
+  };
+});
+import { supabase } from "@/infrastructure/supabase/client";
+const mockedFrom = vi.mocked(supabase.storage.from);
 
 // Isola do Dialog/Radix: o modal depende de portal/overlay que torna o
 // jsdom instável. Como o contrato do Modal é puramente "renderiza a URL
@@ -15,14 +31,43 @@ vi.mock("@/components/ui/dialog", () => ({
   ),
 }));
 
-describe("ModalVisualizacaoFoto — fullPath em alta resolução (ciclo 6)", () => {
-  it("renderiza a url (fullPath) da foto atual como src do <img>", () => {
-    // O caller (GaleriaFotosMoto) é responsável por passar
-    // `fullPath ?? url` por foto. Verificamos que o modal simplesmente
-    // pinta essa url no `src` — sem reescolher entre thumb e full.
-    const fotos = [
-      "https://signed.example/full1.jpg",
-      "https://signed.example/full2.jpg",
+const buildFoto = (params: {
+  fullPath?: string | null;
+  url?: string;
+  id?: string;
+}): Foto => ({
+  id: params.id ?? "foto-1",
+  entradaId: "entrada-1",
+  url: params.url ?? "user/entrada-1/moto/legado.jpg",
+  thumbPath: null,
+  fullPath: params.fullPath ?? null,
+  tipo: "moto",
+  criadoEm: new Date("2025-01-02T00:00:00Z"),
+});
+
+const buildBucket = (signedUrl: string) => {
+  const createSignedUrl = vi.fn().mockResolvedValue({
+    data: { signedUrl },
+    error: null,
+  });
+  mockedFrom.mockReturnValue({ createSignedUrl } as never);
+  return { createSignedUrl };
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  _clearUrlCache();
+});
+
+describe("ModalVisualizacaoFoto — fullPath em alta resolução (issue #13)", () => {
+  it("renderiza a url já assinada (fullPath) da foto atual como src do <img>", async () => {
+    // Após issue #13: o modal recebe `Foto[]` (com thumbPath/fullPath
+    // como paths crus ou signed URLs) e usa `fullPath ?? url` para a
+    // imagem em alta resolução. Como tem lazy signing interno, espera
+    // o useEffect rodar pra assertion.
+    const fotos: Foto[] = [
+      buildFoto({ fullPath: "https://signed.example/full1.jpg" }),
+      buildFoto({ fullPath: "https://signed.example/full2.jpg" }),
     ];
     render(
       <ModalVisualizacaoFoto
@@ -33,16 +78,53 @@ describe("ModalVisualizacaoFoto — fullPath em alta resolução (ciclo 6)", () 
       />
     );
 
+    // fullPath já é signed URL (http) — sem chamada de signed URL
     const img = screen.getByRole("img");
     expect(img).toHaveAttribute("src", "https://signed.example/full1.jpg");
   });
 
-  it("não usa thumbPath como src — usa a url fornecida pelo caller (já é fullPath)", () => {
-    // Garante que a renderização do modal não escolhe thumb em vez de
-    // full. As urls abaixo representam a versão em alta resolução; se o
-    // modal estivesse consumindo thumbPath, veríamos o thumb aqui.
-    const fotos = [
-      "https://signed.example/full/high.jpg", // fullPath (alta resolução)
+  it("assina fullPath lazy quando recebe path cru", async () => {
+    // Cobre o caminho em que `fullPath` é um path (não signed URL) e o
+    // modal precisa assinar para renderizar a imagem em alta resolução.
+    const createSignedUrl = vi.fn().mockResolvedValue({
+      data: { signedUrl: "https://signed.example/full.jpg" },
+      error: null,
+    });
+    mockedFrom.mockReturnValue({ createSignedUrl } as never);
+
+    const fotos: Foto[] = [
+      buildFoto({ fullPath: "user/entrada-1/moto/full.jpg" }),
+    ];
+    render(
+      <ModalVisualizacaoFoto
+        fotos={fotos}
+        fotoAtual={0}
+        aberto={true}
+        onFechar={() => {}}
+      />
+    );
+
+    await waitFor(() => {
+      expect(createSignedUrl).toHaveBeenCalledWith(
+        "user/entrada-1/moto/full.jpg",
+        expect.any(Number)
+      );
+    });
+
+    const img = screen.getByRole("img");
+    expect(img).toHaveAttribute("src", "https://signed.example/full.jpg");
+  });
+
+  it("cai no thumbPath quando o thumb já é signed URL e o fullPath está null", async () => {
+    // Antes do issue #13: galeria assinava o thumbPath e o modal
+    // recebia só a string. Agora o modal recebe Foto[] com
+    // thumbPath/fullPath crus e usa `fullPath ?? url` — mas a foto
+    // legada só tem url (sem thumbPath/fullPath). Cobrindo o fallback.
+    const fotos: Foto[] = [
+      buildFoto({
+        url: "https://signed.example/legado.jpg",
+        fullPath: null,
+      }),
     ];
     render(
       <ModalVisualizacaoFoto
@@ -54,16 +136,14 @@ describe("ModalVisualizacaoFoto — fullPath em alta resolução (ciclo 6)", () 
     );
 
     const img = screen.getByRole("img");
-    expect(img).toHaveAttribute("src", "https://signed.example/full/high.jpg");
-    // E nunca o thumbPath hipotético.
-    expect(img).not.toHaveAttribute("src", expect.stringContaining("thumb"));
+    expect(img).toHaveAttribute("src", "https://signed.example/legado.jpg");
   });
 
-  it("alterna o src ao mudar fotoAtual (cada navegação usa o fullPath correspondente)", () => {
-    const fotos = [
-      "https://signed.example/full/1.jpg",
-      "https://signed.example/full/2.jpg",
-      "https://signed.example/full/3.jpg",
+  it("alterna o src ao mudar fotoAtual (cada navegação usa o fullPath correspondente)", async () => {
+    const fotos: Foto[] = [
+      buildFoto({ fullPath: "https://signed.example/full/1.jpg" }),
+      buildFoto({ fullPath: "https://signed.example/full/2.jpg" }),
+      buildFoto({ fullPath: "https://signed.example/full/3.jpg" }),
     ];
     const { rerender } = render(
       <ModalVisualizacaoFoto

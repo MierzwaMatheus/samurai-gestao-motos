@@ -154,10 +154,10 @@ describe("GaleriaFotosMoto", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("passa urlsParaModal com signed URL do thumb e fallback para thumbPath original", async () => {
-    // O modal recebe `urlsParaModal` calculado no pai. Para cada foto, o
-    // modal recebe a URL assinada do thumb (ou o thumbPath original se já
-    // for URL completa). O fallback cobre fotos sem signed URL.
+  it("passa Foto[] completa para o modal (issue #13: modal assina fullPath internamente)", async () => {
+    // Após issue #13: a galeria não monta mais `urlsParaModal` (string[]).
+    // O modal recebe `Foto[]` com thumbPath/fullPath como paths crus
+    // (ou signed URLs) e ele próprio decide o que assinar sob demanda.
     const { createSignedUrl } = buildBucket();
 
     const fotos: Foto[] = [
@@ -185,28 +185,42 @@ describe("GaleriaFotosMoto", () => {
       expect(createSignedUrl).toHaveBeenCalledTimes(2);
     });
 
-    // Modal foi renderizado (a spy capturou as props) com `urlsParaModal`.
+    // Modal recebe a Foto[] intacta — sem transformação pra string[].
     expect(modalSpy).toHaveBeenCalled();
     const props = modalSpy.mock.calls.at(-1)?.[0] as {
-      fotos: string[];
+      fotos: Foto[];
     };
     expect(props).toBeDefined();
     expect(props.fotos).toHaveLength(3);
-    // Índice 0: signed URL do thumb1 gerada pelo Supabase
-    expect(props.fotos[0]).toBe("https://signed.example/thumb.jpg");
-    // Índice 1: thumbPath original (já começa com http, não foi assinado)
-    expect(props.fotos[1]).toBe("https://already-signed.example/thumb2.jpg");
-    // Índice 2: signed URL do url (foto legada, sem thumbPath)
-    expect(props.fotos[2]).toBe("https://signed.example/thumb.jpg");
+    // As URLs no objeto Foto permanecem como paths crus / signed URLs
+    // originais — o modal que decide o que assinar para fullPath.
+    expect(props.fotos[0]).toEqual(
+      expect.objectContaining({
+        id: "1",
+        url: "user/entrada/moto/full1.jpg",
+        thumbPath: "user/entrada/moto/thumb1.jpg",
+      })
+    );
+    expect(props.fotos[1]).toEqual(
+      expect.objectContaining({
+        id: "2",
+        thumbPath: "https://already-signed.example/thumb2.jpg",
+      })
+    );
+    expect(props.fotos[2]).toEqual(
+      expect.objectContaining({
+        id: "3",
+        url: "user/entrada/moto/legada3.jpg",
+        thumbPath: null,
+      })
+    );
   });
 
-  it("passa url original (signed) ao modal quando thumbPath é URL completa e url é diferente", async () => {
-    // Mata o mutante de LogicalOperator em GaleriaFotosMoto.tsx:63
+  it("passa Foto[] sem transformação quando thumbPath é URL completa (issue #13)", async () => {
+    // Mata o mutante de LogicalOperator em GaleriaFotosMoto.tsx:32
     // (`??` → `&&`). Quando thumbPath já é uma URL completa (http) e
     // `url` aponta para um path distinto, o operador correto é `??`:
-    // precisamos do thumbPath (já assinado) e NÃO do `url` (path cru).
-    // Com o mutante `&&`, `pathOriginal` seria o `url` cru (string
-    // diferente), vazando a URL de alta resolução.
+    // o thumbPath vence e o url fica só como fallback de thumbPath.
     const { createSignedUrl } = buildBucket();
 
     const fotos: Foto[] = [
@@ -225,23 +239,27 @@ describe("GaleriaFotosMoto", () => {
 
     expect(modalSpy).toHaveBeenCalled();
     const props = modalSpy.mock.calls.at(-1)?.[0] as {
-      fotos: string[];
+      fotos: Foto[];
     };
     expect(props).toBeDefined();
-    // thumbPath é http → urls[0] é setado para o thumbPath original; o
-    // modal recebe o thumbPath (não o `url` legado).
-    expect(props.fotos[0]).toBe("https://already-signed.example/thumb1.jpg");
-    expect(props.fotos[0]).not.toBe("user/entrada/moto/legado.jpg");
+    // thumbPath é http → urls[0] é setado para o thumbPath original;
+    // modal recebe a Foto com ambos os campos preservados.
+    expect(props.fotos[0]).toEqual(
+      expect.objectContaining({
+        id: "1",
+        thumbPath: "https://already-signed.example/thumb1.jpg",
+        url: "user/entrada/moto/legado.jpg",
+      })
+    );
+    expect(props.fotos[0].thumbPath).not.toBe("user/entrada/moto/legado.jpg");
   });
 
-  it("cai no thumbPath original quando createSignedUrl falha (carregamento parcial)", async () => {
-    // Mata o mutante de LogicalOperator em GaleriaFotosMoto.tsx:63
-    // (`??` → `&&`) no caminho em que `urls[index]` permanece
-    // undefined (porque createSignedUrl rejeitou). A expressão
-    // `urls[index] ?? pathOriginal` deve cair no `pathOriginal =
-    // thumbPath ?? url`, que para thumbPath truthy é o próprio
-    // thumbPath. Com o mutante `&&`, `pathOriginal` vira o `url`
-    // (string diferente) — distinguível asserindo o thumbPath exato.
+  it("tolerância a falhas: quando createSignedUrl rejeita, urls[index] fica undefined (thumb) sem quebrar a galeria (issue #13)", async () => {
+    // Antes da issue #13: Promise.all rejeitava e a galeria inteira
+    // ficava sem thumbs renderizados. Depois: Promise.allSettled + a
+    // foto problemática fica com `urls[index] === undefined` e o
+    // `<img>` cai no placeholder (Image icon). As outras fotos
+    // renderizam normalmente.
     const createSignedUrl = vi.fn().mockRejectedValue(new Error("rede off"));
     mockedFrom.mockReturnValue({ createSignedUrl } as never);
 
@@ -255,21 +273,26 @@ describe("GaleriaFotosMoto", () => {
 
     render(<GaleriaFotosMoto fotos={fotos} />);
 
-    // Espera o useEffect rodar e rejeitar — `urls[0]` fica undefined
-    // e a prop do modal cai em `pathOriginal`.
+    // Espera o useEffect tentar assinar
     await waitFor(() => {
       expect(createSignedUrl).toHaveBeenCalledTimes(1);
     });
 
+    // Modal continua recebendo a Foto[] intacta — é a galeria que
+    // decide se o thumb renderiza (via `urls[index]`). Quando cai
+    // o reject, a galeria renderiza o placeholder.
     expect(modalSpy).toHaveBeenCalled();
     const props = modalSpy.mock.calls.at(-1)?.[0] as {
-      fotos: string[];
+      fotos: Foto[];
     };
     expect(props).toBeDefined();
-    // Original (`??`): pathOriginal = "user/.../thumb1.jpg".
-    // Mutante (`&&`): pathOriginal = "user/.../legado.jpg".
-    expect(props.fotos[0]).toBe("user/entrada/moto/thumb1.jpg");
-    expect(props.fotos[0]).not.toBe("user/entrada/moto/legado.jpg");
+    expect(props.fotos[0]).toEqual(
+      expect.objectContaining({
+        id: "1",
+        thumbPath: "user/entrada/moto/thumb1.jpg",
+        url: "user/entrada/moto/legado.jpg",
+      })
+    );
   });
 
   it("usa o id (não o index) como key do botão — fotos com id duplicado disparam warning do React", () => {

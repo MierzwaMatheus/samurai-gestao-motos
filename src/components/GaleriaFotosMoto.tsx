@@ -12,9 +12,10 @@ interface GaleriaFotosMotoProps {
  * Componente para exibir galeria de fotos do tipo "moto".
  *
  * Cada thumb usa `thumbPath` (com fallback para `url` quando `thumbPath` é
- * null — fotos legadas sem pipeline de 2 variantes). O modal recebe uma
- * lista de URLs na mesma forma do componente anterior (signed URL do thumb
- * ou url original).
+ * null — fotos legadas sem pipeline de 2 variantes). Issue #13: o
+ * signing do `thumbPath` é lazy no `useEffect`; o modal recebe
+ * `Foto[]` (com thumbPath/fullPath crus) e assina o `fullPath`
+ * internamente quando abre.
  */
 export default function GaleriaFotosMoto({ fotos }: GaleriaFotosMotoProps) {
   const [urls, setUrls] = useState<Record<number, string>>({});
@@ -24,22 +25,35 @@ export default function GaleriaFotosMoto({ fotos }: GaleriaFotosMotoProps) {
   useEffect(() => {
     const carregarUrls = async () => {
       const urlsMap: Record<number, string> = {};
-      await Promise.all(
+      // Issue #13: tolerância a falhas — uma foto com signed URL que
+      // falha (ex.: 400 Bad Request) não pode quebrar a galeria inteira.
+      // Mantemos o path cru como fallback para aquela foto específica.
+      // Também trocamos Promise.all por Promise.allSettled para garantir
+      // que o map rode até o fim mesmo se uma rejeitar.
+      const resultados = await Promise.allSettled(
         fotos.map(async (foto, index) => {
           // thumbPath preferido; cai no url para fotos legadas/documento
           const path = foto.thumbPath ?? foto.url;
           if (!path.startsWith("http")) {
-            try {
-              const signedUrl = await obterSignedUrl(path);
-              urlsMap[index] = signedUrl;
-            } catch (error) {
-              console.error(`Erro ao carregar URL da foto ${index}:`, error);
-            }
-          } else {
-            urlsMap[index] = path;
+            const signedUrl = await obterSignedUrl(path);
+            return { index, url: signedUrl };
           }
+          return { index, url: path };
         })
       );
+      for (const r of resultados) {
+        if (r.status === "fulfilled") {
+          urlsMap[r.value.index] = r.value.url;
+        } else {
+          // Fallback: a foto problemática fica sem `urls[index]` — o thumb
+          // não renderiza (placeholder), mas as outras fotos renderizam.
+          console.warn(
+            `[GaleriaFotosMoto] Falha ao assinar URL, usando path cru: ${String(
+              r.reason
+            )}`
+          );
+        }
+      }
       setUrls(urlsMap);
     };
 
@@ -56,13 +70,6 @@ export default function GaleriaFotosMoto({ fotos }: GaleriaFotosMotoProps) {
   if (fotos.length === 0) {
     return null;
   }
-
-  // Para o modal: usa a URL já assinada para o thumb (alta resolução) e
-  // cai no url original para fotos cuja thumb já vem completa (http).
-  const urlsParaModal = fotos.map((foto, index) => {
-    const pathOriginal = foto.thumbPath ?? foto.url;
-    return urls[index] ?? pathOriginal;
-  });
 
   return (
     <>
@@ -93,9 +100,10 @@ export default function GaleriaFotosMoto({ fotos }: GaleriaFotosMotoProps) {
         ))}
       </div>
 
-      {/* Modal de visualização expandida */}
+      {/* Modal de visualização expandida — recebe Foto[] e assina
+          fullPath sob demanda quando abre */}
       <ModalVisualizacaoFoto
-        fotos={urlsParaModal}
+        fotos={fotos}
         fotoAtual={fotoSelecionada}
         aberto={modalAberto}
         onFechar={() => setModalAberto(false)}

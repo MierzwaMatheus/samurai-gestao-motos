@@ -302,36 +302,15 @@ export class SupabaseEntradaRepository implements EntradaRepository {
         criadoEm: new Date(foto.criado_em),
       });
     }
-    const fotosAssinadas = await Promise.all(
-      Object.entries(fotosPorEntrada).map(async ([entradaId, fotos]) => {
-        const fotosComUrls = await Promise.all(
-          fotos.map(async (foto) => {
-            // Tolerância a falhas: UMA foto com signed URL que falha
-            // (ex.: 400 Bad Request por caractere incomum no path —
-            // observado em prod em 2026-08-05) não pode derrubar a
-            // página inteira. Cada chamada de `obterUrlAssinada` é
-            // envolvida num try/catch — em falha, mantemos o path cru
-            // como `url`/`thumbPath`/`fullPath` para o UI.render não
-            // quebrar. A galeria vai mostrar imagem quebrada pra ESSA
-            // foto específica, mas as outras 9 cards renderizam.
-            const url = foto.url.startsWith("http")
-              ? foto.url
-              : await this.assinarUrlSeguro(foto.url);
-            const thumbPath =
-              foto.thumbPath && !foto.thumbPath.startsWith("http")
-                ? await this.assinarUrlSeguro(foto.thumbPath)
-                : foto.thumbPath;
-            const fullPath =
-              foto.fullPath && !foto.fullPath.startsWith("http")
-                ? await this.assinarUrlSeguro(foto.fullPath)
-                : foto.fullPath;
-            return { ...foto, url, thumbPath, fullPath } as Foto;
-          })
-        );
-        return [entradaId, fotosComUrls] as const;
-      })
-    );
-    const fotosMap = Object.fromEntries(fotosAssinadas);
+    // Issue #13: NÃO assina URLs aqui. O signing é responsabilidade da
+    // GaleriaFotosMoto (no useEffect, lazy on mount), do
+    // ModalVisualizacaoFoto (no click) e do GerarOSUseCase (lazy on
+    // demanda). Antes, esse laço gerava ~10-40 POSTs a
+    // `/storage/v1/object/sign/...` por página da Oficina — mesmo
+    // para fotos que o usuário nunca abriu. Agora, 0 POSTs no carregamento
+    // da lista. O cache do `urlCache` segue reusando URLs entre
+    // componentes.
+    const fotosMap = fotosPorEntrada;
 
     const clientesMap = new Map(
       (clientesResult.data || []).map((c: any) => [c.id, c])
@@ -570,30 +549,5 @@ export class SupabaseEntradaRepository implements EntradaRepository {
       criadoEm: new Date(data.criado_em),
       atualizadoEm: new Date(data.atualizado_em),
     };
-  }
-
-  /**
-   * Assina uma URL com fallback tolerante a falhas.
-   *
-   * Se a chamada de assinatura retornar sucesso, devolve a URL
-   * assinada. Se falhar (ex.: 400 Bad Request por path com caractere
-   * estranho ou arquivo inexistente no bucket), devolve o `path` cru
-   * para que o UI não quebre — a galeria vai mostrá-lo como imagem
-   * quebrada, mas as outras fotos renderizam normalmente.
-   *
-   * Necessário porque `obterUrlAssinada` lança uma `Error` em falha
-   * (urlCache.ts:56), e o `Promise.all` no `buscarPagina` rejeita
-   * inteiro, deixando `oficinaConcluidos.motos` vazio.
-   */
-  private async assinarUrlSeguro(path: string): Promise<string> {
-    try {
-      return await this.storageApi.obterUrlAssinada(path);
-    } catch (err) {
-      console.warn(
-        `[SupabaseEntradaRepository] Falha ao assinar URL, usando path cru: ${path}`,
-        err
-      );
-      return path;
-    }
   }
 }

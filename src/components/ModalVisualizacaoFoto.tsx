@@ -2,18 +2,25 @@ import { useState, useEffect } from "react";
 import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Foto } from "@shared/types";
+import { obterSignedUrl } from "@/infrastructure/storage/urlCache";
 
 interface ModalVisualizacaoFotoProps {
-  fotos: string[];
+  fotos: Foto[];
   fotoAtual: number;
   aberto: boolean;
   onFechar: () => void;
 }
 
 /**
- * Componente de modal para visualização expandida de fotos
- * Suporta navegação entre fotos com swipe (mobile) e setas (desktop)
- * Focado em mobile-first
+ * Componente de modal para visualização expandida de fotos.
+ *
+ * Issue #13: recebe `Foto[]` (com thumbPath/fullPath nulos ou como
+ * paths crus) e faz signing LAZY no `fullPath ?? url` quando o modal
+ * abre. Antes, a galeria assinava o `thumbPath` mas enviava só o
+ * signed URL para o modal — o que impedia o modal de usar o full
+ * size. Agora o modal tem a `Foto` completa e pode pedir o full
+ * resolution sob demanda.
  */
 export default function ModalVisualizacaoFoto({
   fotos,
@@ -24,6 +31,52 @@ export default function ModalVisualizacaoFoto({
   const [fotoAtual, setFotoAtual] = useState(fotoInicial);
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  const [urls, setUrls] = useState<Record<number, string>>({});
+
+  // Lazy sign: quando o modal abre, busca a URL full-size (fullPath) de
+  // cada foto. Threshold: só a foto atual + adjacentes pra swipe.
+  // Antes (issue #12): a galeria assinava o thumbPath e passava o
+  // string pro modal — mas o modal full-size ficava sem source.
+  useEffect(() => {
+    if (!aberto || fotos.length === 0) {
+      setUrls({});
+      return;
+    }
+
+    const signedFoto = async (foto: Foto) => {
+      const path = foto.fullPath ?? foto.url;
+      if (!path || path.startsWith("http")) {
+        return path;
+      }
+      try {
+        return await obterSignedUrl(path);
+      } catch (err) {
+        console.warn(
+          "[ModalVisualizacaoFoto] Falha ao assinar URL, usando path cru:",
+          path,
+          err
+        );
+        return path;
+      }
+    };
+
+    const indices = new Set<number>([
+      fotoInicial,
+      (fotoInicial + 1) % fotos.length,
+      (fotoInicial - 1 + fotos.length) % fotos.length,
+    ]);
+
+    Promise.all(
+      Array.from(indices).map(async (i) => {
+        const foto = fotos[i];
+        if (!foto) return;
+        const url = await signedFoto(foto);
+        if (url) {
+          setUrls((prev) => ({ ...prev, [i]: url }));
+        }
+      })
+    );
+  }, [aberto, fotoInicial, fotos]);
 
   // Atualiza foto atual quando o modal abre com uma foto diferente
   useEffect(() => {
@@ -86,6 +139,11 @@ export default function ModalVisualizacaoFoto({
 
   if (fotos.length === 0) return null;
 
+  // Fallback: se a URL assinada ainda não chegou, usa o path cru
+  // (vai aparecer como imagem quebrada, mas a UI não quebra).
+  const fotoAtualUrl =
+    urls[fotoAtual] ?? fotos[fotoAtual].fullPath ?? fotos[fotoAtual].url;
+
   return (
     <Dialog open={aberto} onOpenChange={onFechar}>
       <DialogContent
@@ -128,20 +186,22 @@ export default function ModalVisualizacaoFoto({
           )}
 
           {/* Imagem em alta qualidade - sem compressão */}
-          <img
-            src={fotos[fotoAtual]}
-            alt={`Foto ${fotoAtual + 1} de ${fotos.length}`}
-            className="max-w-full max-h-full object-contain"
-            style={{ 
-              userSelect: "none",
-              imageRendering: "high-quality",
-            }}
-            draggable={false}
-            loading="eager"
-            onError={(e) => {
-              (e.target as HTMLImageElement).style.display = "none";
-            }}
-          />
+          {fotoAtualUrl && (
+            <img
+              src={fotoAtualUrl}
+              alt={`Foto ${fotoAtual + 1} de ${fotos.length}`}
+              className="max-w-full max-h-full object-contain"
+              style={{
+                userSelect: "none",
+                imageRendering: "high-quality",
+              }}
+              draggable={false}
+              loading="eager"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = "none";
+              }}
+            />
+          )}
 
           {/* Botão próximo (direita) */}
           {fotos.length > 1 && (

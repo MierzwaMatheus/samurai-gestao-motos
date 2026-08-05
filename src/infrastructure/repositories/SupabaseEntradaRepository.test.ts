@@ -322,11 +322,13 @@ describe("SupabaseEntradaRepository — paginação", () => {
     ]);
   });
 
-  it("retorna moto.fotos como Foto[] com thumbPath/fullPath assinados quando há foto nova", async () => {
-    // Após o ciclo 3, `MotoCompleta.fotos` migra de `string[]` para
-    // `Foto[]` e o repositório devolve cada foto da tabela `fotos`
-    // (tipo 'moto') já com `url`/`thumbPath`/`fullPath` assinados.
-    // Cobre o ramo "foto nova com pipeline de 2 variantes".
+  it("retorna moto.fotos como Foto[] com paths crus (assinagem é lazy, responsabilidade da galeria)", async () => {
+    // Após issue #13: `buscarPagina` devolve `Foto[]` com `url`/
+    // `thumbPath`/`fullPath` como PATHS CRUS (não assinados). A
+    // assinatura é responsabilidade de Galeria/MODAL/GerarOS, que
+    // assinam sob demanda. Antes da issue #13, esse teste esperava
+    // que o repository ASSINASSE os 3 caminhos — agora ele só
+    // propaga os paths.
     buildBucket();
     setupPagedEntradas({
       fotos: [
@@ -347,17 +349,16 @@ describe("SupabaseEntradaRepository — paginação", () => {
       pageSize: 10,
     });
 
-    // Foto com shape completo (Foto) — não string crua
     expect(pagina.items[0].fotos).toHaveLength(1);
     expect(pagina.items[0].fotos[0]).toEqual(
       expect.objectContaining({
         id: "foto-nova",
         entradaId: "entrada-1",
         tipo: "moto",
-        // 3 caminhos foram assinados em paralelo (url + thumb + full)
-        url: "https://signed.example/moto.jpg",
-        thumbPath: "https://signed.example/moto.jpg",
-        fullPath: "https://signed.example/moto.jpg",
+        // Paths crus preservados — signing acontece na galeria
+        url: "user/entrada-1/moto/1234-foto.webp",
+        thumbPath: "user/entrada-1/moto/1234-foto-thumb.webp",
+        fullPath: "user/entrada-1/moto/1234-foto-full.webp",
         criadoEm: new Date("2025-01-02T00:00:00Z"),
       })
     );
@@ -393,49 +394,32 @@ describe("SupabaseEntradaRepository — paginação", () => {
         id: "foto-legada",
         entradaId: "entrada-1",
         tipo: "moto",
-        url: "https://signed.example/moto.jpg",
+        // Path cru — Galeria vai assinar thumbPath no useEffect
+        url: "user/entrada-1/moto/legada.jpg",
         thumbPath: null,
         fullPath: null,
       })
     );
   });
 
-  it("tolerância a falhas: signed URL com 400 não derruba a página inteira", async () => {
-    // Bug observado em prod em 2026-08-05: uma foto cujo `obterUrlAssinada`
-    // falha (ex.: 400 Bad Request por causa de caractere incomum no path)
-    // faz o `Promise.all` em `buscarPagina` rejeitar, e o `useMotosOficina`
-    // nunca chama `setMotos` — `oficinaConcluidos.motos` permanece `[]`,
-    // mostrando "Nenhum serviço concluído" mesmo com 241 entradas reais.
-    //
-    // Esperado: a página continua renderizando as outras fotos. A foto
-    // problemática cai num fallback (path cru) em vez de quebrar tudo.
-    const createSignedUrl = vi.fn().mockImplementation((path: string) => {
-      if (path.includes("quebrada")) {
-        return Promise.resolve({
-          data: null,
-          error: { message: "400 Bad Request", statusCode: "400" },
-        });
-      }
-      return Promise.resolve({
-        data: { signedUrl: `https://signed.example/${path}` },
-        error: null,
-      });
-    });
+  it("NÃO chama obterUrlAssinada no repository — signing é responsabilidade da galeria/componente (lazy)", async () => {
+    // Antes da issue #13: buscarPagina assinava todas as URLs upfront (~10
+    // POSTs por página, mesmo se o usuário nunca abriu o dropdown de fotos).
+    // Depois: repository devolve `Foto[]` com paths crus (`url`,
+    // `thumbPath`, `fullPath`); Galeria/MODAL/GerarOS assinam sob
+    // demanda. Foto em si vira 0 chamadas de signed URL ao carregar a
+    // lista da Oficina — todo o signing é lazy.
+    const createSignedUrl = vi.fn();
     mockedStorageFrom.mockReturnValue({ createSignedUrl } as never);
 
     setupPagedEntradas({
       fotos: [
         {
-          id: "foto-boa",
+          id: "foto-1",
           entrada_id: "entrada-1",
-          url: "user/entrada-1/moto/boa.jpg",
-          tipo: "moto",
-          criado_em: "2025-01-02T00:00:00Z",
-        },
-        {
-          id: "foto-quebrada",
-          entrada_id: "entrada-1",
-          url: "user/entrada-1/moto/quebrada.jpg",
+          url: "user/entrada-1/moto/1234-foto.webp",
+          thumb_path: "user/entrada-1/moto/1234-foto-thumb.webp",
+          full_path: "user/entrada-1/moto/1234-foto-full.webp",
           tipo: "moto",
           criado_em: "2025-01-02T00:00:00Z",
         },
@@ -447,20 +431,27 @@ describe("SupabaseEntradaRepository — paginação", () => {
       pageSize: 10,
     });
 
-    // A página vem — Promise.all não rejeitou por causa da foto quebrada
-    expect(pagina.items).toHaveLength(1);
-    expect(pagina.items[0].fotos).toHaveLength(2);
+    expect(createSignedUrl).not.toHaveBeenCalled();
 
-    // A foto "boa" recebeu a URL assinada normalmente
-    expect(pagina.items[0].fotos[0].url).toBe(
-      "https://signed.example/user/entrada-1/moto/boa.jpg"
+    // E os campos voltam como paths crus (não assinados)
+    expect(pagina.items[0].fotos[0]).toEqual(
+      expect.objectContaining({
+        id: "foto-1",
+        url: "user/entrada-1/moto/1234-foto.webp",
+        thumbPath: "user/entrada-1/moto/1234-foto-thumb.webp",
+        fullPath: "user/entrada-1/moto/1234-foto-full.webp",
+      })
     );
+  });
 
-    // A foto "quebrada" caiu pro fallback (path cru) — não bloqueou as outras
-    expect(pagina.items[0].fotos[1].id).toBe("foto-quebrada");
-    expect(pagina.items[0].fotos[1].url).toBe(
-      "user/entrada-1/moto/quebrada.jpg"
-    );
+  it("tolerância a falhas: agora é responsabilidade da galeria (issue #13)", async () => {
+    // Antes da issue #13: o repository assinava URLs upfront em
+    // Promise.all — UMA foto com 400 derrubava a página inteira.
+    // Depois: o repository devolve paths crus; a galeria assina
+    // sob demanda com tolerância local. Este teste está documentado
+    // apenas para rastreabilidade — a tolerância real é testada em
+    // `GaleriaFotosMoto.test.tsx`.
+    expect(true).toBe(true);
   });
 
   it("lê e regrava thumb/full no JSONB de fotos de status", async () => {

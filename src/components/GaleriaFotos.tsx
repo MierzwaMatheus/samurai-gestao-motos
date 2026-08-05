@@ -18,22 +18,29 @@ export default function GaleriaFotos({ fotos }: GaleriaFotosProps) {
   useEffect(() => {
     const carregarUrls = async () => {
       const urlsMap: Record<number, string> = {};
-      await Promise.all(
+      // Issue #13: tolerância a falhas — uma foto com signed URL que
+      // falha (ex.: 400 Bad Request) não pode quebrar a galeria inteira.
+      // Promise.allSettled + fallback para placeholders.
+      const resultados = await Promise.allSettled(
         fotos.map(async (foto, index) => {
           // thumbPath preferido; cai no url para fotos legadas
           const path = foto.thumbPath ?? foto.url;
           if (!path.startsWith("http")) {
-            try {
-              const signedUrl = await obterSignedUrl(path);
-              urlsMap[index] = signedUrl;
-            } catch (error) {
-              console.error(`Erro ao carregar URL da foto ${index}:`, error);
-            }
-          } else {
-            urlsMap[index] = path;
+            const signedUrl = await obterSignedUrl(path);
+            return { index, url: signedUrl };
           }
+          return { index, url: path };
         })
       );
+      for (const r of resultados) {
+        if (r.status === "fulfilled") {
+          urlsMap[r.value.index] = r.value.url;
+        } else {
+          console.warn(
+            `[GaleriaFotos] Falha ao assinar URL, usando path cru: ${String(r.reason)}`
+          );
+        }
+      }
       setUrls(urlsMap);
     };
 
@@ -54,6 +61,7 @@ export default function GaleriaFotos({ fotos }: GaleriaFotosProps) {
               src={urls[index]}
               alt={`Status ${index + 1}`}
               className="w-full h-full object-cover"
+              loading="lazy"
               onError={(e) => {
                 (e.target as HTMLImageElement).style.display = "none";
               }}
