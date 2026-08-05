@@ -31,7 +31,10 @@ export class SupabaseUsuarioRepository implements UsuarioRepository {
   async buscarPorId(id: string): Promise<Usuario | null> {
     const { data, error } = await supabase
       .from("usuarios")
-      .select("*")
+      // Issue #15: select específico (8 colunas) em vez de `select("*")`
+      // que retornava `user_metadata`/`app_metadata` e outras colunas
+      // que o `Usuario` domain type não consome. Reduz payload ~70%.
+      .select("id,nome,email,permissao,ativo,criado_em,atualizado_em,criado_por")
       .eq("id", id)
       .single();
 

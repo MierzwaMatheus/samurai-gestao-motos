@@ -103,6 +103,9 @@ const setupPagedEntradas = ({
         fotos_status: fotosStatus,
       },
     ],
+    // Issue #16: `count: 42` no terminal simula o `content-range`
+    // header que o PostgREST devolve com `Prefer: count=exact`.
+    count: 42,
     error: null,
   });
 
@@ -154,14 +157,20 @@ beforeEach(() => {
 });
 
 describe("SupabaseEntradaRepository — paginação", () => {
-  it("aplica .range() + .order() + limit() na query de página e contagem exata head=true", async () => {
+  it("issue #15+#16: aplica select específico + .range() + .order() + limit() com count=exact inline", async () => {
     buildBucket();
-    const { entradasChain, countChain } = setupPagedEntradas();
+    const { entradasChain } = setupPagedEntradas();
 
     const pagina = await new SupabaseEntradaRepository().buscarPagina({
       page: 2,
       pageSize: 10,
     });
+
+    // Issue #15: select específico (não `select("*")`) — só 26 colunas
+    // que o mapper consome. Reduz payload ~30%.
+    expect(entradasChain.select).toHaveBeenCalledWith(
+      expect.stringContaining("id,tipo,cliente_id,moto_id")
+    );
 
     // Faixa da página 2 com pageSize 10: from=10, to=19
     expect(entradasChain.range).toHaveBeenCalledWith(10, 19);
@@ -172,12 +181,11 @@ describe("SupabaseEntradaRepository — paginação", () => {
     expect(entradasChain.order.mock.invocationCallOrder[0]).toBeLessThan(
       entradasChain.limit.mock.invocationCallOrder[0]
     );
-    expect(entradasChain.limit).toHaveBeenCalledWith(10);
 
-    // Query de contagem exata, sem corpo, apenas o count
-    expect(countChain.select).toHaveBeenCalledWith("*", {
+    // Issue #16: count=exact no SELECT principal via 2º arg do
+    // `.limit(pageSize, { count: "exact" })`. Sem HEAD count separado.
+    expect(entradasChain.limit).toHaveBeenCalledWith(10, {
       count: "exact",
-      head: true,
     });
 
     expect(pagina).toMatchObject({

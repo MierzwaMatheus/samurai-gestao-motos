@@ -6,6 +6,7 @@ import { Pagina } from "@/domain/interfaces/OrcamentoRepository";
 import { Entrada, Foto, MotoCompleta } from "@shared/types";
 import { supabase } from "@/infrastructure/supabase/client";
 import { SupabaseStorageApi } from "@/infrastructure/storage/SupabaseStorageApi";
+import { tiposServicoByIdsCached } from "@/infrastructure/repositories/tiposServicoCache";
 
 /**
  * Implementação do repositório de entradas usando Supabase
@@ -177,29 +178,35 @@ export class SupabaseEntradaRepository implements EntradaRepository {
     };
 
     const paginaBuilder = applyFilter(
-      supabase.from("entradas").select("*")
+      // Issue #15: select específico (26 colunas) em vez de `select("*")`
+      // que retornava `user_id` + dados de auditoria que o `mapToEntrada`
+      // e o `buscarPagina` mapper não consomem. Reduz payload ~30%.
+      //
+      // Issue #16: `Prefer: count=exact` no SELECT principal devolve
+      // o count no header `content-range` — economiza 1 round-trip
+      // por aba (antes era 1 SELECT + 1 HEAD count = 2 calls por aba).
+      supabase
+        .from("entradas")
+        .select(
+          "id,tipo,cliente_id,moto_id,endereco,cep,telefone,frete,valor_cobrado,descricao,observacoes,data_orcamento,data_entrada,data_entrega,data_conclusao,status,status_entrega,progresso,final_numero_quadro,os_assinada_url,forma_pagamento,status_pagamento,data_pagamento,tipo_preco,criado_em,atualizado_em,fotos_status"
+        )
     )
       .range(from, to)
       .order("criado_em", { ascending: false })
       .limit(pageSize);
 
-    const { data: entradas, error: entradasError } = await paginaBuilder;
+    const {
+      data: entradas,
+      error: entradasError,
+      count,
+    } = await paginaBuilder
+      // O segundo arg do `.limit(...)` é `Prefer: count=exact` — o
+      // PostgREST devolve o total no `content-range` sem precisar
+      // de um HEAD count separado.
+      .limit(pageSize, { count: "exact" });
 
     if (entradasError) {
       throw new Error(`Erro ao buscar entradas: ${entradasError.message}`);
-    }
-
-    // O count head precisa ser uma query separada, MAS passando as
-    // opções { count, head } no MESMO select() que recebe os filtros —
-    // chamar `select('*', { count: 'exact', head: true })` DEPOIS de
-    // `applyFilter(select('*'))` sobrescreve os filtros no cliente
-    // PostgREST, fazendo o count retornar 0/null em vez do total real.
-    const { count, error: countError } = await applyFilter(
-      supabase.from("entradas").select("*", { count: "exact", head: true })
-    );
-
-    if (countError) {
-      throw new Error(`Erro ao contar entradas: ${countError.message}`);
     }
 
     if (!entradas?.length) {
@@ -274,12 +281,13 @@ export class SupabaseEntradaRepository implements EntradaRepository {
         (vinculosResult.data || []).map((v: any) => v.tipo_servico_id)
       )
     );
-    const tiposResult = tipoServicoIds.length
-      ? await supabase
-          .from("tipos_servico")
-          .select("*")
-          .in("id", tipoServicoIds)
-      : { data: [], error: null };
+    // Issue #17: cache compartilhado de `tipos_servico` no escopo
+    // do módulo. Quando o `useMotosOficina` é instanciado 2 vezes
+    // (Em Andamento + Concluidos), cada `buscarPagina` chama este
+    // helper. IDs já cacheados são reusados sem nova query; só o
+    // delta (IDs novos) vai pro Supabase. Reduz 2 queries pra 1
+    // no primeiro load (a segunda aba reusa tipos já cacheados).
+    const tiposResult = await tiposServicoByIdsCached(tipoServicoIds);
 
     if (tiposResult.error) {
       throw new Error(
