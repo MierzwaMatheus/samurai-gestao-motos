@@ -193,17 +193,15 @@ export class SupabaseEntradaRepository implements EntradaRepository {
     )
       .range(from, to)
       .order("criado_em", { ascending: false })
-      .limit(pageSize);
-
-    const {
-      data: entradas,
-      error: entradasError,
-      count,
-    } = await paginaBuilder
-      // O segundo arg do `.limit(...)` é `Prefer: count=exact` — o
-      // PostgREST devolve o total no `content-range` sem precisar
-      // de um HEAD count separado.
+      // IMPORTANTE: `.limit(pageSize, { count: "exact" })` na mesma
+      // chain ANTES do `await`. Chamar `.limit()` DEPOIS do `await`
+      // cria uma nova query (sem range/order/filtros) — o count é
+      // perdido e a paginação quebra. Issue #16 corrigido depois
+      // de symptom observado em prod em 2026-08-06.
       .limit(pageSize, { count: "exact" });
+
+    const { data: entradas, error: entradasError, count } =
+      await paginaBuilder;
 
     if (entradasError) {
       throw new Error(`Erro ao buscar entradas: ${entradasError.message}`);
