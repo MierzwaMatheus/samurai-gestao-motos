@@ -566,24 +566,115 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
     for (const foto of fotos) {
       if (!fotosPorEntrada[foto.entrada_id]) fotosPorEntrada[foto.entrada_id] = foto;
     }
-    const fotosAssinadas = await Promise.all(
+    // Tolerância a falhas: Promise.allSettled garante que UMA foto com
+    // 400 (ex.: path com caractere especial) não derruba a página
+    // inteira do /orcamentos. A foto problemática fica com os 3 paths
+    // crus (em vez de signed URLs) — UI mostra ela como quebrada,
+    // mas as outras fotos renderizam normalmente.
+    //
+    // Issue #13 (lazy signing) não foi aplicado aqui ainda — o
+    // `buscarCompletosPorStatus` é chamado pela página de Orçamentos,
+    // e a foto principal (`OrcamentoCompleto.fotoMoto`) precisa de
+    // URL assinada pra renderizar. Migrar pra lazy signing requer
+    // mover o signing pra dentro do `Orcamentos.tsx` (no useEffect
+    // do componente) — fora do escopo deste fix.
+    const fotosAssinadas = await Promise.allSettled(
       Object.entries(fotosPorEntrada).map(async ([entradaId, raw]) => {
         const paths = raw as any;
-        const url = paths.url.startsWith("http") ? paths.url : await this.storageApi.obterUrlAssinada(paths.url);
-        const thumbPath = paths.thumb_path && !paths.thumb_path.startsWith("http") ? await this.storageApi.obterUrlAssinada(paths.thumb_path) : paths.thumb_path ?? null;
-        const fullPath = paths.full_path && !paths.full_path.startsWith("http") ? await this.storageApi.obterUrlAssinada(paths.full_path) : paths.full_path ?? null;
+        const signed = await this.assinar3Paths(paths);
         const foto: Foto = {
           id: paths.id ?? `${entradaId}-moto`,
           entradaId,
           tipo: "moto",
           criadoEm: paths.criado_em ? new Date(paths.criado_em) : new Date(0),
-          url,
-          thumbPath,
-          fullPath,
+          url: signed.url,
+          thumbPath: signed.thumbPath,
+          fullPath: signed.fullPath,
         };
         return [entradaId, foto] as const;
       })
     );
-    return Object.fromEntries(fotosAssinadas);
+    const resultado: Record<string, Foto> = {};
+    for (const r of fotosAssinadas) {
+      if (r.status === "fulfilled") {
+        const [entradaId, foto] = r.value;
+        resultado[entradaId] = foto;
+      } else {
+        // Fallback: usar paths crus quando a assinatura falhou
+        // Identifica qual entrada pelo contexto: percorremos de novo
+        // para extrair entrada_id do path original
+        const reason = String(r.reason);
+        console.warn(
+          `[SupabaseOrcamentoRepository] Falha ao assinar URL, usando path cru: ${reason}`
+        );
+        // Estratégia de fallback: percorre fotosPorEntrada e adiciona
+        // com paths crus. Como o índice é posicional, mapeamos pelo
+        // status de cada Promise.allSettled.
+        const entries = Object.entries(fotosPorEntrada);
+        for (let i = 0; i < entries.length; i++) {
+          if (i >= fotosAssinadas.length) break;
+          if (fotosAssinadas[i] === r) {
+            const [entradaId, raw] = entries[i];
+            resultado[entradaId] = {
+              id: raw.id ?? `${entradaId}-moto`,
+              entradaId,
+              tipo: "moto",
+              criadoEm: raw.criado_em ? new Date(raw.criado_em) : new Date(0),
+              url: raw.url,
+              thumbPath: raw.thumb_path ?? null,
+              fullPath: raw.full_path ?? null,
+            };
+          }
+        }
+      }
+    }
+    return resultado;
+  }
+
+  /**
+   * Assina os 3 paths de uma foto (url, thumb_path, full_path).
+   * URLs já completas (http) são mantidas como estão. Tolerante
+   * a falhas — se uma chamada rejeitar, retorna o path cru pro
+   * campo correspondente.
+   */
+  private async assinar3Paths(paths: any): Promise<{
+    url: string;
+    thumbPath: string | null;
+    fullPath: string | null;
+  }> {
+    const tryUrl = async () => {
+      if (paths.url.startsWith("http")) return paths.url;
+      try {
+        return await this.storageApi.obterUrlAssinada(paths.url);
+      } catch {
+        return paths.url;
+      }
+    };
+    const tryThumb = async () => {
+      if (!paths.thumb_path || paths.thumb_path.startsWith("http")) {
+        return paths.thumb_path ?? null;
+      }
+      try {
+        return await this.storageApi.obterUrlAssinada(paths.thumb_path);
+      } catch {
+        return paths.thumb_path ?? null;
+      }
+    };
+    const tryFull = async () => {
+      if (!paths.full_path || paths.full_path.startsWith("http")) {
+        return paths.full_path ?? null;
+      }
+      try {
+        return await this.storageApi.obterUrlAssinada(paths.full_path);
+      } catch {
+        return paths.full_path ?? null;
+      }
+    };
+    const [url, thumbPath, fullPath] = await Promise.all([
+      tryUrl(),
+      tryThumb(),
+      tryFull(),
+    ]);
+    return { url, thumbPath, fullPath };
   }
 }
