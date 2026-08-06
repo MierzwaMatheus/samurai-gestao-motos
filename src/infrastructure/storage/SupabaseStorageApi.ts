@@ -3,9 +3,13 @@ import {
   EspacoBucketInfo,
   ArquivoStorage,
   UploadFotoResult,
+  TipoFoto,
 } from "@/domain/interfaces/StorageApi";
 import { supabase } from "@/infrastructure/supabase/client";
-import { obterSignedUrl as obterSignedUrlCacheada } from "@/infrastructure/storage/urlCache";
+import {
+  obterSignedUrl as obterSignedUrlCacheada,
+  obterPublicUrl as obterPublicUrlCacheada,
+} from "@/infrastructure/storage/urlCache";
 import { consultarEspacoBucketCacheado } from "@/infrastructure/storage/espacoBucketCache";
 import { gerarVariantes } from "@/infrastructure/storage/imageVariants";
 import { sanitizeFilename } from "@/infrastructure/storage/filename";
@@ -144,20 +148,52 @@ export class SupabaseStorageApi implements StorageApi {
 
   /**
    * Obtém URL pública de uma foto
-   * Nota: Como o bucket é privado, precisamos usar signed URL ou tornar o bucket público
-   * Por enquanto, retornamos uma URL assinada válida por 1 hora
+   *
+   * Como o bucket `fotos` agora é público (migration 27), a
+   * `getPublicUrl` retorna a URL canônica do objeto. O resultado é
+   * cacheado indefinidamente até `_clearCache` explícito para reduzir
+   * chamadas repetidas.
    */
   obterUrlPublica(path: string): string {
-    // Para bucket privado, precisamos gerar signed URL
-    // Mas para simplificar, vamos retornar a URL direta
-    // Se o bucket for privado, precisará usar getSignedUrl
-    const { data } = supabase.storage.from(this.bucketName).getPublicUrl(path);
+    return obterPublicUrlCacheada(path);
+  }
 
-    return data.publicUrl;
+  /**
+   * Resolve a URL de acesso para uma foto a partir do seu path e
+   * tipo. Centraliza a decisão entre public URL (moto/status) e
+   * signed URL (documento) para que consumidores não precisem saber
+   * dos detalhes do Storage.
+   *
+   * - `moto` / `status`: o bucket é público, então retornamos a
+   *   public URL cacheada indefinidamente. URL pública não expira e
+   *   é servida diretamente, sem custo de gerar token.
+   * - `documento`: como pode conter dados sensíveis (CNH/CRLV),
+   *   retornamos uma signed URL com TTL de 1h. O TTL é gerenciado
+   *   pelo `urlCache` (deduplica chamadas e reaproveita antes de
+   *   expirar).
+   *
+   * @param path Caminho do arquivo no bucket (ex.: `user-id/.../moto/foto.jpg`)
+   * @param tipo Tipo da foto (`moto` | `status` | `documento`)
+   * @returns URL pronta para uso em `<img src>`, `Window.open`, etc.
+   */
+  async obterUrlParaFoto(
+    path: string,
+    tipo: TipoFoto
+  ): Promise<string> {
+    if (tipo === "documento") {
+      // Documento: signed URL com TTL 1h (gerenciado pelo urlCache).
+      return this.obterUrlAssinada(path, 3600);
+    }
+    // moto / status: public URL, cache infinito.
+    return this.obterUrlPublica(path);
   }
 
   /**
    * Obtém URL assinada (para bucket privado)
+   *
+   * Detalhe interno do `obterUrlParaFoto` para o caso `documento`.
+   * Continua exposto na interface pública para compatibilidade, mas
+   * novos consumidores devem preferir `obterUrlParaFoto`.
    *
    * Gera uma signed URL com `expiresIn` em segundos (default 1h).
    * Parâmetros de Image Transformations do Supabase **não** são

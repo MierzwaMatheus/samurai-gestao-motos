@@ -183,6 +183,128 @@ describe("SupabaseStorageApi.uploadFoto", () => {
   });
 });
 
+describe("SupabaseStorageApi.obterUrlParaFoto", () => {
+  /**
+   * Monta o duplo de teste do bucket com `getPublicUrl` e
+   * `createSignedUrl` separáveis. Para o teste de `obterUrlParaFoto`
+   * é essencial mockar as duas, porque o helper faz branch por tipo:
+   * `moto`/`status` → `getPublicUrl` (cache infinito);
+   * `documento` → `createSignedUrl` (TTL 1h).
+   */
+  const buildBucketComPublicUrl = (
+    overrides: {
+      publicUrl?: string;
+      signedUrl?: string;
+    } = {}
+  ) => {
+    const upload = vi.fn();
+    const createSignedUrl = vi.fn().mockResolvedValue({
+      data: { signedUrl: overrides.signedUrl ?? "https://signed.example/foto.jpg" },
+      error: null,
+    });
+    const getPublicUrl = vi.fn().mockReturnValue({
+      data: { publicUrl: overrides.publicUrl ?? "https://public.example/foto.jpg" },
+    });
+    mockedFrom.mockReturnValue({
+      upload,
+      createSignedUrl,
+      getPublicUrl,
+    } as never);
+
+    return { upload, createSignedUrl, getPublicUrl, api: new SupabaseStorageApi() };
+  };
+
+  it("retorna public URL (via getPublicUrl) para tipo 'moto'", async () => {
+    const { api, getPublicUrl, createSignedUrl } = buildBucketComPublicUrl();
+
+    const url = await api.obterUrlParaFoto("user/entrada/moto/foto.jpg", "moto");
+
+    expect(url).toBe("https://public.example/foto.jpg");
+    expect(getPublicUrl).toHaveBeenCalledWith("user/entrada/moto/foto.jpg");
+    expect(createSignedUrl).not.toHaveBeenCalled();
+  });
+
+  it("retorna public URL (via getPublicUrl) para tipo 'status'", async () => {
+    const { api, getPublicUrl, createSignedUrl } = buildBucketComPublicUrl();
+
+    const url = await api.obterUrlParaFoto(
+      "user/entrada/status/foto.jpg",
+      "status"
+    );
+
+    expect(url).toBe("https://public.example/foto.jpg");
+    expect(getPublicUrl).toHaveBeenCalledWith("user/entrada/status/foto.jpg");
+    expect(createSignedUrl).not.toHaveBeenCalled();
+  });
+
+  it("retorna signed URL (via createSignedUrl) para tipo 'documento'", async () => {
+    const { api, getPublicUrl, createSignedUrl } = buildBucketComPublicUrl();
+
+    const url = await api.obterUrlParaFoto(
+      "user/entrada/documento/cnh.jpg",
+      "documento"
+    );
+
+    expect(url).toBe("https://signed.example/foto.jpg");
+    expect(createSignedUrl).toHaveBeenCalledWith(
+      "user/entrada/documento/cnh.jpg",
+      3600
+    );
+    expect(getPublicUrl).not.toHaveBeenCalled();
+  });
+
+  it("retorna a mesma public URL em chamadas repetidas para o mesmo path (moto)", async () => {
+    // Stryker muta o branch por tipo. Sem esse teste, um mutante que
+    // sempre chama createSignedUrl sobrevive — moto passa a ser
+    // assinada e o TTL de 1h vaza.
+    const { api, getPublicUrl } = buildBucketComPublicUrl();
+
+    const url1 = await api.obterUrlParaFoto("user/e/moto/f.jpg", "moto");
+    const url2 = await api.obterUrlParaFoto("user/e/moto/f.jpg", "moto");
+
+    expect(url2).toBe(url1);
+    // Public URL é chamada **uma única vez** mesmo entre N chamadas
+    // (cache em memória até `_clearCache`).
+    expect(getPublicUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it("retorna a mesma public URL em chamadas repetidas para o mesmo path (status)", async () => {
+    const { api, getPublicUrl } = buildBucketComPublicUrl();
+
+    const url1 = await api.obterUrlParaFoto("user/e/status/f.jpg", "status");
+    const url2 = await api.obterUrlParaFoto("user/e/status/f.jpg", "status");
+
+    expect(url2).toBe(url1);
+    expect(getPublicUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it("ramifica corretamente: mesmo path com tipos diferentes — moto é public, documento é signed", async () => {
+    // Cobre o branch por tipo: o **mesmo path lógico** com tipo=moto
+    // precisa virar public URL, e tipo=documento precisa virar signed.
+    // Sem esse teste, o branching pode ser ignorado por um mutante.
+    const { api, getPublicUrl, createSignedUrl } = buildBucketComPublicUrl();
+
+    const urlMoto = await api.obterUrlParaFoto("user/e/path.jpg", "moto");
+    const urlDoc = await api.obterUrlParaFoto("user/e/path.jpg", "documento");
+
+    expect(urlMoto).toBe("https://public.example/foto.jpg");
+    expect(urlDoc).toBe("https://signed.example/foto.jpg");
+    expect(getPublicUrl).toHaveBeenCalledTimes(1);
+    expect(createSignedUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it("documento usa TTL de 1h (3600s) por padrão", async () => {
+    const { api, createSignedUrl } = buildBucketComPublicUrl();
+
+    await api.obterUrlParaFoto("user/e/documento/cnh.jpg", "documento");
+
+    expect(createSignedUrl).toHaveBeenCalledWith(
+      "user/e/documento/cnh.jpg",
+      3600
+    );
+  });
+});
+
 describe("SupabaseStorageApi.obterUrlAssinada", () => {
   it('gera a URL assinada no bucket "fotos"', async () => {
     const { api } = buildBucket();

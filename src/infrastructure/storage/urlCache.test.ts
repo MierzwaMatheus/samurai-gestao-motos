@@ -278,3 +278,133 @@ describe("urlCache", () => {
     });
   });
 });
+
+describe("urlCache — obterPublicUrl (ciclo 2: cache de public URL com TTL infinito)", () => {
+  // O cache de public URL é separado do cache de signed URL: TTL
+  // infinito (até `_clearCache`) e chave por path. Não usa
+  // `expiraEm` porque public URLs do Supabase Storage não expiram
+  // enquanto o bucket estiver público.
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const { _clearUrlCache } = await import("@/infrastructure/storage/urlCache");
+    _clearUrlCache();
+  });
+
+  const buildBucket = (publicUrl: string) => {
+    const getPublicUrl = vi.fn().mockReturnValue({
+      data: { publicUrl },
+    });
+    mockedFrom.mockReturnValue({ getPublicUrl } as never);
+    return { getPublicUrl };
+  };
+
+  it("retorna a public URL devolvida pelo Supabase", async () => {
+    buildBucket("https://public.example/foto.jpg");
+
+    const { obterPublicUrl } = await import("@/infrastructure/storage/urlCache");
+    const url = await obterPublicUrl("user/e/moto/foto.jpg");
+
+    expect(url).toBe("https://public.example/foto.jpg");
+  });
+
+  it("cacheia a public URL e não chama Supabase na 2ª vez", async () => {
+    const { getPublicUrl } = buildBucket("https://public.example/foto.jpg");
+
+    const { obterPublicUrl } = await import("@/infrastructure/storage/urlCache");
+    const url1 = await obterPublicUrl("user/e/moto/foto.jpg");
+    const url2 = await obterPublicUrl("user/e/moto/foto.jpg");
+
+    expect(url2).toBe(url1);
+    expect(getPublicUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it("chama getPublicUrl uma vez por path diferente", async () => {
+    const { getPublicUrl } = buildBucket("https://public.example/foto.jpg");
+
+    const { obterPublicUrl } = await import("@/infrastructure/storage/urlCache");
+    await obterPublicUrl("user/e/moto/1.jpg");
+    await obterPublicUrl("user/e/moto/2.jpg");
+    await obterPublicUrl("user/e/moto/1.jpg"); // repetido — usa cache
+
+    expect(getPublicUrl).toHaveBeenCalledTimes(2);
+  });
+
+  it("invoca getPublicUrl com o path correto", async () => {
+    const { getPublicUrl } = buildBucket("https://public.example/foto.jpg");
+
+    const { obterPublicUrl } = await import("@/infrastructure/storage/urlCache");
+    await obterPublicUrl("user/e/moto/path-especifico.jpg");
+
+    expect(getPublicUrl).toHaveBeenCalledWith("user/e/moto/path-especifico.jpg");
+  });
+
+  it("TTL infinito: mantém a entrada mesmo após tempo avançar além do TTL de signed URL", async () => {
+    // Public URLs não expiram — diferente do cache de signed URL que
+    // usa `expiresIn - MARGEM_SEGURANCA`. Avança o relógio bem além
+    // do que invalidaria uma entrada signed e a public URL
+    // permanece cacheada.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+
+    const { getPublicUrl } = buildBucket("https://public.example/foto.jpg");
+
+    const { obterPublicUrl } = await import("@/infrastructure/storage/urlCache");
+
+    await obterPublicUrl("user/e/moto/foto.jpg");
+    expect(getPublicUrl).toHaveBeenCalledTimes(1);
+
+    // Avança 1 ano — bem além de qualquer TTL.
+    vi.setSystemTime(new Date("2027-01-01T00:00:00Z"));
+    await obterPublicUrl("user/e/moto/foto.jpg");
+
+    expect(getPublicUrl).toHaveBeenCalledTimes(1);
+
+    vi.useRealTimers();
+  });
+
+  it("_clearCache invalida o cache de public URL", async () => {
+    const { getPublicUrl } = buildBucket("https://public.example/foto.jpg");
+
+    const { obterPublicUrl, _clearUrlCache } = await import("@/infrastructure/storage/urlCache");
+
+    await obterPublicUrl("user/e/moto/foto.jpg");
+    expect(getPublicUrl).toHaveBeenCalledTimes(1);
+
+    _clearUrlCache();
+
+    await obterPublicUrl("user/e/moto/foto.jpg");
+    expect(getPublicUrl).toHaveBeenCalledTimes(2);
+  });
+
+  it("_clearCache invalida AMBOS caches (signed e public) numa só chamada", async () => {
+    // Stryker muta o `_clearCache` para limpar só um dos dois maps.
+    // O teste abaixo mata o mutante exercitando ambos os caches antes
+    // do clear.
+    const createSignedUrl = vi.fn().mockResolvedValue({
+      data: { signedUrl: "https://signed.example/foto.jpg" },
+      error: null,
+    });
+    const getPublicUrl = vi.fn().mockReturnValue({
+      data: { publicUrl: "https://public.example/foto.jpg" },
+    });
+    mockedFrom.mockReturnValue({ createSignedUrl, getPublicUrl } as never);
+
+    const { obterSignedUrl, obterPublicUrl, _clearUrlCache } = await import(
+      "@/infrastructure/storage/urlCache"
+    );
+
+    await obterSignedUrl("user/e/moto/signed.jpg", 3600);
+    await obterPublicUrl("user/e/moto/public.jpg");
+    expect(createSignedUrl).toHaveBeenCalledTimes(1);
+    expect(getPublicUrl).toHaveBeenCalledTimes(1);
+
+    _clearUrlCache();
+
+    await obterSignedUrl("user/e/moto/signed.jpg", 3600);
+    await obterPublicUrl("user/e/moto/public.jpg");
+    // Ambos voltaram a chamar Supabase após o clear.
+    expect(createSignedUrl).toHaveBeenCalledTimes(2);
+    expect(getPublicUrl).toHaveBeenCalledTimes(2);
+  });
+});

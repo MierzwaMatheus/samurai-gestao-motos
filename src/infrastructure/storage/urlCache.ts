@@ -12,17 +12,24 @@ interface CacheEntry {
 }
 
 /**
- * Cache em memória para URLs assinadas do Supabase Storage.
+ * Cache em memória para URLs do Supabase Storage.
  *
- * Deduplica chamadas simultâneas para o mesmo path usando um cache de
- * promises — múltiplas requisições simultâneas compartilham uma única
- * chamada ao Supabase.
+ * Mantém dois caches distintos, um para cada categoria:
  *
- * Cada entrada expira após `expiresIn - MARGEM_SEGURANCA` ms.
+ * - `signedCache` (TTL): URLs assinadas (`createSignedUrl`). Expiram
+ *   após `expiresIn - MARGEM_SEGURANCA` ms. Deduplica chamadas
+ *   simultâneas para o mesmo path via cache de promises.
+ * - `publicCache` (infinito): URLs públicas (`getPublicUrl`). São
+ *   estáveis enquanto o bucket é público — cachear indefinidamente
+ *   reduz chamadas a `getPublicUrl` (que em algumas SDKs do Supabase
+ *   ainda dispara um HEAD interno).
+ *
+ * Os dois caches são limpos juntos por `_clearCache`.
  */
 class UrlCache {
-  private cache = new Map<string, CacheEntry>();
+  private signedCache = new Map<string, CacheEntry>();
   private pending = new Map<string, Promise<string>>();
+  private publicCache = new Map<string, string>();
 
   /**
    * Obtém URL assinada, usando cache se disponível e válido.
@@ -34,7 +41,7 @@ class UrlCache {
     const expiraEm = agora + (expiresIn * 1000) - MARGEM_SEGURANCA_MS;
 
     // Cache hit?
-    const entry = this.cache.get(path);
+    const entry = this.signedCache.get(path);
     if (entry && entry.expiraEm > agora) {
       return entry.url;
     }
@@ -56,7 +63,7 @@ class UrlCache {
         throw new Error(`Erro ao gerar URL assinada: ${error.message}`);
       }
 
-      this.cache.set(path, { url: data.signedUrl, expiraEm });
+      this.signedCache.set(path, { url: data.signedUrl, expiraEm });
       this.pending.delete(path);
       return data.signedUrl;
     })();
@@ -66,12 +73,33 @@ class UrlCache {
   }
 
   /**
+   * Obtém URL pública, cacheando indefinidamente até `_clearCache`.
+   *
+   * Public URLs do Supabase Storage são estáveis enquanto o bucket
+   * permanece público — não expiram. Cachear reduz o número de
+   * chamadas a `getPublicUrl` ao longo da sessão.
+   *
+   * @param path Caminho do arquivo no bucket
+   */
+  obterPublicUrl(path: string): string {
+    const cached = this.publicCache.get(path);
+    if (cached) {
+      return cached;
+    }
+
+    const { data } = supabase.storage.from("fotos").getPublicUrl(path);
+    this.publicCache.set(path, data.publicUrl);
+    return data.publicUrl;
+  }
+
+  /**
    * Força a expiração de todas as entradas do cache.
    * Usado apenas em testes.
    */
   _clearCache(): void {
-    this.cache.clear();
+    this.signedCache.clear();
     this.pending.clear();
+    this.publicCache.clear();
   }
 }
 
@@ -81,6 +109,9 @@ export const urlCache = new UrlCache();
 /** Alias para compatibilidade com a interface esperada pelos consumidores. */
 export const obterSignedUrl = (path: string, expiresIn: number = 3600) =>
   urlCache.obterSignedUrl(path, expiresIn);
+
+/** Obtém URL pública cacheada indefinidamente. */
+export const obterPublicUrl = (path: string) => urlCache.obterPublicUrl(path);
 
 /** Limpa o cache entre testes. Usar apenas em testes. */
 export const _clearUrlCache = () => urlCache._clearCache();

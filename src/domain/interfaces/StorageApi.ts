@@ -31,6 +31,12 @@ export interface StorageApi {
   ): Promise<UploadFotoResult>;
   deletarFoto(path: string): Promise<void>;
   obterUrlPublica(path: string): string;
+  /**
+   * Resolve a URL de acesso para uma foto a partir do seu path e
+   * tipo. Para `moto`/`status` usa public URL (cache infinito). Para
+   * `documento` usa signed URL com TTL 1h.
+   */
+  obterUrlParaFoto(path: string, tipo: TipoFoto): Promise<string>;
   obterUrlAssinada(path: string, expiresIn?: number): Promise<string>;
   consultarEspacoBucket(): Promise<EspacoBucketInfo>;
   listarArquivosPorPeriodo(
