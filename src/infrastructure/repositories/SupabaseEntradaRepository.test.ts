@@ -157,9 +157,19 @@ beforeEach(() => {
 });
 
 describe("SupabaseEntradaRepository — paginação", () => {
-  it("issue #15+#16: aplica select específico + .range() + .order() + limit() com count=exact inline", async () => {
+  it("issue #15: select específico + .range() + .order() + limit(); count head separado (issue #16 desfeito)", async () => {
+    // Issue #16 (REVERTIDO em prod 2026-08-06): tentei usar
+    // `.limit(pageSize, { count: "exact" })` mas o supabase-js
+    // (versão deployada) ignora silenciosamente o `count` no
+    // segundo arg do `.limit()` — o método só aceita `{foreignTable,
+    // referencedTable}`. Resultado: `Prefer: count=exact` nunca era
+    // enviado, PostgREST não devolvia `content-range`, parser
+    // retornava `null`, `total=0`, `hasMore=false`, paginação trava.
+    //
+    // Reverti pro count head separado. Mantém o ganho de payload
+    // do issue #15 (select específico).
     buildBucket();
-    const { entradasChain } = setupPagedEntradas();
+    const { entradasChain, countChain } = setupPagedEntradas();
 
     const pagina = await new SupabaseEntradaRepository().buscarPagina({
       page: 2,
@@ -177,15 +187,12 @@ describe("SupabaseEntradaRepository — paginação", () => {
     expect(entradasChain.order).toHaveBeenCalledWith("criado_em", {
       ascending: false,
     });
-    // .order() deve vir antes de .limit() para garantir a ordenação correta
-    expect(entradasChain.order.mock.invocationCallOrder[0]).toBeLessThan(
-      entradasChain.limit.mock.invocationCallOrder[0]
-    );
+    expect(entradasChain.limit).toHaveBeenCalledWith(10);
 
-    // Issue #16: count=exact no SELECT principal via 2º arg do
-    // `.limit(pageSize, { count: "exact" })`. Sem HEAD count separado.
-    expect(entradasChain.limit).toHaveBeenCalledWith(10, {
+    // Count head separado — funciona em qualquer versão do supabase-js.
+    expect(countChain.select).toHaveBeenCalledWith("*", {
       count: "exact",
+      head: true,
     });
 
     expect(pagina).toMatchObject({

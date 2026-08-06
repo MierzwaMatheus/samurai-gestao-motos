@@ -181,10 +181,6 @@ export class SupabaseEntradaRepository implements EntradaRepository {
       // Issue #15: select específico (26 colunas) em vez de `select("*")`
       // que retornava `user_id` + dados de auditoria que o `mapToEntrada`
       // e o `buscarPagina` mapper não consomem. Reduz payload ~30%.
-      //
-      // Issue #16: `Prefer: count=exact` no SELECT principal devolve
-      // o count no header `content-range` — economiza 1 round-trip
-      // por aba (antes era 1 SELECT + 1 HEAD count = 2 calls por aba).
       supabase
         .from("entradas")
         .select(
@@ -193,18 +189,28 @@ export class SupabaseEntradaRepository implements EntradaRepository {
     )
       .range(from, to)
       .order("criado_em", { ascending: false })
-      // IMPORTANTE: `.limit(pageSize, { count: "exact" })` na mesma
-      // chain ANTES do `await`. Chamar `.limit()` DEPOIS do `await`
-      // cria uma nova query (sem range/order/filtros) — o count é
-      // perdido e a paginação quebra. Issue #16 corrigido depois
-      // de symptom observado em prod em 2026-08-06.
-      .limit(pageSize, { count: "exact" });
+      .limit(pageSize);
 
-    const { data: entradas, error: entradasError, count } =
-      await paginaBuilder;
+    const { data: entradas, error: entradasError } = await paginaBuilder;
 
     if (entradasError) {
       throw new Error(`Erro ao buscar entradas: ${entradasError.message}`);
+    }
+
+    // O supabase-js NÃO suporta `.limit(n, { count: "exact" })` —
+    // ver deployado: `limit(t, {foreignTable, referencedTable}={})`
+    // ignora silenciosamente `count`. Por isso voltamos ao count
+    // head separado (issue #16 desfeito). Custa 1 round-trip extra
+    // por aba mas é a única opção enquanto o supabase-js não tiver
+    // `count: "exact"` nativo no `.limit()`.
+    const { count, error: countError } = await applyFilter(
+      supabase
+        .from("entradas")
+        .select("*", { count: "exact", head: true })
+    );
+
+    if (countError) {
+      throw new Error(`Erro ao contar entradas: ${countError.message}`);
     }
 
     if (!entradas?.length) {
