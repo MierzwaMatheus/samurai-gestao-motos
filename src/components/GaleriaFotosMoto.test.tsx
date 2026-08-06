@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, waitFor } from "@testing-library/react";
+import { render, waitFor, screen } from "@testing-library/react";
 
 import GaleriaFotosMoto from "@/components/GaleriaFotosMoto";
 import type { Foto } from "@shared/types";
@@ -329,5 +329,55 @@ describe("GaleriaFotosMoto — ciclo 3 (obterUrlParaFoto com public URL)", () =>
     expect(mensagens).toMatch(/same key|duplicate key/i);
 
     errorSpy.mockRestore();
+  });
+});
+
+describe("GaleriaFotosMoto — ciclo 4 (atributos de performance em <img>)", () => {
+  /**
+   * Ciclo 4 (issue #13): reduzir egress via lazy loading nativo. Os
+   * atributos `loading="lazy"` + `decoding="async"` adiam requests e
+   * decodificação para thumbs fora da viewport; `fetchpriority="high"`
+   * marca apenas o primeiro thumb (acima da fold).
+   *
+   * RED: hoje só `loading="lazy"` está setado — `decoding="async"` e
+   * `fetchpriority="high"` (no primeiro thumb) ainda faltam.
+   */
+  it("todas as <img> têm loading=lazy e decoding=async", async () => {
+    buildBucket();
+    const fotos: Foto[] = [
+      buildFoto({ id: "1", url: "u/m/1.jpg", thumbPath: "u/m/t1.jpg" }),
+      buildFoto({ id: "2", url: "u/m/2.jpg", thumbPath: "u/m/t2.jpg" }),
+      buildFoto({ id: "3", url: "u/m/3.jpg", thumbPath: "u/m/t3.jpg" }),
+    ];
+    render(<GaleriaFotosMoto fotos={fotos} />);
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("img")).toHaveLength(3);
+    });
+
+    const imgs = screen.getAllByRole("img");
+    imgs.forEach(img => {
+      expect(img).toHaveAttribute("loading", "lazy");
+      expect(img).toHaveAttribute("decoding", "async");
+    });
+  });
+
+  it("apenas o primeiro <img> recebe fetchpriority=high", async () => {
+    buildBucket();
+    const fotos: Foto[] = [
+      buildFoto({ id: "1", url: "u/m/1.jpg", thumbPath: "u/m/t1.jpg" }),
+      buildFoto({ id: "2", url: "u/m/2.jpg", thumbPath: "u/m/t2.jpg" }),
+      buildFoto({ id: "3", url: "u/m/3.jpg", thumbPath: "u/m/t3.jpg" }),
+    ];
+    render(<GaleriaFotosMoto fotos={fotos} />);
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("img")).toHaveLength(3);
+    });
+
+    const imgs = screen.getAllByRole("img");
+    expect(imgs[0]).toHaveAttribute("fetchpriority", "high");
+    expect(imgs[1]).not.toHaveAttribute("fetchpriority");
+    expect(imgs[2]).not.toHaveAttribute("fetchpriority");
   });
 });

@@ -91,6 +91,11 @@ export default function GaleriaFotosMoto({ fotos }: GaleriaFotosMotoProps) {
                 alt={`Foto da moto ${index + 1}`}
                 className="w-full h-full object-cover"
                 loading="lazy"
+                decoding="async"
+                // fetchpriority="high" apenas no primeiro thumb (acima da
+                // fold); os demais não setam o atributo (undefined → omitido).
+                // Issue #13 ciclo 4.
+                fetchPriority={index === 0 ? "high" : undefined}
                 onError={(e) => {
                   (e.target as HTMLImageElement).style.display = "none";
                 }}

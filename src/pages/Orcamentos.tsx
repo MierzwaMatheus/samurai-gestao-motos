@@ -303,6 +303,14 @@ export default function Orcamentos() {
                             src={orcamento.fotoMoto.thumbPath ?? orcamento.fotoMoto.url}
                             alt={orcamento.moto}
                             className="w-full h-full object-cover"
+                            loading="lazy"
+                            decoding="async"
+                            // fetchpriority="high" apenas no primeiro
+                            // card (acima da fold); demais omitidos.
+                            // Issue #13 ciclo 4.
+                            fetchPriority={
+                              orcamento === orcamentos[0] ? "high" : undefined
+                            }
                             onError={e => {
                               (e.target as HTMLImageElement).style.display =
                                 "none";

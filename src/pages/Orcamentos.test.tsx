@@ -472,3 +472,71 @@ describe("Orcamentos — ciclo 3 (URLs resolvidas pelo repo, página não chama 
     expect(() => render(<Orcamentos />)).not.toThrow();
   });
 });
+
+describe("Orcamentos — ciclo 4 (atributos de performance no <img> da fotoMoto)", () => {
+  /**
+   * Ciclo 4 (issue #13): o thumb da moto em cada card de orçamento
+   * também precisa de `loading="lazy"`, `decoding="async"` e
+   * `fetchpriority="high"` no primeiro card (acima da fold).
+   *
+   * RED: hoje o `<img>` da fotoMoto em Orcamentos.tsx não tem NENHUM
+   * desses atributos. Estes testes falham até a GREEN.
+   */
+  it("todas as <img> da fotoMoto têm loading=lazy e decoding=async", () => {
+    mockUseOrcamentos({
+      orcamentos: [
+        makeOrcamento("orc-1", {
+          url: "https://public.example/moto/full1.webp",
+          thumbPath: "https://public.example/moto/thumb1.webp",
+        }),
+        makeOrcamento("orc-2", {
+          url: "https://public.example/moto/full2.webp",
+          thumbPath: "https://public.example/moto/thumb2.webp",
+        }),
+        makeOrcamento("orc-3", {
+          url: "https://public.example/moto/full3.webp",
+          thumbPath: "https://public.example/moto/thumb3.webp",
+        }),
+      ],
+      total: 3,
+    });
+
+    render(<Orcamentos />);
+
+    const imgs = screen.getAllByRole("img");
+    expect(imgs.length).toBeGreaterThanOrEqual(3);
+    imgs.forEach(img => {
+      expect(img).toHaveAttribute("loading", "lazy");
+      expect(img).toHaveAttribute("decoding", "async");
+    });
+  });
+
+  it("apenas o primeiro <img> da fotoMoto recebe fetchpriority=high", () => {
+    mockUseOrcamentos({
+      orcamentos: [
+        makeOrcamento("orc-1", {
+          url: "https://public.example/moto/full1.webp",
+          thumbPath: "https://public.example/moto/thumb1.webp",
+        }),
+        makeOrcamento("orc-2", {
+          url: "https://public.example/moto/full2.webp",
+          thumbPath: "https://public.example/moto/thumb2.webp",
+        }),
+        makeOrcamento("orc-3", {
+          url: "https://public.example/moto/full3.webp",
+          thumbPath: "https://public.example/moto/thumb3.webp",
+        }),
+      ],
+      total: 3,
+    });
+
+    render(<Orcamentos />);
+
+    const imgs = screen.getAllByRole("img");
+    expect(imgs[0]).toHaveAttribute("fetchpriority", "high");
+    // Os demais NÃO devem ter fetchpriority (estes <img> ficam abaixo da fold)
+    for (let i = 1; i < imgs.length; i++) {
+      expect(imgs[i]).not.toHaveAttribute("fetchpriority");
+    }
+  });
+});

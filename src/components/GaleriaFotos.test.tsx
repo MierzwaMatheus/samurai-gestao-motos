@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, waitFor } from "@testing-library/react";
+import { render, waitFor, screen } from "@testing-library/react";
 
 import GaleriaFotos from "@/components/GaleriaFotos";
 import type { FotoStatus } from "@shared/types";
@@ -117,5 +117,56 @@ describe("GaleriaFotos — ciclo 3 (obterUrlParaFoto com public URL)", () => {
       expect(getPublicUrl).not.toHaveBeenCalled();
       expect(createSignedUrl).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("GaleriaFotos — ciclo 4 (atributos de performance em <img>)", () => {
+  /**
+   * Ciclo 4 (issue #13): reduzir egress do storage exige que o browser
+   * adie requests de thumbs fora da viewport. Os atributos nativos
+   * `loading="lazy"` e `decoding="async"` evitam bloquear o main thread;
+   * `fetchpriority="high"` é exclusivo do primeiro thumb (acima da fold).
+   *
+   * RED: hoje o componente só seta `loading="lazy"` — falta
+   * `decoding="async"` e `fetchpriority="high"` no primeiro thumb.
+   * Estes testes falham até a GREEN adicionar esses atributos.
+   */
+  it("todas as <img> têm loading=lazy e decoding=async", async () => {
+    buildBucket();
+    const fotos: FotoStatus[] = [
+      buildFoto({ url: "u/s/1.jpg", thumbPath: "u/s/t1.jpg" }),
+      buildFoto({ url: "u/s/2.jpg", thumbPath: "u/s/t2.jpg" }),
+      buildFoto({ url: "u/s/3.jpg", thumbPath: "u/s/t3.jpg" }),
+    ];
+    render(<GaleriaFotos fotos={fotos} />);
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("img")).toHaveLength(3);
+    });
+
+    const imgs = screen.getAllByRole("img");
+    imgs.forEach(img => {
+      expect(img).toHaveAttribute("loading", "lazy");
+      expect(img).toHaveAttribute("decoding", "async");
+    });
+  });
+
+  it("apenas o primeiro <img> recebe fetchpriority=high", async () => {
+    buildBucket();
+    const fotos: FotoStatus[] = [
+      buildFoto({ url: "u/s/1.jpg", thumbPath: "u/s/t1.jpg" }),
+      buildFoto({ url: "u/s/2.jpg", thumbPath: "u/s/t2.jpg" }),
+      buildFoto({ url: "u/s/3.jpg", thumbPath: "u/s/t3.jpg" }),
+    ];
+    render(<GaleriaFotos fotos={fotos} />);
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("img")).toHaveLength(3);
+    });
+
+    const imgs = screen.getAllByRole("img");
+    expect(imgs[0]).toHaveAttribute("fetchpriority", "high");
+    expect(imgs[1]).not.toHaveAttribute("fetchpriority");
+    expect(imgs[2]).not.toHaveAttribute("fetchpriority");
   });
 });
