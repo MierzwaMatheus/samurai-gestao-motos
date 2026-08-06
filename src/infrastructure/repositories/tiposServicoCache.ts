@@ -37,7 +37,6 @@ type TipoServicoRow = {
   quantidade_servicos: number | null;
   criado_em: string;
   atualizado_em: string;
-  valor: string | null;
 };
 
 class TiposServicoCache {
@@ -94,8 +93,12 @@ export async function tiposServicoByIdsCached(
 
   const { data, error } = await supabase
     .from("tipos_servico")
+    // Não inclui `valor` — a tabela `tipos_servico` NÃO tem essa coluna
+    // (só `preco_oficina` e `preco_particular`). O legacy `?? valor ??`
+    // no SupabaseTipoServicoRepository.mapToTipoServico era uma
+    // fallback para dados antigos exportados de outro lugar.
     .select(
-      "id,nome,preco_oficina,preco_particular,categoria,preco_oficina_com_oleo,preco_oficina_sem_oleo,preco_particular_com_oleo,preco_particular_sem_oleo,quantidade_servicos,criado_em,atualizado_em,valor"
+      "id,nome,preco_oficina,preco_particular,categoria,preco_oficina_com_oleo,preco_oficina_sem_oleo,preco_particular_com_oleo,preco_particular_sem_oleo,quantidade_servicos,criado_em,atualizado_em"
     )
     .in("id", missing);
 
