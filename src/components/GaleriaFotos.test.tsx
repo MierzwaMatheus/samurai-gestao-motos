@@ -120,6 +120,73 @@ describe("GaleriaFotos — ciclo 3 (obterUrlParaFoto com public URL)", () => {
   });
 });
 
+describe("GaleriaFotos — gate final (issue #13): robustez do resolver de URLs", () => {
+  /**
+   * Stryker sobrevivia em alguns mutantes CRÍTICOS do resolver de URLs
+   * da GaleriaFotos por testes não cobrirem todas as combinações:
+   *
+   *   L42 ConditionalExpression `if (r.status === "fulfilled")` —
+   *       branch do Promise.allSettled (rejeição vs sucesso).
+   *   L53 EqualityOperator `fotos.length > 0` — boundary com lista vazia.
+   *   L68 ArithmeticOperator `index + 1` no alt da imagem — referência
+   *       textual visível ao usuário.
+   *   L85 ConditionalExpression `urls[index]` (truthy vs falsy) —
+   *       carregando vs resolvido.
+   */
+
+  it("NÃO chama carregarUrls (Promise.allSettled) quando a lista de fotos é vazia", async () => {
+    // Mata o mutante ConditionalExpression `if (fotos.length > 0)`
+    // → `if (true)` (sempre tentaria resolver mesmo com lista vazia).
+    const { getPublicUrl } = buildBucket();
+    render(<GaleriaFotos fotos={[]} />);
+
+    // Aguarda ciclo do React para garantir que o useEffect rodou.
+    await new Promise(r => setTimeout(r, 50));
+
+    expect(getPublicUrl).not.toHaveBeenCalled();
+    expect(screen.queryAllByRole("img")).toHaveLength(0);
+  });
+
+  it("renderiza placeholder 'Carregando...' antes da URL resolver (urls[index] falsy)", async () => {
+    // Mata o mutante ConditionalExpression `urls[index] ? <img> : <Carregando>`
+    // → `if (false)` (nunca mostraria o placeholder).
+    // Não mockamos `getPublicUrl` para que a promise fique pendurada —
+    // assim `urls[index]` permanece undefined e o placeholder aparece.
+    mockedFrom.mockReturnValue({
+      getPublicUrl: vi.fn(() => new Promise(() => {})) as never,
+    } as never);
+
+    const fotos: FotoStatus[] = [
+      buildFoto({ url: "u/s/pendente.jpg", thumbPath: "u/s/t.jpg" }),
+    ];
+    render(<GaleriaFotos fotos={fotos} />);
+
+    expect(screen.getByText(/Carregando/i)).toBeInTheDocument();
+    expect(screen.queryByRole("img")).toBeNull();
+  });
+
+  it("renderiza contador de progresso (index + 1) corretamente para múltiplas fotos", async () => {
+    // Mata o mutante ALTO ArithmeticOperator `index + 1` → `index - 1`
+    // (mutação troca o `+` por `-` e o alt textual ficaria errado).
+    // O alt da foto índice 0 deve ser "Status 1", índice 1 = "Status 2" etc.
+    buildBucket();
+    const fotos: FotoStatus[] = [
+      buildFoto({ url: "u/s/1.jpg", thumbPath: "u/s/t1.jpg" }),
+      buildFoto({ url: "u/s/2.jpg", thumbPath: "u/s/t2.jpg" }),
+      buildFoto({ url: "u/s/3.jpg", thumbPath: "u/s/t3.jpg" }),
+    ];
+    render(<GaleriaFotos fotos={fotos} />);
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("img")).toHaveLength(3);
+    });
+
+    expect(screen.getByAltText("Status 1")).toBeInTheDocument();
+    expect(screen.getByAltText("Status 2")).toBeInTheDocument();
+    expect(screen.getByAltText("Status 3")).toBeInTheDocument();
+  });
+});
+
 describe("GaleriaFotos — ciclo 4 (atributos de performance em <img>)", () => {
   /**
    * Ciclo 4 (issue #13): reduzir egress do storage exige que o browser

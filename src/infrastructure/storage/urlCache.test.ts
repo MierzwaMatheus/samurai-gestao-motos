@@ -381,6 +381,9 @@ describe("urlCache — obterPublicUrl (ciclo 2: cache de public URL com TTL infi
     // Stryker muta o `_clearCache` para limpar só um dos dois maps.
     // O teste abaixo mata o mutante exercitando ambos os caches antes
     // do clear.
+    // Stryker muta o `_clearCache` para limpar só um dos dois maps.
+    // O teste abaixo mata o mutante exercitando ambos os caches antes
+    // do clear.
     const createSignedUrl = vi.fn().mockResolvedValue({
       data: { signedUrl: "https://signed.example/foto.jpg" },
       error: null,
@@ -406,5 +409,109 @@ describe("urlCache — obterPublicUrl (ciclo 2: cache de public URL com TTL infi
     // Ambos voltaram a chamar Supabase após o clear.
     expect(createSignedUrl).toHaveBeenCalledTimes(2);
     expect(getPublicUrl).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("urlCache — obterUrlParaFoto (helper central, ciclo 3: branching por tipo)", () => {
+  // Helper central que decide entre signed URL (documento) e public
+  // URL (moto/status). Stryker muta o `if (tipo === "documento")` para
+  // `if (true)`/`if (false)` — o que quebraria o branching e faria
+  // moto/status passarem por signed URL desnecessariamente (issue #13).
+  // Estes testes matam esse mutante.
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const { _clearUrlCache } = await import("@/infrastructure/storage/urlCache");
+    _clearUrlCache();
+  });
+
+  const buildBucket = () => {
+    const createSignedUrl = vi.fn(async (path: string) => ({
+      data: { signedUrl: `https://signed.example/${path}` },
+      error: null,
+    }));
+    const getPublicUrl = vi.fn((path: string) => ({
+      data: { publicUrl: `https://public.example/${path}` },
+    }));
+    mockedFrom.mockReturnValue({ createSignedUrl, getPublicUrl } as never);
+    return { createSignedUrl, getPublicUrl };
+  };
+
+  it("delega para obterPublicUrl (não createSignedUrl) quando tipo é 'moto'", async () => {
+    // Mata o mutante CRÍTICO ConditionalExpression `tipo === "documento"` → `true`
+    // (faria moto passar por signed URL — defeito de regressão da issue #13).
+    const { createSignedUrl, getPublicUrl } = buildBucket();
+
+    const { obterUrlParaFoto } = await import("@/infrastructure/storage/urlCache");
+    const url = await obterUrlParaFoto("user/e/moto/foto.jpg", "moto");
+
+    expect(url).toBe("https://public.example/user/e/moto/foto.jpg");
+    expect(getPublicUrl).toHaveBeenCalledTimes(1);
+    expect(createSignedUrl).not.toHaveBeenCalled();
+  });
+
+  it("delega para obterPublicUrl (não createSignedUrl) quando tipo é 'status'", async () => {
+    const { createSignedUrl, getPublicUrl } = buildBucket();
+
+    const { obterUrlParaFoto } = await import("@/infrastructure/storage/urlCache");
+    const url = await obterUrlParaFoto("user/e/status/foto.jpg", "status");
+
+    expect(url).toBe("https://public.example/user/e/status/foto.jpg");
+    expect(getPublicUrl).toHaveBeenCalledTimes(1);
+    expect(createSignedUrl).not.toHaveBeenCalled();
+  });
+
+  it("delega para obterSignedUrl (não getPublicUrl) quando tipo é 'documento'", async () => {
+    // Mata o mutante CRÍTICO ConditionalExpression `tipo === "documento"` → `false`
+    // (faria documento cair em public URL — vazaria CNH/CRLV sem auth).
+    const { createSignedUrl, getPublicUrl } = buildBucket();
+
+    const { obterUrlParaFoto } = await import("@/infrastructure/storage/urlCache");
+    const url = await obterUrlParaFoto("user/e/documento/cnh.pdf", "documento");
+
+    expect(url).toBe("https://signed.example/user/e/documento/cnh.pdf");
+    expect(createSignedUrl).toHaveBeenCalledTimes(1);
+    expect(createSignedUrl).toHaveBeenCalledWith(
+      "user/e/documento/cnh.pdf",
+      3600
+    );
+    expect(getPublicUrl).not.toHaveBeenCalled();
+  });
+
+  it("ramifica corretamente: mesmo path com tipos diferentes vai para endpoints diferentes", async () => {
+    // Mata o mutante CRÍTICO ConditionalExpression para o caso de tipos
+    // distintos com o MESMO path (cobre os dois ramos do `if`).
+    const { createSignedUrl, getPublicUrl } = buildBucket();
+
+    const { obterUrlParaFoto } = await import("@/infrastructure/storage/urlCache");
+    const urlMoto = await obterUrlParaFoto("user/e/compartilhado.jpg", "moto");
+    const urlDoc = await obterUrlParaFoto("user/e/compartilhado.jpg", "documento");
+
+    expect(urlMoto).toBe("https://public.example/user/e/compartilhado.jpg");
+    expect(urlDoc).toBe("https://signed.example/user/e/compartilhado.jpg");
+    expect(getPublicUrl).toHaveBeenCalledTimes(1);
+    expect(createSignedUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it("reutiliza a public URL cacheada entre chamadas (TTL infinito)", async () => {
+    const { getPublicUrl } = buildBucket();
+
+    const { obterUrlParaFoto } = await import("@/infrastructure/storage/urlCache");
+    const url1 = await obterUrlParaFoto("user/e/moto/foto.jpg", "moto");
+    const url2 = await obterUrlParaFoto("user/e/moto/foto.jpg", "moto");
+
+    expect(url2).toBe(url1);
+    expect(getPublicUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it("reutiliza a signed URL cacheada entre chamadas (TTL 1h com margem)", async () => {
+    const { createSignedUrl } = buildBucket();
+
+    const { obterUrlParaFoto } = await import("@/infrastructure/storage/urlCache");
+    const url1 = await obterUrlParaFoto("user/e/documento/cnh.pdf", "documento");
+    const url2 = await obterUrlParaFoto("user/e/documento/cnh.pdf", "documento");
+
+    expect(url2).toBe(url1);
+    expect(createSignedUrl).toHaveBeenCalledTimes(1);
   });
 });
