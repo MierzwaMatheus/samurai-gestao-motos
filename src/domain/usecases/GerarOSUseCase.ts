@@ -71,20 +71,22 @@ export class GerarOSUseCase {
       throw new Error("Cliente ou moto não encontrados");
     }
 
-    // Resolver URLs assinadas para fotos de status
+    // Resolver URLs para fotos de status
     const fotosStatusFinal = await Promise.all(
       (entrada.fotosStatus || []).map(async f => {
         // fullPath preferido (alta resolução) — cai no url para fotos
         // legadas sem a coluna `full_path` ou já com URL completa.
         const pathOriginal = f.fullPath ?? f.url;
         let url = pathOriginal;
-        // Se não for URL completa (http...), gera assinada
+        // Se não for URL completa (http...), resolve via helper.
+        // Ciclo 3: `obterUrlParaFoto(path, "status")` usa public URL
+        // (bucket público) — antes chamava `obterUrlAssinada` direto
+        // desnecessariamente para status photos.
         if (!url.startsWith("http")) {
-          // Tenta obter URL assinada. Se falhar, usa a original.
           try {
-            url = await this.storageApi.obterUrlAssinada(pathOriginal, 3600);
+            url = await this.storageApi.obterUrlParaFoto(pathOriginal, "status");
           } catch (e) {
-            console.error("Erro ao gerar URL assinada para foto status:", e);
+            console.error("Erro ao gerar URL para foto status:", e);
           }
         }
         return {

@@ -26,21 +26,31 @@ const mockedDbFrom = vi.mocked(supabase.from);
 const mockedStorageFrom = vi.mocked(supabase.storage.from);
 
 /**
- * Monta o mock do bucket de storage, expondo o spy de `createSignedUrl`.
- * Por padrão devolve uma URL fixa independente do path; pode-se
- * sobrescrever via `signedUrlFor` para devolver uma URL distinta por
- * path (usado nos testes do ciclo 3 para verificar que cada path
- * gera sua própria signed URL).
+ * Monta o mock do bucket de storage, expondo os spies de
+ * `createSignedUrl` e `getPublicUrl`. Por padrão devolve URLs fixas
+ * independentes do path; pode-se sobrescrever via `signedUrlFor` /
+ * `publicUrlFor` para devolver URLs distintas por path (usado nos
+ * testes do ciclo 3 para verificar que cada path gera sua própria
+ * URL e que o branching por tipo (moto/status → public,
+ * documento → signed) funciona corretamente).
  */
-const buildBucket = (signedUrlFor?: (path: string) => string) => {
+const buildBucket = (
+  signedUrlFor?: (path: string) => string,
+  publicUrlFor?: (path: string) => string
+) => {
   const createSignedUrl = vi.fn(async (path: string) => ({
     data: {
       signedUrl: signedUrlFor ? signedUrlFor(path) : "https://signed.example/foto.jpg",
     },
     error: null,
   }));
-  mockedStorageFrom.mockReturnValue({ createSignedUrl } as never);
-  return { createSignedUrl };
+  const getPublicUrl = vi.fn((path: string) => ({
+    data: {
+      publicUrl: publicUrlFor ? publicUrlFor(path) : "https://public.example/foto.jpg",
+    },
+  }));
+  mockedStorageFrom.mockReturnValue({ createSignedUrl, getPublicUrl } as never);
+  return { createSignedUrl, getPublicUrl };
 };
 
 /**
@@ -75,10 +85,17 @@ beforeEach(() => {
   _clearUrlCache();
 });
 
-describe("SupabaseFotoRepository — geração de signed URLs", () => {
+describe("SupabaseFotoRepository — resolução de URLs (ciclo 3: obterUrlParaFoto)", () => {
+  /**
+   * Após ciclo 3: o repositório usa `obterUrlParaFoto(path, tipo)` em
+   * vez de `obterUrlAssinada` direto. Para `moto`/`status` isso
+   * desce até `getPublicUrl` (cache infinito, sem `/sign/...`); para
+   * `documento` continua indo até `createSignedUrl` (TTL 1h).
+   */
+
   describe("buscarPorId", () => {
-    it("chama createSignedUrl com (path, 3600) quando a foto é tipo 'moto'", async () => {
-      const { createSignedUrl } = buildBucket();
+    it("chama getPublicUrl para moto (não createSignedUrl) — bucket público", async () => {
+      const { createSignedUrl, getPublicUrl } = buildBucket();
       const row = buildFotoRow({ tipo: "moto", url: "user/entrada/moto/x.jpg" });
 
       mockedDbFrom.mockReturnValueOnce({
@@ -91,15 +108,13 @@ describe("SupabaseFotoRepository — geração de signed URLs", () => {
 
       await new SupabaseFotoRepository().buscarPorId("foto-1");
 
-      expect(createSignedUrl).toHaveBeenCalledTimes(1);
-      expect(createSignedUrl).toHaveBeenCalledWith(
-        "user/entrada/moto/x.jpg",
-        3600
-      );
+      expect(getPublicUrl).toHaveBeenCalledTimes(1);
+      expect(getPublicUrl).toHaveBeenCalledWith("user/entrada/moto/x.jpg");
+      expect(createSignedUrl).not.toHaveBeenCalled();
     });
 
-    it("chama createSignedUrl com (path, 3600) quando a foto é tipo 'status'", async () => {
-      const { createSignedUrl } = buildBucket();
+    it("chama getPublicUrl para status (não createSignedUrl)", async () => {
+      const { createSignedUrl, getPublicUrl } = buildBucket();
       const row = buildFotoRow({
         tipo: "status",
         url: "user/entrada/status/x.jpg",
@@ -115,14 +130,12 @@ describe("SupabaseFotoRepository — geração de signed URLs", () => {
 
       await new SupabaseFotoRepository().buscarPorId("foto-1");
 
-      expect(createSignedUrl).toHaveBeenCalledWith(
-        "user/entrada/status/x.jpg",
-        3600
-      );
+      expect(getPublicUrl).toHaveBeenCalledWith("user/entrada/status/x.jpg");
+      expect(createSignedUrl).not.toHaveBeenCalled();
     });
 
     it("chama createSignedUrl com (path, 3600) quando a foto é tipo 'documento'", async () => {
-      const { createSignedUrl } = buildBucket();
+      const { createSignedUrl, getPublicUrl } = buildBucket();
       const row = buildFotoRow({
         tipo: "documento",
         url: "user/entrada/documento/x.jpg",
@@ -138,17 +151,18 @@ describe("SupabaseFotoRepository — geração de signed URLs", () => {
 
       await new SupabaseFotoRepository().buscarPorId("foto-1");
 
-      // Após a reversão: independentemente do tipo, a chamada ao Supabase
-      // é sempre `(path, 3600)` — sem 3º argumento de opções.
+      // Documento mantém signed URL (TTL 1h) — bucket público
+      // não se aplica a dados sensíveis (CNH/CRLV).
       expect(createSignedUrl).toHaveBeenCalledWith(
         "user/entrada/documento/x.jpg",
         3600
       );
       expect(createSignedUrl.mock.calls[0]).toHaveLength(2);
+      expect(getPublicUrl).not.toHaveBeenCalled();
     });
 
-    it("não chama createSignedUrl quando a URL já é completa (http)", async () => {
-      const { createSignedUrl } = buildBucket();
+    it("não chama createSignedUrl/getPublicUrl quando a URL já é completa (http)", async () => {
+      const { createSignedUrl, getPublicUrl } = buildBucket();
       const row = buildFotoRow({
         tipo: "moto",
         url: "https://already-signed.example/foto.jpg",
@@ -165,12 +179,13 @@ describe("SupabaseFotoRepository — geração de signed URLs", () => {
       await new SupabaseFotoRepository().buscarPorId("foto-1");
 
       expect(createSignedUrl).not.toHaveBeenCalled();
+      expect(getPublicUrl).not.toHaveBeenCalled();
     });
   });
 
   describe("buscarPorEntradaId", () => {
-    it("chama createSignedUrl com (path, 3600) para cada foto, independente do tipo", async () => {
-      const { createSignedUrl } = buildBucket();
+    it("branching por tipo: moto/status → getPublicUrl, documento → createSignedUrl", async () => {
+      const { createSignedUrl, getPublicUrl } = buildBucket();
       const rows = [
         buildFotoRow({
           id: "f-1",
@@ -201,23 +216,19 @@ describe("SupabaseFotoRepository — geração de signed URLs", () => {
 
       await new SupabaseFotoRepository().buscarPorEntradaId("entrada-1");
 
-      expect(createSignedUrl).toHaveBeenCalledTimes(3);
-      expect(createSignedUrl).toHaveBeenCalledWith(
-        "user/entrada/moto/x.jpg",
-        3600
-      );
-      expect(createSignedUrl).toHaveBeenCalledWith(
-        "user/entrada/status/x.jpg",
-        3600
-      );
+      // 2 chamadas a getPublicUrl (moto + status) + 1 a createSignedUrl (documento).
+      expect(getPublicUrl).toHaveBeenCalledTimes(2);
+      expect(getPublicUrl).toHaveBeenCalledWith("user/entrada/moto/x.jpg");
+      expect(getPublicUrl).toHaveBeenCalledWith("user/entrada/status/x.jpg");
+      expect(createSignedUrl).toHaveBeenCalledTimes(1);
       expect(createSignedUrl).toHaveBeenCalledWith(
         "user/entrada/documento/x.pdf",
         3600
       );
     });
 
-    it("não chama createSignedUrl para fotos cuja URL já é completa (http)", async () => {
-      const { createSignedUrl } = buildBucket();
+    it("não chama nada para fotos cuja URL já é completa (http)", async () => {
+      const { createSignedUrl, getPublicUrl } = buildBucket();
       const rows = [
         buildFotoRow({
           id: "f-1",
@@ -242,22 +253,21 @@ describe("SupabaseFotoRepository — geração de signed URLs", () => {
 
       await new SupabaseFotoRepository().buscarPorEntradaId("entrada-1");
 
-      expect(createSignedUrl).toHaveBeenCalledTimes(1);
-      expect(createSignedUrl).toHaveBeenCalledWith(
-        "user/entrada/moto/x.jpg",
-        3600
-      );
+      // Só a foto com path (moto/x.jpg) precisa resolver → 1 chamada public.
+      expect(getPublicUrl).toHaveBeenCalledTimes(1);
+      expect(getPublicUrl).toHaveBeenCalledWith("user/entrada/moto/x.jpg");
+      expect(createSignedUrl).not.toHaveBeenCalled();
     });
   });
 
   describe("buscarPorEntradaIdETipo", () => {
-    it("não chama createSignedUrl para fotos com URL já completa (http)", async () => {
+    it("não chama createSignedUrl/getPublicUrl para fotos com URL já completa (http)", async () => {
       // Mata os mutantes em src/infrastructure/repositories/SupabaseFotoRepository.ts:99
       // (ConditionalExpression `if (!foto.url.startsWith("http"))` → `true` e
       // MethodExpression `startsWith("http")` → `endsWith("http")`).
       // Sem este teste, o Stryker considera os mutantes sobreviventes porque
       // o caminho `buscarPorEntradaIdETipo` não tinha cobertura com URL completa.
-      const { createSignedUrl } = buildBucket();
+      const { createSignedUrl, getPublicUrl } = buildBucket();
       const rows = [
         buildFotoRow({
           id: "f-1",
@@ -285,8 +295,8 @@ describe("SupabaseFotoRepository — geração de signed URLs", () => {
       expect(createSignedUrl).not.toHaveBeenCalled();
     });
 
-    it("chama createSignedUrl com (path, 3600) para cada foto retornada", async () => {
-      const { createSignedUrl } = buildBucket();
+    it("chama getPublicUrl para cada foto retornada quando tipo é 'status'", async () => {
+      const { createSignedUrl, getPublicUrl } = buildBucket();
       const rows = [
         buildFotoRow({
           id: "f-1",
@@ -316,24 +326,19 @@ describe("SupabaseFotoRepository — geração de signed URLs", () => {
         "status"
       );
 
-      expect(createSignedUrl).toHaveBeenCalledTimes(2);
-      expect(createSignedUrl).toHaveBeenCalledWith(
-        "user/entrada/status/a.jpg",
-        3600
-      );
-      expect(createSignedUrl).toHaveBeenCalledWith(
-        "user/entrada/status/b.jpg",
-        3600
-      );
+      expect(getPublicUrl).toHaveBeenCalledTimes(2);
+      expect(getPublicUrl).toHaveBeenCalledWith("user/entrada/status/a.jpg");
+      expect(getPublicUrl).toHaveBeenCalledWith("user/entrada/status/b.jpg");
+      expect(createSignedUrl).not.toHaveBeenCalled();
     });
   });
 
-  describe("cache de signed URLs (delegação urlCache via SupabaseStorageApi)", () => {
+  describe("cache de URLs (delegação urlCache via SupabaseStorageApi)", () => {
     /**
-     * Verifica o encadeamento: SupabaseFotoRepository → SupabaseStorageApi.obterUrlAssinada
-     * (ciclo 2) → urlCache singleton (ciclo 1). Estes testes provam que o cache
-     * cobre os 3 pontos de uso no repositório (linhas 50, 73, 100) sem
-     * nenhuma duplicação desnecessária.
+     * Verifica o encadeamento: SupabaseFotoRepository → SupabaseStorageApi.obterUrlParaFoto
+     * (ciclo 3) → urlCache singleton (ciclo 1). Estes testes provam que o cache
+     * cobre os 3 pontos de uso no repositório sem nenhuma duplicação
+     * desnecessária.
      */
 
     /**
@@ -351,8 +356,8 @@ describe("SupabaseFotoRepository — geração de signed URLs", () => {
       } as never);
     };
 
-    it("chama createSignedUrl uma única vez quando o mesmo path é resolvido em duas buscas sequenciais", async () => {
-      const { createSignedUrl } = buildBucket();
+    it("chama getPublicUrl uma única vez quando o mesmo path é resolvido em duas buscas sequenciais", async () => {
+      const { getPublicUrl } = buildBucket();
       const sharedPath = "user/entrada/moto/shared.jpg";
       mockBuscarPorId(buildFotoRow({ url: sharedPath }));
       mockBuscarPorId(buildFotoRow({ url: sharedPath }));
@@ -361,12 +366,12 @@ describe("SupabaseFotoRepository — geração de signed URLs", () => {
       await repo.buscarPorId("foto-1");
       await repo.buscarPorId("foto-1");
 
-      expect(createSignedUrl).toHaveBeenCalledTimes(1);
-      expect(createSignedUrl).toHaveBeenCalledWith(sharedPath, 3600);
+      expect(getPublicUrl).toHaveBeenCalledTimes(1);
+      expect(getPublicUrl).toHaveBeenCalledWith(sharedPath);
     });
 
     it("deduplica chamadas paralelas para o mesmo path em buscarPorEntradaId", async () => {
-      const { createSignedUrl } = buildBucket();
+      const { getPublicUrl } = buildBucket();
       const sharedPath = "user/entrada/moto/dup.jpg";
       const rows = [
         buildFotoRow({ id: "f-1", url: sharedPath }),
@@ -388,11 +393,11 @@ describe("SupabaseFotoRepository — geração de signed URLs", () => {
       await new SupabaseFotoRepository().buscarPorEntradaId("entrada-1");
 
       // 2 rows com o mesmo path → cache deve deduplicar para 1 chamada
-      expect(createSignedUrl).toHaveBeenCalledTimes(1);
+      expect(getPublicUrl).toHaveBeenCalledTimes(1);
     });
 
-    it("chama createSignedUrl novamente para paths distintos (cache hit só para o mesmo path)", async () => {
-      const { createSignedUrl } = buildBucket();
+    it("chama getPublicUrl novamente para paths distintos (cache hit só para o mesmo path)", async () => {
+      const { getPublicUrl } = buildBucket();
       mockBuscarPorId(buildFotoRow({ url: "user/entrada/moto/a.jpg" }));
       mockBuscarPorId(buildFotoRow({ url: "user/entrada/moto/b.jpg" }));
 
@@ -400,15 +405,9 @@ describe("SupabaseFotoRepository — geração de signed URLs", () => {
       await repo.buscarPorId("foto-1");
       await repo.buscarPorId("foto-2");
 
-      expect(createSignedUrl).toHaveBeenCalledTimes(2);
-      expect(createSignedUrl).toHaveBeenCalledWith(
-        "user/entrada/moto/a.jpg",
-        3600
-      );
-      expect(createSignedUrl).toHaveBeenCalledWith(
-        "user/entrada/moto/b.jpg",
-        3600
-      );
+      expect(getPublicUrl).toHaveBeenCalledTimes(2);
+      expect(getPublicUrl).toHaveBeenCalledWith("user/entrada/moto/a.jpg");
+      expect(getPublicUrl).toHaveBeenCalledWith("user/entrada/moto/b.jpg");
     });
   });
 });
@@ -498,8 +497,12 @@ describe("SupabaseFotoRepository — persistência e mapeamento de thumbPath/ful
   });
 
   describe("buscarPorId — mapeamento thumbPath/fullPath", () => {
-    it("mapeia thumb_path e full_path para Foto.thumbPath e Foto.fullPath (com signed URLs distintas)", async () => {
-      buildBucket(path => `https://signed.example/${path}`);
+    it("mapeia thumb_path e full_path para Foto.thumbPath e Foto.fullPath (com public URLs distintas) — moto", async () => {
+      // Após ciclo 3: moto usa public URL (bucket público).
+      buildBucket(
+        undefined,
+        path => `https://public.example/${path}`
+      );
       const row = buildFotoRow({
         thumb_path: "user/.../thumb.webp",
         full_path: "user/.../full.webp",
@@ -516,12 +519,12 @@ describe("SupabaseFotoRepository — persistência e mapeamento de thumbPath/ful
       const foto = await new SupabaseFotoRepository().buscarPorId("foto-1");
 
       expect(foto).not.toBeNull();
-      expect(foto!.thumbPath).toBe("https://signed.example/user/.../thumb.webp");
-      expect(foto!.fullPath).toBe("https://signed.example/user/.../full.webp");
+      expect(foto!.thumbPath).toBe("https://public.example/user/.../thumb.webp");
+      expect(foto!.fullPath).toBe("https://public.example/user/.../full.webp");
     });
 
-    it("cai no signed URL para thumbPath e fullPath em foto legada (thumb_path/full_path null)", async () => {
-      const { createSignedUrl } = buildBucket();
+    it("cai na public URL para thumbPath e fullPath em foto legada (thumb_path/full_path null)", async () => {
+      const { getPublicUrl } = buildBucket();
       const row = buildFotoRow({
         url: "user/.../legacy.jpg",
         thumb_path: null,
@@ -538,14 +541,14 @@ describe("SupabaseFotoRepository — persistência e mapeamento de thumbPath/ful
 
       const foto = await new SupabaseFotoRepository().buscarPorId("foto-1");
 
-      // O thumb/full legado aponta para o MESMO signed URL do url.
-      expect(createSignedUrl).toHaveBeenCalledTimes(1);
-      expect(foto!.thumbPath).toBe("https://signed.example/foto.jpg");
-      expect(foto!.fullPath).toBe("https://signed.example/foto.jpg");
+      // O thumb/full legado aponta para a MESMA public URL do url.
+      expect(getPublicUrl).toHaveBeenCalledTimes(1);
+      expect(foto!.thumbPath).toBe("https://public.example/foto.jpg");
+      expect(foto!.fullPath).toBe("https://public.example/foto.jpg");
     });
 
-    it("solicita signed URL também para thumb_path e full_path quando são paths (não http)", async () => {
-      const { createSignedUrl } = buildBucket();
+    it("solicita public URL também para thumb_path e full_path quando são paths (não http)", async () => {
+      const { getPublicUrl } = buildBucket();
       const row = buildFotoRow({
         thumb_path: "user/.../thumb.webp",
         full_path: "user/.../full.webp",
@@ -561,35 +564,31 @@ describe("SupabaseFotoRepository — persistência e mapeamento de thumbPath/ful
 
       await new SupabaseFotoRepository().buscarPorId("foto-1");
 
-      // Chamadas separadas para cada path distinto (url + thumb_path + full_path).
-      expect(createSignedUrl).toHaveBeenCalledTimes(3);
-      expect(createSignedUrl).toHaveBeenCalledWith(
-        "user/entrada/moto/foto.jpg",
-        3600
-      );
-      expect(createSignedUrl).toHaveBeenCalledWith(
-        "user/.../thumb.webp",
-        3600
-      );
-      expect(createSignedUrl).toHaveBeenCalledWith(
-        "user/.../full.webp",
-        3600
-      );
+      // 3 chamadas public: url + thumb_path + full_path.
+      expect(getPublicUrl).toHaveBeenCalledTimes(3);
+      expect(getPublicUrl).toHaveBeenCalledWith("user/entrada/moto/foto.jpg");
+      expect(getPublicUrl).toHaveBeenCalledWith("user/.../thumb.webp");
+      expect(getPublicUrl).toHaveBeenCalledWith("user/.../full.webp");
     });
   });
 
   describe("buscarPorEntradaId — mapeamento thumbPath/fullPath", () => {
-    it("mapeia thumb_path/full_path para cada foto retornada", async () => {
-      buildBucket(path => `https://signed.example/${path}`);
+    it("mapeia thumb_path/full_path para cada foto retornada (moto → public URLs)", async () => {
+      buildBucket(
+        undefined,
+        path => `https://public.example/${path}`
+      );
       const rows = [
         buildFotoRow({
           id: "f-1",
+          tipo: "moto",
           url: "user/entrada/moto/a.jpg",
           thumb_path: "user/.../t1.webp",
           full_path: "user/.../p1.webp",
         }),
         buildFotoRow({
           id: "f-2",
+          tipo: "moto",
           url: "user/entrada/moto/legacy.jpg",
           thumb_path: null,
           full_path: null,
@@ -610,27 +609,27 @@ describe("SupabaseFotoRepository — persistência e mapeamento de thumbPath/ful
       );
 
       expect(fotos).toHaveLength(2);
-      expect(fotos[0].thumbPath).toBe("https://signed.example/user/.../t1.webp");
-      expect(fotos[0].fullPath).toBe("https://signed.example/user/.../p1.webp");
-      // Foto legada: thumb e full caem no signed URL do url.
-      expect(fotos[1].thumbPath).toBe("https://signed.example/user/entrada/moto/legacy.jpg");
-      expect(fotos[1].fullPath).toBe("https://signed.example/user/entrada/moto/legacy.jpg");
+      expect(fotos[0].thumbPath).toBe("https://public.example/user/.../t1.webp");
+      expect(fotos[0].fullPath).toBe("https://public.example/user/.../p1.webp");
+      // Foto legada: thumb e full caem na public URL do url.
+      expect(fotos[1].thumbPath).toBe("https://public.example/user/entrada/moto/legacy.jpg");
+      expect(fotos[1].fullPath).toBe("https://public.example/user/entrada/moto/legacy.jpg");
     });
   });
 
   describe("buscarPorId — paths já completos (http) em thumbPath/fullPath", () => {
-    it("não chama createSignedUrl para thumbPath que já é URL completa (http)", async () => {
+    it("não chama getPublicUrl para thumbPath que já é URL completa (http)", async () => {
       // Mata os mutantes em src/infrastructure/repositories/SupabaseFotoRepository.ts:139
       // (ConditionalExpression `if (path.startsWith("http"))` → `if (false)` e
       // MethodExpression `startsWith("http")` → `endsWith("http")`).
       // Sem este teste, ambos os mutantes sobrevivem porque o caminho com
       // URL completa só era exercitado para o `url` (não para
       // thumbPath/fullPath).
-      const { createSignedUrl } = buildBucket();
+      const { getPublicUrl } = buildBucket();
       const row = buildFotoRow({
         url: "user/.../legacy.jpg",
-        thumb_path: "https://already-signed.example/thumb.jpg",
-        full_path: "https://already-signed.example/full.jpg",
+        thumb_path: "https://already-public.example/thumb.jpg",
+        full_path: "https://already-public.example/full.jpg",
       });
 
       mockedDbFrom.mockReturnValueOnce({
@@ -643,22 +642,22 @@ describe("SupabaseFotoRepository — persistência e mapeamento de thumbPath/ful
 
       const foto = await new SupabaseFotoRepository().buscarPorId("foto-1");
 
-      // Só o `url` (path cru) é assinado; thumb_path/full_path já são
-      // URLs completas e voltam intactas.
-      expect(createSignedUrl).toHaveBeenCalledTimes(1);
-      expect(createSignedUrl).toHaveBeenCalledWith("user/.../legacy.jpg", 3600);
+      // Só o `url` (path cru) é resolvido via public URL; thumb_path/
+      // full_path já são URLs completas e voltam intactas.
+      expect(getPublicUrl).toHaveBeenCalledTimes(1);
+      expect(getPublicUrl).toHaveBeenCalledWith("user/.../legacy.jpg");
       expect(foto).not.toBeNull();
-      expect(foto!.thumbPath).toBe("https://already-signed.example/thumb.jpg");
-      expect(foto!.fullPath).toBe("https://already-signed.example/full.jpg");
+      expect(foto!.thumbPath).toBe("https://already-public.example/thumb.jpg");
+      expect(foto!.fullPath).toBe("https://already-public.example/full.jpg");
     });
 
-    it("não chama createSignedUrl para thumbPath que termina com http (anti endsWith)", async () => {
+    it("não chama getPublicUrl para thumbPath que termina com http (anti endsWith)", async () => {
       // Mata o mutante `startsWith("http")` → `endsWith("http")`:
       // um path cru como "user/.../xhttp" terminaria com "http" e o
-      // mutante o devolveria intacto (skipando a assinatura).
+      // mutante o devolveria intacto (skipando a resolução).
       // O original `startsWith("http")` exige que o path COMECE com
-      // "http" — então assina normalmente.
-      const { createSignedUrl } = buildBucket();
+      // "http" — então resolve normalmente.
+      const { getPublicUrl } = buildBucket();
       const row = buildFotoRow({
         url: "user/.../outro.jpg",
         thumb_path: "user/.../thumbxhttp", // termina com "http" mas não começa
@@ -675,26 +674,23 @@ describe("SupabaseFotoRepository — persistência e mapeamento de thumbPath/ful
 
       const foto = await new SupabaseFotoRepository().buscarPorId("foto-1");
 
-      // O `url` + os 2 paths devem ser assinados (3 chamadas) — nenhum
+      // O `url` + os 2 paths devem ser resolvidos (3 chamadas) — nenhum
       // começa com "http", então o original trata todos como paths crus.
       // Com o mutante `endsWith`, os dois paths terminam com "http" e
       // seriam devolvidos intactos (apenas 1 chamada para `url`).
-      expect(createSignedUrl).toHaveBeenCalledTimes(3);
-      expect(createSignedUrl).toHaveBeenCalledWith(
-        "user/.../thumbxhttp",
-        3600
-      );
-      expect(createSignedUrl).toHaveBeenCalledWith(
-        "user/.../fullxhttp",
-        3600
-      );
+      expect(getPublicUrl).toHaveBeenCalledTimes(3);
+      expect(getPublicUrl).toHaveBeenCalledWith("user/.../thumbxhttp");
+      expect(getPublicUrl).toHaveBeenCalledWith("user/.../fullxhttp");
       expect(foto).not.toBeNull();
     });
   });
 
   describe("buscarPorEntradaIdETipo — mapeamento thumbPath/fullPath", () => {
-    it("mapeia thumb_path/full_path para cada foto retornada", async () => {
-      buildBucket(path => `https://signed.example/${path}`);
+    it("mapeia thumb_path/full_path para cada foto retornada (status → public URLs)", async () => {
+      buildBucket(
+        undefined,
+        path => `https://public.example/${path}`
+      );
       const rows = [
         buildFotoRow({
           id: "f-1",
@@ -729,10 +725,10 @@ describe("SupabaseFotoRepository — persistência e mapeamento de thumbPath/ful
       );
 
       expect(fotos).toHaveLength(2);
-      expect(fotos[0].thumbPath).toBe("https://signed.example/user/.../t1.webp");
-      expect(fotos[0].fullPath).toBe("https://signed.example/user/.../p1.webp");
-      expect(fotos[1].thumbPath).toBe("https://signed.example/user/entrada/status/legacy.jpg");
-      expect(fotos[1].fullPath).toBe("https://signed.example/user/entrada/status/legacy.jpg");
+      expect(fotos[0].thumbPath).toBe("https://public.example/user/.../t1.webp");
+      expect(fotos[0].fullPath).toBe("https://public.example/user/.../p1.webp");
+      expect(fotos[1].thumbPath).toBe("https://public.example/user/entrada/status/legacy.jpg");
+      expect(fotos[1].fullPath).toBe("https://public.example/user/entrada/status/legacy.jpg");
     });
   });
 });

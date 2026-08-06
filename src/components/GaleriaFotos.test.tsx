@@ -5,7 +5,8 @@ import GaleriaFotos from "@/components/GaleriaFotos";
 import type { FotoStatus } from "@shared/types";
 
 // Mock do cliente Supabase: precisamos controlar o retorno de
-// `storage.from("fotos")` para observar os argumentos de `createSignedUrl`.
+// `storage.from("fotos")` para observar os argumentos de `getPublicUrl`
+// (ciclo 3: status usa public URL via `obterUrlParaFoto`).
 vi.mock("@/infrastructure/supabase/client", () => {
   const from = vi.fn();
   return {
@@ -22,18 +23,21 @@ import { _clearUrlCache } from "@/infrastructure/storage/urlCache";
 const mockedFrom = vi.mocked(supabase.storage.from);
 
 /**
- * Monta o duplo de teste do bucket. Retorna o spy de `createSignedUrl` para
- * que cada teste observe exatamente os argumentos recebidos.
+ * Monta o duplo de teste do bucket, expondo os spies de `getPublicUrl`
+ * (moto/status → public) e `createSignedUrl` (documento → signed).
  */
 const buildBucket = () => {
   const createSignedUrl = vi.fn().mockResolvedValue({
     data: { signedUrl: "https://signed.example/thumb.jpg" },
     error: null,
   });
+  const getPublicUrl = vi.fn((path: string) => ({
+    data: { publicUrl: `https://public.example/${path}` },
+  }));
 
-  mockedFrom.mockReturnValue({ createSignedUrl } as never);
+  mockedFrom.mockReturnValue({ createSignedUrl, getPublicUrl } as never);
 
-  return { createSignedUrl };
+  return { createSignedUrl, getPublicUrl };
 };
 
 /**
@@ -58,9 +62,9 @@ beforeEach(() => {
   _clearUrlCache();
 });
 
-describe("GaleriaFotos", () => {
-  it("chama createSignedUrl com (thumbPath, 3600) quando thumbPath existe", async () => {
-    const { createSignedUrl } = buildBucket();
+describe("GaleriaFotos — ciclo 3 (obterUrlParaFoto com public URL)", () => {
+  it("chama getPublicUrl(thumbPath) quando thumbPath existe — status usa bucket público", async () => {
+    const { createSignedUrl, getPublicUrl } = buildBucket();
 
     const fotos: FotoStatus[] = [
       buildFoto({
@@ -71,19 +75,16 @@ describe("GaleriaFotos", () => {
     render(<GaleriaFotos fotos={fotos} />);
 
     await waitFor(() => {
-      expect(createSignedUrl).toHaveBeenCalledTimes(1);
+      expect(getPublicUrl).toHaveBeenCalledTimes(1);
     });
 
-    expect(createSignedUrl).toHaveBeenCalledWith(
-      "user/entrada/status/thumb.jpg",
-      3600
-    );
-    expect(createSignedUrl.mock.calls[0]).toHaveLength(2);
+    expect(getPublicUrl).toHaveBeenCalledWith("user/entrada/status/thumb.jpg");
+    expect(createSignedUrl).not.toHaveBeenCalled();
   });
 
-  it("cai no url (signed) quando thumbPath é null — fallback para fotos legadas", async () => {
+  it("cai no url (public URL) quando thumbPath é null — fallback para fotos legadas", async () => {
     // Cobre o ramo CRÍTICO do `thumbPath ?? url` quando thumbPath é null.
-    const { createSignedUrl } = buildBucket();
+    const { createSignedUrl, getPublicUrl } = buildBucket();
 
     const fotos: FotoStatus[] = [
       buildFoto({
@@ -94,27 +95,26 @@ describe("GaleriaFotos", () => {
     render(<GaleriaFotos fotos={fotos} />);
 
     await waitFor(() => {
-      expect(createSignedUrl).toHaveBeenCalledTimes(1);
+      expect(getPublicUrl).toHaveBeenCalledTimes(1);
     });
 
-    expect(createSignedUrl).toHaveBeenCalledWith(
-      "user/entrada/status/legada.jpg",
-      3600
-    );
+    expect(getPublicUrl).toHaveBeenCalledWith("user/entrada/status/legada.jpg");
+    expect(createSignedUrl).not.toHaveBeenCalled();
   });
 
-  it("não chama createSignedUrl quando thumbPath é uma URL completa (já assinada)", async () => {
-    const { createSignedUrl } = buildBucket();
+  it("não chama getPublicUrl/createSignedUrl quando thumbPath é uma URL completa (já resolvida)", async () => {
+    const { createSignedUrl, getPublicUrl } = buildBucket();
 
     const fotos: FotoStatus[] = [
       buildFoto({
         url: "user/entrada/status/full.jpg",
-        thumbPath: "https://already-signed.example/thumb.jpg",
+        thumbPath: "https://already-public.example/thumb.jpg",
       }),
     ];
     render(<GaleriaFotos fotos={fotos} />);
 
     await waitFor(() => {
+      expect(getPublicUrl).not.toHaveBeenCalled();
       expect(createSignedUrl).not.toHaveBeenCalled();
     });
   });

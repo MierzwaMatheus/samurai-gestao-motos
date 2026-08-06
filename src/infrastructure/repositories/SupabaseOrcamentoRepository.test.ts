@@ -28,16 +28,26 @@ const mockedStorageFrom = vi.mocked(supabase.storage.from);
 const mockedRpc = vi.mocked(supabase.rpc);
 
 /**
- * Monta o duplo de teste do bucket de storage, expondo o spy de
- * `createSignedUrl` para observarmos os argumentos recebidos.
+ * Monta o duplo de teste do bucket de storage, expondo os spies de
+ * `createSignedUrl` e `getPublicUrl`. Por padrão devolve URLs fixas
+ * independentes do path; pode-se sobrescrever via `signedUrlFor` /
+ * `publicUrlFor` para devolver URLs distintas por path.
  */
-const buildBucket = () => {
-  const createSignedUrl = vi.fn().mockResolvedValue({
-    data: { signedUrl: "https://signed.example/moto.jpg" },
+const buildBucket = (
+  signedUrlFor?: (path: string) => string,
+  publicUrlFor?: (path: string) => string
+) => {
+  const createSignedUrl = vi.fn().mockImplementation(async (path: string) => ({
+    data: { signedUrl: signedUrlFor ? signedUrlFor(path) : "https://signed.example/moto.jpg" },
     error: null,
-  });
-  mockedStorageFrom.mockReturnValue({ createSignedUrl } as never);
-  return { createSignedUrl };
+  }));
+  const getPublicUrl = vi.fn((path: string) => ({
+    data: {
+      publicUrl: publicUrlFor ? publicUrlFor(path) : "https://public.example/moto.jpg",
+    },
+  }));
+  mockedStorageFrom.mockReturnValue({ createSignedUrl, getPublicUrl } as never);
+  return { createSignedUrl, getPublicUrl };
 };
 
 /**
@@ -267,10 +277,15 @@ describe("SupabaseOrcamentoRepository — paginação", () => {
   });
 });
 
-describe("SupabaseOrcamentoRepository — geração de signed URLs", () => {
+describe("SupabaseOrcamentoRepository — resolução de URLs (ciclo 3: obterUrlParaFoto)", () => {
+  /**
+   * Após ciclo 3: a query filtra `tipo = "moto"`, então o helper
+   * retorna public URL (cache infinito) — não chama mais
+   * `createSignedUrl` para o caminho eager-signing da foto da moto.
+   */
   describe("buscarCompletosPorStatus", () => {
-    it("chama createSignedUrl com (path, 3600) na listagem (query de fotos filtra tipo=moto)", async () => {
-      const { createSignedUrl } = buildBucket();
+    it("chama getPublicUrl na listagem (query de fotos filtra tipo=moto → bucket público)", async () => {
+      const { createSignedUrl, getPublicUrl } = buildBucket();
 
       setupBuscarCompletosPorStatus([
         {
@@ -281,30 +296,29 @@ describe("SupabaseOrcamentoRepository — geração de signed URLs", () => {
 
       await new SupabaseOrcamentoRepository().buscarCompletosPorStatus("ativo");
 
-      expect(createSignedUrl).toHaveBeenCalledTimes(1);
-      expect(createSignedUrl).toHaveBeenCalledWith(
-        "user/entrada/moto/foto.jpg",
-        3600
-      );
+      expect(getPublicUrl).toHaveBeenCalledTimes(1);
+      expect(getPublicUrl).toHaveBeenCalledWith("user/entrada/moto/foto.jpg");
+      expect(createSignedUrl).not.toHaveBeenCalled();
     });
 
-    it("não chama createSignedUrl quando a foto da listagem já é URL completa (http)", async () => {
-      const { createSignedUrl } = buildBucket();
+    it("não chama getPublicUrl quando a foto da listagem já é URL completa (http)", async () => {
+      const { createSignedUrl, getPublicUrl } = buildBucket();
 
       setupBuscarCompletosPorStatus([
         {
           entrada_id: "entrada-1",
-          url: "https://already-signed.example/foto.jpg",
+          url: "https://already-public.example/foto.jpg",
         },
       ]);
 
       await new SupabaseOrcamentoRepository().buscarCompletosPorStatus("ativo");
 
+      expect(getPublicUrl).not.toHaveBeenCalled();
       expect(createSignedUrl).not.toHaveBeenCalled();
     });
 
-    it("chama createSignedUrl uma vez por entrada_id distinto, sempre com (path, 3600)", async () => {
-      const { createSignedUrl } = buildBucket();
+    it("chama getPublicUrl uma vez por entrada_id distinto", async () => {
+      const { createSignedUrl, getPublicUrl } = buildBucket();
 
       // Deduplicação por entrada_id é o comportamento real da query —
       // cada entrada fica com apenas a primeira foto (a mais recente).
@@ -321,19 +335,14 @@ describe("SupabaseOrcamentoRepository — geração de signed URLs", () => {
 
       await new SupabaseOrcamentoRepository().buscarCompletosPorStatus("ativo");
 
-      expect(createSignedUrl).toHaveBeenCalledTimes(2);
-      expect(createSignedUrl).toHaveBeenCalledWith(
-        "user/entrada/moto/a.jpg",
-        3600
-      );
-      expect(createSignedUrl).toHaveBeenCalledWith(
-        "user/entrada/moto/b.jpg",
-        3600
-      );
+      expect(getPublicUrl).toHaveBeenCalledTimes(2);
+      expect(getPublicUrl).toHaveBeenCalledWith("user/entrada/moto/a.jpg");
+      expect(getPublicUrl).toHaveBeenCalledWith("user/entrada/moto/b.jpg");
+      expect(createSignedUrl).not.toHaveBeenCalled();
     });
 
-    it("carrega thumb_path/full_path, assina os 3 paths e fotoMoto é uma Foto completa (Foto nova)", async () => {
-      const { createSignedUrl } = buildBucket();
+    it("carrega thumb_path/full_path, resolve via getPublicUrl e fotoMoto é uma Foto completa (Foto nova)", async () => {
+      const { createSignedUrl, getPublicUrl } = buildBucket();
       const { fotosChain } = setupBuscarCompletosPorStatus([
         {
           entrada_id: "entrada-1",
@@ -352,30 +361,25 @@ describe("SupabaseOrcamentoRepository — geração de signed URLs", () => {
       expect(fotosChain.select).toHaveBeenCalledWith(
         "entrada_id, url, thumb_path, full_path"
       );
-      // (b/c) Foto completa com thumbPath/fullPath assinados
-      // (verificado via createSignedUrl) e fotoMoto é a Foto completa
-      expect(createSignedUrl).toHaveBeenCalledTimes(3);
-      expect(createSignedUrl).toHaveBeenCalledWith(
-        "user/entrada/moto/nova.jpg",
-        3600
+      // (b/c) Foto completa com thumbPath/fullPath resolvidos (moto → public)
+      expect(getPublicUrl).toHaveBeenCalledTimes(3);
+      expect(getPublicUrl).toHaveBeenCalledWith("user/entrada/moto/nova.jpg");
+      expect(getPublicUrl).toHaveBeenCalledWith(
+        "user/entrada/moto/nova-thumb.webp"
       );
-      expect(createSignedUrl).toHaveBeenCalledWith(
-        "user/entrada/moto/nova-thumb.webp",
-        3600
+      expect(getPublicUrl).toHaveBeenCalledWith(
+        "user/entrada/moto/nova-full.webp"
       );
-      expect(createSignedUrl).toHaveBeenCalledWith(
-        "user/entrada/moto/nova-full.webp",
-        3600
-      );
+      expect(createSignedUrl).not.toHaveBeenCalled();
       expect(orcamentos[0].fotoMoto).toMatchObject({
-        url: "https://signed.example/moto.jpg",
-        thumbPath: "https://signed.example/moto.jpg",
-        fullPath: "https://signed.example/moto.jpg",
+        url: "https://public.example/moto.jpg",
+        thumbPath: "https://public.example/moto.jpg",
+        fullPath: "https://public.example/moto.jpg",
       });
     });
 
-    it("foto legada (sem thumb_path/full_path) só assina o url (cobre fallback)", async () => {
-      const { createSignedUrl } = buildBucket();
+    it("foto legada (sem thumb_path/full_path) só resolve o url (cobre fallback)", async () => {
+      const { createSignedUrl, getPublicUrl } = buildBucket();
       const { fotosChain } = setupBuscarCompletosPorStatus([
         {
           entrada_id: "entrada-1",
@@ -393,14 +397,12 @@ describe("SupabaseOrcamentoRepository — geração de signed URLs", () => {
       expect(fotosChain.select).toHaveBeenCalledWith(
         "entrada_id, url, thumb_path, full_path"
       );
-      // Foto legada: só `url` é assinado (não há thumb_path/full_path)
-      expect(createSignedUrl).toHaveBeenCalledTimes(1);
-      expect(createSignedUrl).toHaveBeenCalledWith(
-        "user/entrada/moto/legada.jpg",
-        3600
-      );
+      // Foto legada: só `url` é resolvido (não há thumb_path/full_path)
+      expect(getPublicUrl).toHaveBeenCalledTimes(1);
+      expect(getPublicUrl).toHaveBeenCalledWith("user/entrada/moto/legada.jpg");
+      expect(createSignedUrl).not.toHaveBeenCalled();
       expect(orcamentos[0].fotoMoto).toMatchObject({
-        url: "https://signed.example/moto.jpg",
+        url: "https://public.example/moto.jpg",
         thumbPath: null,
         fullPath: null,
       });
@@ -409,27 +411,28 @@ describe("SupabaseOrcamentoRepository — geração de signed URLs", () => {
     // ==========================================================================
     // Mata mutantes de boundary: `startsWith("http")` ↔ `endsWith("http")`.
     // Quando url/thumb_path/full_path já é URL completa (`http...`), o
-    // repositório NÃO deve chamar `obterUrlAssinada` — se chamar, está
-    // quebrando o invariante (URLs já assinadas não devem ser re-assinadas).
+    // repositório NÃO deve chamar `obterUrlParaFoto` — se chamar, está
+    // quebrando o invariante (URLs já resolvidas não devem ser re-resolvidas).
     // ==========================================================================
-    it("NÃO re-assina url/thumb_path/full_path quando já começam com 'http'", async () => {
-      const { createSignedUrl } = buildBucket();
+    it("NÃO re-resolve url/thumb_path/full_path quando já começam com 'http'", async () => {
+      const { createSignedUrl, getPublicUrl } = buildBucket();
       setupBuscarCompletosPorStatus([
         {
           entrada_id: "entrada-1",
           // já são URLs completas (vinham do cache/banco prontas)
-          url: "https://signed.example/full.webp",
-          thumb_path: "https://signed.example/thumb.webp",
-          full_path: "https://signed.example/full.webp",
+          url: "https://public.example/full.webp",
+          thumb_path: "https://public.example/thumb.webp",
+          full_path: "https://public.example/full.webp",
         },
       ]);
 
       await new SupabaseOrcamentoRepository().buscarCompletosPorStatus("ativo");
 
       // Como url/thumb_path/full_path já começam com "http", nenhuma
-      // chamada extra a `obterUrlAssinada` deve ocorrer. Se um mutante
+      // chamada extra a `obterUrlParaFoto` deve ocorrer. Se um mutante
       // trocar `startsWith("http")` por `endsWith("http")`, essas URLs
-      // não serão reconhecidas e `createSignedUrl` será chamado 3x.
+      // não serão reconhecidas e `getPublicUrl` será chamado 3x.
+      expect(getPublicUrl).not.toHaveBeenCalled();
       expect(createSignedUrl).not.toHaveBeenCalled();
     });
 
@@ -468,7 +471,7 @@ describe("SupabaseOrcamentoRepository — geração de signed URLs", () => {
     // só a primeira (mais recente) deve ser usada.
     // ==========================================================================
     it("deduplica fotos por entrada_id mantendo a primeira ocorrência", async () => {
-      const { createSignedUrl } = buildBucket();
+      const { createSignedUrl, getPublicUrl } = buildBucket();
       setupBuscarCompletosPorStatus([
         {
           id: "foto-recente",
@@ -479,7 +482,7 @@ describe("SupabaseOrcamentoRepository — geração de signed URLs", () => {
         },
         // Segunda foto para a mesma entrada — deve ser IGNORADA pela
         // deduplicação. Se o mutante `if (true)` for aplicado, esta
-        // foto sobrescreverá a primeira e `createSignedUrl` será
+        // foto sobrescreverá a primeira e `getPublicUrl` será
         // chamado 3x adicionais (3 + 3 = 6).
         {
           id: "foto-antiga",
@@ -496,15 +499,12 @@ describe("SupabaseOrcamentoRepository — geração de signed URLs", () => {
         );
 
       // Foto recente vence (3 chamadas — url/thumb/full da foto recente)
-      expect(createSignedUrl).toHaveBeenCalledTimes(3);
-      expect(createSignedUrl).toHaveBeenCalledWith(
-        "user/entrada/moto/recente.jpg",
-        3600
+      expect(getPublicUrl).toHaveBeenCalledTimes(3);
+      expect(getPublicUrl).toHaveBeenCalledWith("user/entrada/moto/recente.jpg");
+      expect(getPublicUrl).not.toHaveBeenCalledWith(
+        "user/entrada/moto/antiga.jpg"
       );
-      expect(createSignedUrl).not.toHaveBeenCalledWith(
-        "user/entrada/moto/antiga.jpg",
-        3600
-      );
+      expect(createSignedUrl).not.toHaveBeenCalled();
       // E o id da Foto retornada é o da foto recente (não da antiga)
       expect(orcamentos[0].fotoMoto.id).toBe("foto-recente");
     });
@@ -563,8 +563,8 @@ describe("SupabaseOrcamentoRepository — geração de signed URLs", () => {
   });
 
   describe("buscarPagina", () => {
-    it("carrega thumb_path/full_path na query de fotos e assina os 3 paths por entrada", async () => {
-      const { createSignedUrl } = buildBucket();
+    it("carrega thumb_path/full_path na query de fotos e resolve via getPublicUrl (moto)", async () => {
+      const { createSignedUrl, getPublicUrl } = buildBucket();
 
       // Pega as chains pré-construídas para reusar no dispatcher
       const clienteId = "11111111-1111-4111-8111-111111111111";
@@ -647,29 +647,25 @@ describe("SupabaseOrcamentoRepository — geração de signed URLs", () => {
       expect(fotosChain.select).toHaveBeenCalledWith(
         "entrada_id, url, thumb_path, full_path"
       );
-      // (b/c) fotoMoto é a Foto completa com paths assinados
+      // (b/c) fotoMoto é a Foto completa com paths resolvidos (moto → public)
       expect(pagina.items[0].fotoMoto).toMatchObject({
-        url: "https://signed.example/moto.jpg",
-        thumbPath: "https://signed.example/moto.jpg",
-        fullPath: "https://signed.example/moto.jpg",
+        url: "https://public.example/moto.jpg",
+        thumbPath: "https://public.example/moto.jpg",
+        fullPath: "https://public.example/moto.jpg",
       });
-      expect(createSignedUrl).toHaveBeenCalledTimes(3);
-      expect(createSignedUrl).toHaveBeenCalledWith(
-        "user/entrada/moto/nova.jpg",
-        3600
+      expect(getPublicUrl).toHaveBeenCalledTimes(3);
+      expect(getPublicUrl).toHaveBeenCalledWith("user/entrada/moto/nova.jpg");
+      expect(getPublicUrl).toHaveBeenCalledWith(
+        "user/entrada/moto/nova-thumb.webp"
       );
-      expect(createSignedUrl).toHaveBeenCalledWith(
-        "user/entrada/moto/nova-thumb.webp",
-        3600
+      expect(getPublicUrl).toHaveBeenCalledWith(
+        "user/entrada/moto/nova-full.webp"
       );
-      expect(createSignedUrl).toHaveBeenCalledWith(
-        "user/entrada/moto/nova-full.webp",
-        3600
-      );
+      expect(createSignedUrl).not.toHaveBeenCalled();
     });
 
-    it("foto legada em buscarPagina: só url é assinado (fallback)", async () => {
-      const { createSignedUrl } = buildBucket();
+    it("foto legada em buscarPagina: só url é resolvido via getPublicUrl (fallback)", async () => {
+      const { createSignedUrl, getPublicUrl } = buildBucket();
 
       const clienteId = "11111111-1111-4111-8111-111111111111";
       const motoId = "22222222-2222-4222-8222-222222222222";
@@ -745,13 +741,13 @@ describe("SupabaseOrcamentoRepository — geração de signed URLs", () => {
         status: "ativo",
       });
 
-      expect(createSignedUrl).toHaveBeenCalledTimes(1);
-      expect(createSignedUrl).toHaveBeenCalledWith(
-        "user/entrada/moto/legada.jpg",
-        3600
+      expect(getPublicUrl).toHaveBeenCalledTimes(1);
+      expect(getPublicUrl).toHaveBeenCalledWith(
+        "user/entrada/moto/legada.jpg"
       );
+      expect(createSignedUrl).not.toHaveBeenCalled();
       expect(pagina.items[0].fotoMoto).toMatchObject({
-        url: "https://signed.example/moto.jpg",
+        url: "https://public.example/moto.jpg",
         thumbPath: null,
         fullPath: null,
       });

@@ -5,8 +5,8 @@ import ModalVisualizacaoFoto from "@/components/ModalVisualizacaoFoto";
 import { _clearUrlCache } from "@/infrastructure/storage/urlCache";
 import type { Foto } from "@shared/types";
 
-// Mock do cliente Supabase: o modal faz obterSignedUrl (via urlCache).
-// Controlamos o retorno de createSignedUrl para testes com paths crus.
+// Mock do cliente Supabase: o modal faz obterUrlParaFoto (via urlCache).
+// Controlamos o retorno de getPublicUrl para testes com paths crus.
 vi.mock("@/infrastructure/supabase/client", () => {
   const from = vi.fn();
   return {
@@ -35,23 +35,28 @@ const buildFoto = (params: {
   fullPath?: string | null;
   url?: string;
   id?: string;
+  tipo?: "moto" | "status" | "documento";
 }): Foto => ({
   id: params.id ?? "foto-1",
   entradaId: "entrada-1",
   url: params.url ?? "user/entrada-1/moto/legado.jpg",
   thumbPath: null,
   fullPath: params.fullPath ?? null,
-  tipo: "moto",
+  tipo: params.tipo ?? "moto",
   criadoEm: new Date("2025-01-02T00:00:00Z"),
 });
 
-const buildBucket = (signedUrl: string) => {
+const buildBucket = () => {
+  // Ciclo 3: moto usa public URL (cache infinito).
+  const getPublicUrl = vi.fn((path: string) => ({
+    data: { publicUrl: `https://public.example/${path}` },
+  }));
   const createSignedUrl = vi.fn().mockResolvedValue({
-    data: { signedUrl },
+    data: { signedUrl: "https://signed.example/full.jpg" },
     error: null,
   });
-  mockedFrom.mockReturnValue({ createSignedUrl } as never);
-  return { createSignedUrl };
+  mockedFrom.mockReturnValue({ createSignedUrl, getPublicUrl } as never);
+  return { createSignedUrl, getPublicUrl };
 };
 
 beforeEach(() => {
@@ -59,15 +64,15 @@ beforeEach(() => {
   _clearUrlCache();
 });
 
-describe("ModalVisualizacaoFoto — fullPath em alta resolução (issue #13)", () => {
-  it("renderiza a url já assinada (fullPath) da foto atual como src do <img>", async () => {
+describe("ModalVisualizacaoFoto — fullPath em alta resolução (issue #13, ciclo 3)", () => {
+  it("renderiza a URL já resolvida (fullPath) da foto atual como src do <img>", async () => {
     // Após issue #13: o modal recebe `Foto[]` (com thumbPath/fullPath
-    // como paths crus ou signed URLs) e usa `fullPath ?? url` para a
-    // imagem em alta resolução. Como tem lazy signing interno, espera
-    // o useEffect rodar pra assertion.
+    // como paths crus ou URLs resolvidas) e usa `fullPath ?? url` para
+    // a imagem em alta resolução. Como tem lazy resolve interno,
+    // espera o useEffect rodar pra assertion.
     const fotos: Foto[] = [
-      buildFoto({ fullPath: "https://signed.example/full1.jpg" }),
-      buildFoto({ fullPath: "https://signed.example/full2.jpg" }),
+      buildFoto({ fullPath: "https://public.example/full1.jpg" }),
+      buildFoto({ fullPath: "https://public.example/full2.jpg" }),
     ];
     render(
       <ModalVisualizacaoFoto
@@ -78,19 +83,16 @@ describe("ModalVisualizacaoFoto — fullPath em alta resolução (issue #13)", (
       />
     );
 
-    // fullPath já é signed URL (http) — sem chamada de signed URL
+    // fullPath já é URL completa (http) — sem chamada de resolve
     const img = screen.getByRole("img");
-    expect(img).toHaveAttribute("src", "https://signed.example/full1.jpg");
+    expect(img).toHaveAttribute("src", "https://public.example/full1.jpg");
   });
 
-  it("assina fullPath lazy quando recebe path cru", async () => {
-    // Cobre o caminho em que `fullPath` é um path (não signed URL) e o
-    // modal precisa assinar para renderizar a imagem em alta resolução.
-    const createSignedUrl = vi.fn().mockResolvedValue({
-      data: { signedUrl: "https://signed.example/full.jpg" },
-      error: null,
-    });
-    mockedFrom.mockReturnValue({ createSignedUrl } as never);
+  it("resolve fullPath lazy via getPublicUrl quando recebe path cru (moto)", async () => {
+    // Cobre o caminho em que `fullPath` é um path (não URL completa) e
+    // o modal precisa resolver para renderizar a imagem em alta
+    // resolução. Ciclo 3: moto usa public URL (não signed).
+    const { getPublicUrl } = buildBucket();
 
     const fotos: Foto[] = [
       buildFoto({ fullPath: "user/entrada-1/moto/full.jpg" }),
@@ -105,24 +107,24 @@ describe("ModalVisualizacaoFoto — fullPath em alta resolução (issue #13)", (
     );
 
     await waitFor(() => {
-      expect(createSignedUrl).toHaveBeenCalledWith(
-        "user/entrada-1/moto/full.jpg",
-        expect.any(Number)
-      );
+      expect(getPublicUrl).toHaveBeenCalledWith("user/entrada-1/moto/full.jpg");
     });
 
     const img = screen.getByRole("img");
-    expect(img).toHaveAttribute("src", "https://signed.example/full.jpg");
+    expect(img).toHaveAttribute(
+      "src",
+      "https://public.example/user/entrada-1/moto/full.jpg"
+    );
   });
 
-  it("cai no thumbPath quando o thumb já é signed URL e o fullPath está null", async () => {
-    // Antes do issue #13: galeria assinava o thumbPath e o modal
+  it("cai no thumbPath quando o thumb já é URL resolvida e o fullPath está null", async () => {
+    // Antes do issue #13: galeria resolvia o thumbPath e o modal
     // recebia só a string. Agora o modal recebe Foto[] com
     // thumbPath/fullPath crus e usa `fullPath ?? url` — mas a foto
     // legada só tem url (sem thumbPath/fullPath). Cobrindo o fallback.
     const fotos: Foto[] = [
       buildFoto({
-        url: "https://signed.example/legado.jpg",
+        url: "https://public.example/legado.jpg",
         fullPath: null,
       }),
     ];
@@ -136,14 +138,14 @@ describe("ModalVisualizacaoFoto — fullPath em alta resolução (issue #13)", (
     );
 
     const img = screen.getByRole("img");
-    expect(img).toHaveAttribute("src", "https://signed.example/legado.jpg");
+    expect(img).toHaveAttribute("src", "https://public.example/legado.jpg");
   });
 
   it("alterna o src ao mudar fotoAtual (cada navegação usa o fullPath correspondente)", async () => {
     const fotos: Foto[] = [
-      buildFoto({ fullPath: "https://signed.example/full/1.jpg" }),
-      buildFoto({ fullPath: "https://signed.example/full/2.jpg" }),
-      buildFoto({ fullPath: "https://signed.example/full/3.jpg" }),
+      buildFoto({ fullPath: "https://public.example/full/1.jpg" }),
+      buildFoto({ fullPath: "https://public.example/full/2.jpg" }),
+      buildFoto({ fullPath: "https://public.example/full/3.jpg" }),
     ];
     const { rerender } = render(
       <ModalVisualizacaoFoto
@@ -155,7 +157,7 @@ describe("ModalVisualizacaoFoto — fullPath em alta resolução (issue #13)", (
     );
     expect(screen.getByRole("img")).toHaveAttribute(
       "src",
-      "https://signed.example/full/1.jpg"
+      "https://public.example/full/1.jpg"
     );
 
     rerender(
@@ -168,7 +170,7 @@ describe("ModalVisualizacaoFoto — fullPath em alta resolução (issue #13)", (
     );
     expect(screen.getByRole("img")).toHaveAttribute(
       "src",
-      "https://signed.example/full/2.jpg"
+      "https://public.example/full/2.jpg"
     );
 
     rerender(
@@ -181,7 +183,7 @@ describe("ModalVisualizacaoFoto — fullPath em alta resolução (issue #13)", (
     );
     expect(screen.getByRole("img")).toHaveAttribute(
       "src",
-      "https://signed.example/full/3.jpg"
+      "https://public.example/full/3.jpg"
     );
   });
 

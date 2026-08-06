@@ -17,6 +17,15 @@ const buildStorageApi = (
   deletarFoto: vi.fn(),
   obterUrlPublica: vi.fn(),
   obterUrlAssinada: vi.fn().mockResolvedValue("https://signed.example/full.webp"),
+  // Ciclo 3: helper central. Para `status` retorna public URL.
+  obterUrlParaFoto: vi
+    .fn()
+    .mockImplementation(
+      async (path: string, tipo: "moto" | "status" | "documento") =>
+        tipo === "documento"
+          ? `https://signed.example/${path}`
+          : `https://public.example/${path}`
+    ),
   consultarEspacoBucket: vi.fn(),
   listarArquivosPorPeriodo: vi.fn(),
   deletarArquivosPorPeriodo: vi.fn(),
@@ -132,13 +141,15 @@ describe("propagação das variantes de foto", () => {
       fotosStatus: [fotoAnterior, novaFotoPersistida],
       progresso: 60,
     });
-    expect(storageApi.obterUrlAssinada).toHaveBeenCalledWith(
+    // Ciclo 3: usa obterUrlParaFoto(path, "status") → public URL.
+    expect(storageApi.obterUrlParaFoto).toHaveBeenCalledWith(
       "entrada-1/status/full.webp",
-      3600
+      "status"
     );
+    expect(storageApi.obterUrlAssinada).not.toHaveBeenCalled();
     expect(resultado).toEqual({
       ...novaFotoPersistida,
-      url: "https://signed.example/full.webp",
+      url: "https://public.example/entrada-1/status/full.webp",
     });
   });
 });

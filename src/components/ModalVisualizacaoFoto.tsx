@@ -3,7 +3,7 @@ import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Foto } from "@shared/types";
-import { obterSignedUrl } from "@/infrastructure/storage/urlCache";
+import { obterUrlParaFoto } from "@/infrastructure/storage/urlCache";
 
 interface ModalVisualizacaoFotoProps {
   fotos: Foto[];
@@ -16,11 +16,15 @@ interface ModalVisualizacaoFotoProps {
  * Componente de modal para visualização expandida de fotos.
  *
  * Issue #13: recebe `Foto[]` (com thumbPath/fullPath nulos ou como
- * paths crus) e faz signing LAZY no `fullPath ?? url` quando o modal
+ * paths crus) e resolve LAZY o `fullPath ?? url` quando o modal
  * abre. Antes, a galeria assinava o `thumbPath` mas enviava só o
  * signed URL para o modal — o que impedia o modal de usar o full
  * size. Agora o modal tem a `Foto` completa e pode pedir o full
  * resolution sob demanda.
+ *
+ * Ciclo 3 (issue #13): usa `obterUrlParaFoto(path, tipo)` em vez de
+ * `obterSignedUrl` direto. Para moto (tipo padrão desta galeria)
+ * retorna public URL — antes assinava desnecessariamente.
  */
 export default function ModalVisualizacaoFoto({
   fotos,
@@ -33,8 +37,8 @@ export default function ModalVisualizacaoFoto({
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
   const [urls, setUrls] = useState<Record<number, string>>({});
 
-  // Lazy sign: quando o modal abre, busca a URL full-size (fullPath) de
-  // cada foto. Threshold: só a foto atual + adjacentes pra swipe.
+  // Lazy resolve: quando o modal abre, busca a URL full-size (fullPath)
+  // de cada foto. Threshold: só a foto atual + adjacentes pra swipe.
   // Antes (issue #12): a galeria assinava o thumbPath e passava o
   // string pro modal — mas o modal full-size ficava sem source.
   useEffect(() => {
@@ -43,16 +47,20 @@ export default function ModalVisualizacaoFoto({
       return;
     }
 
-    const signedFoto = async (foto: Foto) => {
+    const resolveFoto = async (foto: Foto) => {
       const path = foto.fullPath ?? foto.url;
       if (!path || path.startsWith("http")) {
         return path;
       }
       try {
-        return await obterSignedUrl(path);
+        // Tipo: a galeria da moto sempre é "moto"; se vier FotoStatus
+        // (status) ou Foto de documento, o helper escolhe o caminho
+        // certo (public/signed).
+        const tipo = foto.tipo ?? "moto";
+        return await obterUrlParaFoto(path, tipo);
       } catch (err) {
         console.warn(
-          "[ModalVisualizacaoFoto] Falha ao assinar URL, usando path cru:",
+          "[ModalVisualizacaoFoto] Falha ao resolver URL, usando path cru:",
           path,
           err
         );
@@ -70,7 +78,7 @@ export default function ModalVisualizacaoFoto({
       Array.from(indices).map(async (i) => {
         const foto = fotos[i];
         if (!foto) return;
-        const url = await signedFoto(foto);
+        const url = await resolveFoto(foto);
         if (url) {
           setUrls((prev) => ({ ...prev, [i]: url }));
         }

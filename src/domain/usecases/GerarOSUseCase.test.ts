@@ -82,6 +82,16 @@ const buildStorageApi = (): StorageApi => ({
   obterUrlAssinada: vi
     .fn()
     .mockImplementation(async (path: string) => `https://signed.example/${path}`),
+  // Ciclo 3: helper central de resolução de URL. Para `moto`/`status`
+  // retorna public URL; para `documento` retorna signed URL.
+  obterUrlParaFoto: vi
+    .fn()
+    .mockImplementation(
+      async (path: string, tipo: "moto" | "status" | "documento") =>
+        tipo === "documento"
+          ? `https://signed.example/${path}`
+          : `https://public.example/${path}`
+    ),
   consultarEspacoBucket: vi.fn(),
   listarArquivosPorPeriodo: vi.fn(),
   deletarArquivosPorPeriodo: vi.fn(),
@@ -182,10 +192,11 @@ describe("GerarOSUseCase — fullPath em alta resolução (ciclo 6)", () => {
     });
   });
 
-  it("sinaliza o caminho a ser assinado para fotos de status usando fullPath quando disponível", async () => {
-    // Para fotos de status, o use case gera URL assinada e devolve o
-    // resultado em `url`. Quando o FotoStatus tem fullPath, o caminho
-    // assinado deve ser o fullPath (alta resolução), não o `url`.
+  it("sinaliza o caminho a ser resolvido para fotos de status usando fullPath quando disponível", async () => {
+    // Para fotos de status, o use case resolve URL via helper e devolve
+    // o resultado em `url`. Quando o FotoStatus tem fullPath, o
+    // caminho passado deve ser o fullPath (alta resolução), não o `url`.
+    // Ciclo 3: usa `obterUrlParaFoto(path, "status")` — public URL.
     const fotoStatus: FotoStatus = {
       url: "status/path.webp", // path persistido (não URL completa)
       thumbPath: "status/thumb.webp",
@@ -208,14 +219,16 @@ describe("GerarOSUseCase — fullPath em alta resolução (ciclo 6)", () => {
 
     const dados = await useCase.execute("entrada-1");
 
-    // O caminho passado ao storageApi.obterUrlAssinada deve ser o fullPath.
-    expect(storageApi.obterUrlAssinada).toHaveBeenCalledWith(
+    // O caminho passado ao storageApi.obterUrlParaFoto deve ser o
+    // fullPath (ciclo 3 — antes era obterUrlAssinada com mesmo path).
+    expect(storageApi.obterUrlParaFoto).toHaveBeenCalledWith(
       "status/full.webp",
-      3600
+      "status"
     );
-    // E a url final entregue ao PDF reflete a assinatura do fullPath.
+    expect(storageApi.obterUrlAssinada).not.toHaveBeenCalled();
+    // E a url final entregue ao PDF reflete a resolução do fullPath.
     expect(dados.fotos[0]).toEqual({
-      url: "https://signed.example/status/full.webp",
+      url: "https://public.example/status/full.webp",
       tipo: "status",
     });
   });

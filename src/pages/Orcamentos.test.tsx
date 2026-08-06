@@ -401,3 +401,74 @@ describe("Orcamentos — ciclo 8 (scroll infinito + contador + reset)", () => {
     expect(imagens[1]).toHaveAttribute("src", "legacy.jpg");
   });
 });
+
+describe("Orcamentos — ciclo 3 (URLs resolvidas pelo repo, página não chama helper)", () => {
+  /**
+   * Após ciclo 3 (issue #13): o `SupabaseOrcamentoRepository.assinar3Paths`
+   * usa `obterUrlParaFoto(path, "moto")` → public URL (bucket público).
+   * A página `Orcamentos.tsx` consome o `fotoMoto` que vem do repo
+   * (já resolvido) — não chama helper nenhum.
+   */
+
+  it("renderiza a fotoMoto.thumbPath resolvida pelo repo (public URL), sem chamar storage helper direto", () => {
+    // O repo já resolveu a URL — basta propagar para o <img>.
+    mockUseOrcamentos({
+      orcamentos: [
+        makeOrcamento("orc-1", {
+          url: "https://public.example/moto/full.webp",
+          thumbPath: "https://public.example/moto/thumb.webp",
+          fullPath: "https://public.example/moto/full.webp",
+        }),
+      ],
+      total: 1,
+    });
+
+    render(<Orcamentos />);
+
+    const img = screen.getByRole("img");
+    // thumbPath preferido (já resolvido pelo repo com obterUrlParaFoto).
+    expect(img).toHaveAttribute(
+      "src",
+      "https://public.example/moto/thumb.webp"
+    );
+  });
+
+  it("cai na url quando thumbPath é null (foto legada — repo também resolveu)", () => {
+    mockUseOrcamentos({
+      orcamentos: [
+        makeOrcamento("legada", {
+          url: "https://public.example/moto/legacy.jpg",
+          thumbPath: null,
+          fullPath: null,
+        }),
+      ],
+      total: 1,
+    });
+
+    render(<Orcamentos />);
+
+    const img = screen.getByRole("img");
+    expect(img).toHaveAttribute("src", "https://public.example/moto/legacy.jpg");
+  });
+
+  it("NÃO instancia helper de storage na página (urls já vêm resolvidas via prop)", () => {
+    // O stub de `SupabaseStorageApi` no mock global retorna um repoStub
+    // sem `obterUrlAssinada` / `obterUrlParaFoto`. Se a página
+    // tentasse chamar essas APIs no <img> (lazy sign local), quebraria
+    // com `TypeError: obterUrlParaFoto is not a function`. O teste
+    // verifica que isso NÃO acontece — basta renderizar sem erro.
+    mockUseOrcamentos({
+      orcamentos: [
+        makeOrcamento("orc-1", {
+          url: "https://public.example/moto/full.webp",
+          thumbPath: "https://public.example/moto/thumb.webp",
+        }),
+      ],
+      total: 1,
+    });
+
+    // Renderiza sem crash — confirma que a página não invoca helper
+    // de storage para resolver URLs (elas vêm prontas do repo).
+    expect(() => render(<Orcamentos />)).not.toThrow();
+  });
+});

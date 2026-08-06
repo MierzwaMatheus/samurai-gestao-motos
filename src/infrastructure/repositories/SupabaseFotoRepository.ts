@@ -2,6 +2,7 @@ import { FotoRepository } from "@/domain/interfaces/FotoRepository";
 import { Foto } from "@shared/types";
 import { supabase } from "@/infrastructure/supabase/client";
 import { SupabaseStorageApi } from "@/infrastructure/storage/SupabaseStorageApi";
+import { TipoFoto } from "@/domain/interfaces/StorageApi";
 
 /**
  * Implementação do repositório de fotos usando Supabase
@@ -106,38 +107,48 @@ export class SupabaseFotoRepository implements FotoRepository {
   }
 
   /**
-   * Resolve o `url` e os `thumbPath`/`fullPath` para URLs assinadas
+   * Resolve o `url` e os `thumbPath`/`fullPath` para URLs utilizáveis
    * quando ainda são filePaths (raw). Para fotos legadas (sem
    * thumb_path/full_path) ou para `documento` (thumb_path null), o
-   * thumbPath aponta para o MESMO signed URL do `url` — preservando
-   * compatibilidade. O cache de signed URLs (delegado a
-   * `urlCache`) garante que o mesmo path não assina 2x.
+   * thumbPath aponta para a MESMA URL do `url` — preservando
+   * compatibilidade. O cache (delegado a `urlCache`) garante que o
+   * mesmo path não assina 2x.
+   *
+   * Ciclo 3 (issue #13): usa `obterUrlParaFoto(path, tipo)` em vez de
+   * `obterUrlAssinada` direto. Para `moto`/`status` o helper retorna
+   * public URL (cache indefinido) — não usa mais o caminho de signed
+   * URL desnecessário, reduzindo ~30 chamadas a
+   * `/storage/v1/object/sign/...` por página da Oficina. Para
+   * `documento` mantém signed URL com TTL 1h.
    */
   private async resolveSignedUrls(foto: Foto): Promise<Foto> {
+    const tipo: TipoFoto = foto.tipo;
+
     if (!foto.url.startsWith("http")) {
-      foto.url = await this.storageApi.obterUrlAssinada(foto.url);
+      foto.url = await this.storageApi.obterUrlParaFoto(foto.url, tipo);
     }
 
-    const signedUrl = foto.url;
-    foto.thumbPath = await this.resolvePath(foto.thumbPath, signedUrl);
-    foto.fullPath = await this.resolvePath(foto.fullPath, signedUrl);
+    const resolvedUrl = foto.url;
+    foto.thumbPath = await this.resolvePath(foto.thumbPath, resolvedUrl, tipo);
+    foto.fullPath = await this.resolvePath(foto.fullPath, resolvedUrl, tipo);
 
     return foto;
   }
 
   /**
    * Resolve um único path para uma URL utilizável:
-   * - `null`/`undefined` → `fallback` (signed URL do `url`).
+   * - `null`/`undefined` → `fallback` (URL resolvida do `url`).
    * - Já é uma URL completa (`http`) → devolve como está.
-   * - Raw path → assina via `obterUrlAssinada` (com cache).
+   * - Raw path → resolve via `obterUrlParaFoto(path, tipo)`.
    */
   private async resolvePath(
     path: string | null | undefined,
-    fallback: string
+    fallback: string,
+    tipo: TipoFoto
   ): Promise<string> {
     if (!path) return fallback;
     if (path.startsWith("http")) return path;
-    return this.storageApi.obterUrlAssinada(path);
+    return this.storageApi.obterUrlParaFoto(path, tipo);
   }
 
   private mapToFoto(data: any): Foto {

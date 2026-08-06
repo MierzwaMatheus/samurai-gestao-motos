@@ -1,4 +1,5 @@
 import { supabase } from "@/infrastructure/supabase/client";
+import type { TipoFoto } from "@/domain/interfaces/StorageApi";
 
 /**
  * Margem de segurança subtraída do TTL antes de expirar entrada.
@@ -112,6 +113,36 @@ export const obterSignedUrl = (path: string, expiresIn: number = 3600) =>
 
 /** Obtém URL pública cacheada indefinidamente. */
 export const obterPublicUrl = (path: string) => urlCache.obterPublicUrl(path);
+
+/**
+ * Helper central para resolver URL de uma foto. Decide entre public URL
+ * (`moto`/`status`) e signed URL (`documento`).
+ *
+ * Espelha o método `SupabaseStorageApi.obterUrlParaFoto` mas exposto como
+ * função top-level para componentes que não têm injeção de dependência
+ * do `StorageApi` (ex.: `GaleriaFotos`, `GaleriaFotosMoto`,
+ * `ModalVisualizacaoFoto`). Esses componentes ainda precisam resolver
+ * paths crus (recebidos de `Entrada.fotosStatus` ou de entradas
+ * legadas) — o repository (`SupabaseEntradaRepository`) não assina
+ * URLs por design (issue #13), então o resolver fica aqui.
+ *
+ * Componentes que recebem `Foto[]` resolvida pelo
+ * `SupabaseFotoRepository` (e.g. `GaleriaFotosMoto`,
+ * `ModalVisualizacaoFoto`) só precisam chamar este helper quando o
+ * campo é path cru (ramo de fallback) — URL já resolvida é usada
+ * direto.
+ */
+export const obterUrlParaFoto = async (
+  path: string,
+  tipo: TipoFoto
+): Promise<string> => {
+  if (tipo === "documento") {
+    return obterSignedUrl(path);
+  }
+  // moto/status: public URL é síncrona (cache), mas retornamos como
+  // Promise para unificar a interface com `obterSignedUrl`.
+  return Promise.resolve(obterPublicUrl(path));
+};
 
 /** Limpa o cache entre testes. Usar apenas em testes. */
 export const _clearUrlCache = () => urlCache._clearCache();

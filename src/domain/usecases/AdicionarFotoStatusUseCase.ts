@@ -42,12 +42,13 @@ export class AdicionarFotoStatusUseCase {
       "status"
     );
 
-    // Gera URL assinada
-    const url = await this.storageApi.obterUrlAssinada(fullPath, 3600);
+    // Resolve URL via helper central (ciclo 3): para `status` retorna
+    // public URL (cache infinito), em vez de signed URL com TTL 1h.
+    const url = await this.storageApi.obterUrlParaFoto(fullPath, "status");
 
     // Cria objeto de foto de status
     const fotoStatus: FotoStatus = {
-      url: fullPath, // Salva o filePath, não a URL assinada
+      url: fullPath, // Salva o filePath, não a URL resolvida
       thumbPath,
       fullPath,
       data: new Date(),
@@ -67,10 +68,10 @@ export class AdicionarFotoStatusUseCase {
       progresso: progressoAtual,
     });
 
-    // Retorna foto com URL assinada para exibição imediata
+    // Retorna foto com URL pública para exibição imediata
     return {
       ...fotoStatus,
-      url, // URL assinada para exibição
+      url, // URL pública (cache indefinido) para exibição
     };
   }
 }

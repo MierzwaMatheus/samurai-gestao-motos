@@ -7,6 +7,7 @@ import { TipoServicoRepository } from "@/domain/interfaces/TipoServicoRepository
 import { Foto, Orcamento, OrcamentoCompleto } from "@shared/types";
 import { supabase } from "@/infrastructure/supabase/client";
 import { SupabaseStorageApi } from "@/infrastructure/storage/SupabaseStorageApi";
+import { TipoFoto } from "@/domain/interfaces/StorageApi";
 
 /**
  * Implementação do repositório de orçamentos usando Supabase
@@ -632,49 +633,42 @@ export class SupabaseOrcamentoRepository implements OrcamentoRepository {
   }
 
   /**
-   * Assina os 3 paths de uma foto (url, thumb_path, full_path).
-   * URLs já completas (http) são mantidas como estão. Tolerante
-   * a falhas — se uma chamada rejeitar, retorna o path cru pro
-   * campo correspondente.
+   * Resolve os 3 paths de uma foto (url, thumb_path, full_path) para URLs utilizáveis.
+   *
+   * Após ciclo 3 (issue #13): usa `obterUrlParaFoto(path, tipo)` em vez
+   * de `obterUrlAssinada` direto. O parâmetro `tipo` é o tipo da foto
+   * (vem da coluna `fotos.tipo` filtrada na query — para a página de
+   * orçamentos sempre é `"moto"`). Para `moto` retorna public URL
+   * (cache indefinido) — antes, todo o eager signing estava gerando
+   * chamadas desnecessárias a `/storage/v1/object/sign/...` que o
+   * browser descartava em revisitas.
+   *
+   * URLs já completas (`http`) são mantidas como estão. Tolerante a
+   * falhas — se uma chamada rejeitar, retorna o path cru pro campo
+   * correspondente (a UI mostra placeholder).
    */
-  private async assinar3Paths(paths: any): Promise<{
+  private async assinar3Paths(
+    paths: any,
+    tipo: TipoFoto = "moto"
+  ): Promise<{
     url: string;
     thumbPath: string | null;
     fullPath: string | null;
   }> {
-    const tryUrl = async () => {
-      if (paths.url.startsWith("http")) return paths.url;
+    const resolvePath = async (raw: string | null | undefined): Promise<string | null> => {
+      if (!raw) return raw ?? null;
+      if (raw.startsWith("http")) return raw;
       try {
-        return await this.storageApi.obterUrlAssinada(paths.url);
+        return await this.storageApi.obterUrlParaFoto(raw, tipo);
       } catch {
-        return paths.url;
-      }
-    };
-    const tryThumb = async () => {
-      if (!paths.thumb_path || paths.thumb_path.startsWith("http")) {
-        return paths.thumb_path ?? null;
-      }
-      try {
-        return await this.storageApi.obterUrlAssinada(paths.thumb_path);
-      } catch {
-        return paths.thumb_path ?? null;
-      }
-    };
-    const tryFull = async () => {
-      if (!paths.full_path || paths.full_path.startsWith("http")) {
-        return paths.full_path ?? null;
-      }
-      try {
-        return await this.storageApi.obterUrlAssinada(paths.full_path);
-      } catch {
-        return paths.full_path ?? null;
+        return raw;
       }
     };
     const [url, thumbPath, fullPath] = await Promise.all([
-      tryUrl(),
-      tryThumb(),
-      tryFull(),
+      resolvePath(paths.url),
+      resolvePath(paths.thumb_path),
+      resolvePath(paths.full_path),
     ]);
-    return { url, thumbPath, fullPath };
+    return { url: url!, thumbPath, fullPath };
   }
 }

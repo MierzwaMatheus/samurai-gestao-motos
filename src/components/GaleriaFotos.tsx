@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { FotoStatus } from "@shared/types";
-import { obterSignedUrl } from "@/infrastructure/storage/urlCache";
+import { obterUrlParaFoto } from "@/infrastructure/storage/urlCache";
 
 interface GaleriaFotosProps {
   fotos: FotoStatus[];
@@ -11,6 +11,12 @@ interface GaleriaFotosProps {
  *
  * Cada thumb usa `thumbPath` (com fallback para `url` quando `thumbPath` é
  * null — fotos legadas sem pipeline de 2 variantes).
+ *
+ * Ciclo 3 (issue #13): usa `obterUrlParaFoto(path, "status")` em vez
+ * de `obterSignedUrl` direto. Para status photos, o helper retorna
+ * public URL (cache infinito) — o ciclo 1 introduziu o helper
+ * `obterUrlAssinada` que ainda vale para `documento`, mas para
+ * `moto`/`status` é desperdício já que o bucket é público.
  */
 export default function GaleriaFotos({ fotos }: GaleriaFotosProps) {
   const [urls, setUrls] = useState<Record<number, string>>({});
@@ -18,16 +24,16 @@ export default function GaleriaFotos({ fotos }: GaleriaFotosProps) {
   useEffect(() => {
     const carregarUrls = async () => {
       const urlsMap: Record<number, string> = {};
-      // Issue #13: tolerância a falhas — uma foto com signed URL que
-      // falha (ex.: 400 Bad Request) não pode quebrar a galeria inteira.
+      // Issue #13: tolerância a falhas — uma foto com URL que falha
+      // (ex.: 400 Bad Request) não pode quebrar a galeria inteira.
       // Promise.allSettled + fallback para placeholders.
       const resultados = await Promise.allSettled(
         fotos.map(async (foto, index) => {
           // thumbPath preferido; cai no url para fotos legadas
           const path = foto.thumbPath ?? foto.url;
           if (!path.startsWith("http")) {
-            const signedUrl = await obterSignedUrl(path);
-            return { index, url: signedUrl };
+            const resolvedUrl = await obterUrlParaFoto(path, "status");
+            return { index, url: resolvedUrl };
           }
           return { index, url: path };
         })
@@ -37,7 +43,7 @@ export default function GaleriaFotos({ fotos }: GaleriaFotosProps) {
           urlsMap[r.value.index] = r.value.url;
         } else {
           console.warn(
-            `[GaleriaFotos] Falha ao assinar URL, usando path cru: ${String(r.reason)}`
+            `[GaleriaFotos] Falha ao resolver URL, usando path cru: ${String(r.reason)}`
           );
         }
       }

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Image } from "lucide-react";
 import { Foto } from "@shared/types";
-import { obterSignedUrl } from "@/infrastructure/storage/urlCache";
+import { obterUrlParaFoto } from "@/infrastructure/storage/urlCache";
 import ModalVisualizacaoFoto from "@/components/ModalVisualizacaoFoto";
 
 interface GaleriaFotosMotoProps {
@@ -12,10 +12,14 @@ interface GaleriaFotosMotoProps {
  * Componente para exibir galeria de fotos do tipo "moto".
  *
  * Cada thumb usa `thumbPath` (com fallback para `url` quando `thumbPath` é
- * null — fotos legadas sem pipeline de 2 variantes). Issue #13: o
- * signing do `thumbPath` é lazy no `useEffect`; o modal recebe
- * `Foto[]` (com thumbPath/fullPath crus) e assina o `fullPath`
+ * null — fotos legadas sem pipeline de 2 variantes). Issue #13: a
+ * resolução do `thumbPath` é lazy no `useEffect`; o modal recebe
+ * `Foto[]` (com thumbPath/fullPath crus) e resolve o `fullPath`
  * internamente quando abre.
+ *
+ * Ciclo 3 (issue #13): usa `obterUrlParaFoto(path, "moto")` em vez de
+ * `obterSignedUrl` direto. Para moto photos, o helper retorna public
+ * URL (cache infinito) — antes assinava desnecessariamente.
  */
 export default function GaleriaFotosMoto({ fotos }: GaleriaFotosMotoProps) {
   const [urls, setUrls] = useState<Record<number, string>>({});
@@ -25,8 +29,8 @@ export default function GaleriaFotosMoto({ fotos }: GaleriaFotosMotoProps) {
   useEffect(() => {
     const carregarUrls = async () => {
       const urlsMap: Record<number, string> = {};
-      // Issue #13: tolerância a falhas — uma foto com signed URL que
-      // falha (ex.: 400 Bad Request) não pode quebrar a galeria inteira.
+      // Issue #13: tolerância a falhas — uma foto com URL que falha
+      // (ex.: 400 Bad Request) não pode quebrar a galeria inteira.
       // Mantemos o path cru como fallback para aquela foto específica.
       // Também trocamos Promise.all por Promise.allSettled para garantir
       // que o map rode até o fim mesmo se uma rejeitar.
@@ -35,8 +39,8 @@ export default function GaleriaFotosMoto({ fotos }: GaleriaFotosMotoProps) {
           // thumbPath preferido; cai no url para fotos legadas/documento
           const path = foto.thumbPath ?? foto.url;
           if (!path.startsWith("http")) {
-            const signedUrl = await obterSignedUrl(path);
-            return { index, url: signedUrl };
+            const resolvedUrl = await obterUrlParaFoto(path, "moto");
+            return { index, url: resolvedUrl };
           }
           return { index, url: path };
         })
@@ -48,7 +52,7 @@ export default function GaleriaFotosMoto({ fotos }: GaleriaFotosMotoProps) {
           // Fallback: a foto problemática fica sem `urls[index]` — o thumb
           // não renderiza (placeholder), mas as outras fotos renderizam.
           console.warn(
-            `[GaleriaFotosMoto] Falha ao assinar URL, usando path cru: ${String(
+            `[GaleriaFotosMoto] Falha ao resolver URL, usando path cru: ${String(
               r.reason
             )}`
           );
