@@ -662,6 +662,150 @@ describe("Oficina — toast de erro em Adicionar Foto de Status", () => {
 });
 
 // ============================================================================
+// Conclusão de serviço espelha statusEntrega → aba "Concluídos"
+// ----------------------------------------------------------------------------
+// A aba "Concluídos" filtra server-side por `statusEntrega IN
+// ('entregue', 'retirado')`. O fluxo "Concluir" (= confirmar
+// pagamento) precisa setar `statusEntrega: "entregue"` no payload do
+// `atualizarProgresso` e na atualização otimista `atualizarMoto` em
+// AMBAS as instâncias de `useMotosOficina` (Em Andamento e
+// Concluídos) — sem isso, o card fica preso na aba "Em Andamento"
+// mesmo com `status="concluido"`. Espelha o padrão já existente do
+// "Reabrir" (`Oficina.tsx:302-335`), que reseta
+// `statusEntrega: "pendente"`.
+// ============================================================================
+describe("Oficina — concluir move moto para a aba 'Concluídos' (statusEntrega)", () => {
+  it("'Concluir' → confirmar pagamento envia statusEntrega:'entregue' no payload e na otimista", async () => {
+    // Mock dedicado: vi.clearAllMocks() zera call history mas mantém
+    // mockReturnValue de testes anteriores — resetamos aqui para
+    // garantir isolamento.
+    useAtualizarProgressoStatusMock.mockReset();
+    const atualizarMock = vi.fn().mockResolvedValue(true);
+    useAtualizarProgressoStatusMock.mockReturnValue({
+      atualizar: atualizarMock,
+      loading: false,
+      error: null,
+    });
+
+    // Moto na aba "Em Andamento" com status='alinhando' (o botão
+    // "Concluir" só é renderizado para esse status, ver
+    // `Oficina.tsx:770-801`).
+    const motoAlinhando = {
+      ...makeMoto("em-1"),
+      status: "alinhando" as const,
+    };
+    const { emAndamento, concluidos } = mockUseMotosOficina(
+      { motos: [motoAlinhando], total: 1, hasMore: false },
+      { motos: [], total: 0, hasMore: false }
+    );
+
+    render(<Oficina />);
+
+    // 1. Clicar no botão "Concluir" do card.
+    const botaoConcluir = await screen.findByRole("button", {
+      name: /^concluir$/i,
+    });
+    fireEvent.click(botaoConcluir);
+
+    // 2. Modal de pagamento abre → selecionar "Pix".
+    const botaoPix = await screen.findByRole("button", { name: /^pix$/i });
+    fireEvent.click(botaoPix);
+
+    // 3. Botão "Confirmar" (habilitado após escolher forma de
+    //    pagamento, `Oficina.tsx:1228`).
+    const botaoConfirmar = screen.getByRole("button", {
+      name: /^confirmar$/i,
+    });
+    fireEvent.click(botaoConfirmar);
+
+    // 4. atualizarProgresso chamado UMA vez com o payload correto.
+    await waitFor(() => {
+      expect(atualizarMock).toHaveBeenCalledTimes(1);
+    });
+    // statusEntrega: 'entregue' faz a moto aparecer na aba
+    // "Concluídos" no próximo load server-side. Hoje essa
+    // asserção FALHA (código omite o campo) — é o RED do TDD.
+    expect(atualizarMock).toHaveBeenCalledWith(
+      "em-1",
+      expect.objectContaining({
+        status: "concluido",
+        statusEntrega: "entregue",
+        formaPagamento: "pix",
+      })
+    );
+
+    // 5. Atualização otimista: ambas as instâncias recebem
+    //    statusEntrega: 'entregue' para que o card SUMA da lista
+    //    "Em Andamento" (filtro client-side `statusEntrega ===
+    //    'pendente'`, `Oficina.tsx:514`) e APAREÇA na lista
+    //    "Concluídos" (`Oficina.tsx:519`).
+    expect(emAndamento.atualizarMoto).toHaveBeenCalledWith(
+      "em-1",
+      expect.objectContaining({ statusEntrega: "entregue" })
+    );
+    expect(concluidos.atualizarMoto).toHaveBeenCalledWith(
+      "em-1",
+      expect.objectContaining({ statusEntrega: "entregue" })
+    );
+  });
+
+  it("(regressão) 'Reabrir' continua resetando statusEntrega para 'pendente'", async () => {
+    useAtualizarProgressoStatusMock.mockReset();
+    const atualizarMock = vi.fn().mockResolvedValue(true);
+    useAtualizarProgressoStatusMock.mockReturnValue({
+      atualizar: atualizarMock,
+      loading: false,
+      error: null,
+    });
+
+    // Moto na aba "Concluídos" com status='concluido' e
+    // statusEntrega='entregue' (o botão "Reabrir" só é renderizado
+    // quando moto.status === 'concluido').
+    const motoConcluida = {
+      ...makeMoto("con-1"),
+      status: "concluido" as const,
+      statusEntrega: "entregue" as const,
+    };
+    mockUseMotosOficina(
+      { motos: [], total: 0, hasMore: false },
+      { motos: [motoConcluida], total: 1, hasMore: false }
+    );
+
+    render(<Oficina />);
+
+    // Trocar para a aba "Concluídos" (default é "Em Andamento";
+    // o filtro client-side da aba Em Andamento exclui esta moto).
+    // Radix Tabs usa pointer/mouseDown + click (mesmo padrão do
+    // teste "(b) trocar aba zera paginação" acima).
+    const tabConcluidos = screen.getByRole("tab", { name: /concluídos/i });
+    act(() => {
+      fireEvent.pointerDown(tabConcluidos, { button: 0, ctrlKey: false });
+      fireEvent.mouseDown(tabConcluidos, { button: 0 });
+      fireEvent.click(tabConcluidos);
+    });
+
+    // Botão "Reabrir" do card.
+    const botaoReabrir = await screen.findByRole("button", {
+      name: /^reabrir$/i,
+    });
+    fireEvent.click(botaoReabrir);
+
+    await waitFor(() => {
+      expect(atualizarMock).toHaveBeenCalledTimes(1);
+    });
+    // statusEntrega: 'pendente' é o que faz a moto voltar para a
+    // aba "Em Andamento" (filtro server-side).
+    expect(atualizarMock).toHaveBeenCalledWith(
+      "con-1",
+      expect.objectContaining({
+        status: "pendente",
+        statusEntrega: "pendente",
+      })
+    );
+  });
+});
+
+// ============================================================================
 // Ciclo 3 — `MotoCompleta.fotos` migra para `Foto[]` + `Oficina` consome
 // ----------------------------------------------------------------------------
 // A página não deve mais embrulhar `string` num `Foto` com

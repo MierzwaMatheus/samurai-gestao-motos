@@ -387,6 +387,15 @@ export default function Oficina() {
       status: "concluido",
       dataConclusao: new Date(),
       formaPagamento: formaPagamentoSelecionada,
+      // MVP: ao concluir (= botão "Concluir"), marca a entrada
+      // como 'entregue' para que ela apareça na aba "Concluídos"
+      // (filtro server-side por statusEntrega ∈
+      // {entregue,retirado}). Espelha o `statusEntrega:
+      // "pendente"` do caminho "Reabrir" (linha 321). O split
+      // 'entregue' vs 'retirado' é intencionalmente MVP —
+      // refinamento (escolha + upload de OS assinada) fica para
+      // `useAtualizarStatusEntrega`.
+      statusEntrega: "entregue",
     });
 
     if (sucesso) {
@@ -396,6 +405,7 @@ export default function Oficina() {
         dataConclusao: new Date(),
         formaPagamento: formaPagamentoSelecionada,
         statusPagamento: "pendente",
+        statusEntrega: "entregue",
       });
       toast.success("Serviço concluído! Pagamento pendente.");
       handleCancelarPagamento();
