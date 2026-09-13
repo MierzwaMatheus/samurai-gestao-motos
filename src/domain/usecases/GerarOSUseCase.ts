@@ -24,7 +24,7 @@ export class GerarOSUseCase {
 
   async execute(entradaId: string): Promise<{
     entrada: Entrada;
-    cliente: { nome: string; telefone?: string; endereco?: string };
+    cliente: { nome: string; telefone?: string; endereco?: string; cpfCnpj?: string };
     moto: {
       modelo: string;
       placa?: string;
@@ -106,6 +106,7 @@ export class GerarOSUseCase {
         nome: cliente.nome,
         telefone: cliente.telefone,
         endereco: cliente.endereco,
+        cpfCnpj: cliente.cpfCnpj,
       },
       moto: {
         modelo: moto.modelo,

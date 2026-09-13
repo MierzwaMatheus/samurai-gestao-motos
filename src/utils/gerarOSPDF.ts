@@ -3,6 +3,8 @@
  * Esta é uma implementação de infraestrutura que conhece detalhes de geração de PDF
  */
 
+import { formatarCpfCnpj } from "@/utils/cpfCnpj";
+
 interface DadosOS {
   entrada: {
     id: string;
@@ -20,6 +22,7 @@ interface DadosOS {
     nome: string;
     telefone?: string;
     endereco?: string;
+    cpfCnpj?: string;
   };
   moto: {
     modelo: string;
@@ -236,6 +239,14 @@ export async function gerarOSPDF(dados: DadosOS): Promise<Blob> {
               <span class="label">TELEFONE</span>
               <span class="value">${dados.cliente.telefone || ""}</span>
             </td>
+            ${
+              dados.cliente.cpfCnpj
+                ? `<td>
+              <span class="label">CPF/CNPJ</span>
+              <span class="value">${formatarCpfCnpj(dados.cliente.cpfCnpj)}</span>
+            </td>`
+                : ""
+            }
             <td colspan="2">
               <span class="label">ENDEREÇO</span>
               <span class="value">${dados.cliente.endereco || ""}</span>

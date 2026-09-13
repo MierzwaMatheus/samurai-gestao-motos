@@ -134,3 +134,57 @@ describe("gerarOSPDF — ciclo 3 (URLs já resolvidas pelo use case)", () => {
     expect(blob.type).toBe("text/html");
   });
 });
+
+/**
+ * CPF/CNPJ é opcional no cadastro do cliente. Quando preenchido, aparece
+ * formatado no bloco "Dados do Cliente"; quando não, a linha some por
+ * completo em vez de imprimir um campo vazio.
+ */
+describe("gerarOSPDF — CPF/CNPJ do cliente", () => {
+  const dadosBase = {
+    entrada: { id: "abcdef12-0000-0000-0000-000000000000", tipo: "entrada", frete: null },
+    moto: { modelo: "CB 500" },
+    fotos: [],
+  };
+
+  it("imprime o CPF formatado quando o cliente tem documento", async () => {
+    const blob = await gerarOSPDF({
+      ...dadosBase,
+      cliente: { nome: "João da Silva", telefone: "11999", cpfCnpj: "52998224725" },
+    } as never);
+    const html = await blob.text();
+
+    expect(html).toContain("CPF/CNPJ");
+    expect(html).toContain("529.982.247-25");
+  });
+
+  it("imprime o CNPJ formatado quando o cliente é pessoa jurídica", async () => {
+    const blob = await gerarOSPDF({
+      ...dadosBase,
+      cliente: { nome: "Motos LTDA", cpfCnpj: "11222333000181" },
+    } as never);
+    const html = await blob.text();
+
+    expect(html).toContain("11.222.333/0001-81");
+  });
+
+  it("omite a linha de CPF/CNPJ quando o cliente não informou documento", async () => {
+    const blob = await gerarOSPDF({
+      ...dadosBase,
+      cliente: { nome: "João da Silva", telefone: "11999" },
+    } as never);
+    const html = await blob.text();
+
+    expect(html).not.toContain("CPF/CNPJ");
+  });
+
+  it("omite a linha de CPF/CNPJ quando o documento vem vazio", async () => {
+    const blob = await gerarOSPDF({
+      ...dadosBase,
+      cliente: { nome: "João da Silva", cpfCnpj: "" },
+    } as never);
+    const html = await blob.text();
+
+    expect(html).not.toContain("CPF/CNPJ");
+  });
+});

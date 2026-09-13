@@ -16,6 +16,7 @@ export class SupabaseClienteRepository implements ClienteRepository {
         email: cliente.email,
         endereco: cliente.endereco,
         cep: cliente.cep,
+        cpf_cnpj: cliente.cpfCnpj,
       })
       .select()
       .single();
@@ -92,6 +93,7 @@ export class SupabaseClienteRepository implements ClienteRepository {
         email: dados.email,
         endereco: dados.endereco,
         cep: dados.cep,
+        cpf_cnpj: dados.cpfCnpj,
       })
       .eq("id", id)
       .select()
@@ -123,6 +125,7 @@ export class SupabaseClienteRepository implements ClienteRepository {
       email: data.email,
       endereco: data.endereco,
       cep: data.cep,
+      cpfCnpj: data.cpf_cnpj ?? undefined,
       numeroServicos: data.numero_servicos || 0,
       criadoEm: new Date(data.criado_em),
       atualizadoEm: new Date(data.atualizado_em),

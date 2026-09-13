@@ -4,7 +4,7 @@ import { EntradaRepository } from "@/domain/interfaces/EntradaRepository";
 import { OrcamentoRepository } from "@/domain/interfaces/OrcamentoRepository";
 import { TipoServicoRepository } from "@/domain/interfaces/TipoServicoRepository";
 import { ServicoPersonalizadoRepository } from "@/domain/interfaces/ServicoPersonalizadoRepository";
-import { DadosCadastro } from "@shared/types";
+import { Cliente, DadosCadastro } from "@shared/types";
 
 /**
  * Caso de uso: Criar entrada (entrada ou orçamento)
@@ -40,12 +40,7 @@ export class CriarEntradaUseCase {
         throw new Error("Cliente não encontrado");
       }
       clienteId = clienteExistente.id;
-      // Atualiza telefone se fornecido
-      if (dados.telefone && clienteExistente.telefone !== dados.telefone) {
-        await this.clienteRepo.atualizar(clienteId, {
-          telefone: dados.telefone,
-        });
-      }
+      await this.sincronizarCadastroCliente(clienteId, clienteExistente, dados);
     } else {
       // Buscar cliente existente por nome ou criar novo
       const clientesExistentes = await this.clienteRepo.buscarPorNome(
@@ -57,18 +52,14 @@ export class CriarEntradaUseCase {
 
       if (clienteExistente) {
         clienteId = clienteExistente.id;
-        // Atualiza telefone se fornecido
-        if (dados.telefone && clienteExistente.telefone !== dados.telefone) {
-          await this.clienteRepo.atualizar(clienteId, {
-            telefone: dados.telefone,
-          });
-        }
+        await this.sincronizarCadastroCliente(clienteId, clienteExistente, dados);
       } else {
         const novoCliente = await this.clienteRepo.criar({
           nome: dados.cliente,
           telefone: dados.telefone,
           endereco: dados.endereco,
           cep: dados.cep?.replace(/\D/g, ""),
+          cpfCnpj: apenasDigitos(dados.cpfCnpj),
           numeroServicos: 0,
         });
         clienteId = novoCliente.id;
@@ -162,4 +153,35 @@ export class CriarEntradaUseCase {
 
     return { entradaId: entrada.id, orcamentoId };
   }
+
+  /**
+   * Mantém o cadastro do cliente em dia com o que foi digitado no
+   * formulário de entrada. Só grava os campos que realmente mudaram e
+   * nunca apaga um dado já salvo quando o campo vem em branco.
+   */
+  private async sincronizarCadastroCliente(
+    clienteId: string,
+    clienteExistente: Cliente,
+    dados: DadosCadastro
+  ): Promise<void> {
+    const alteracoes: Partial<Cliente> = {};
+
+    if (dados.telefone && clienteExistente.telefone !== dados.telefone) {
+      alteracoes.telefone = dados.telefone;
+    }
+
+    const cpfCnpj = apenasDigitos(dados.cpfCnpj);
+    if (cpfCnpj && clienteExistente.cpfCnpj !== cpfCnpj) {
+      alteracoes.cpfCnpj = cpfCnpj;
+    }
+
+    if (Object.keys(alteracoes).length > 0) {
+      await this.clienteRepo.atualizar(clienteId, alteracoes);
+    }
+  }
+}
+
+/** Normaliza o documento digitado (com máscara) para somente dígitos. */
+function apenasDigitos(valor: string | undefined): string | undefined {
+  return valor?.replace(/\D/g, "") || undefined;
 }

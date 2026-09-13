@@ -28,6 +28,7 @@ import {
   Phone,
   Mail,
   MapPin,
+  IdCard,
   Wrench,
   Search,
   Edit,
@@ -37,6 +38,11 @@ import {
 import { toast } from "sonner";
 import { SupabaseClienteRepository } from "@/infrastructure/repositories/SupabaseClienteRepository";
 import { useClientes } from "@/hooks/useClientes";
+import {
+  formatarCpfCnpj,
+  mascararCpfCnpjParcial,
+  validarCpfCnpj,
+} from "@/utils/cpfCnpj";
 import { Cliente } from "@shared/types";
 
 export default function Clientes() {
@@ -59,6 +65,7 @@ export default function Clientes() {
     email: "",
     endereco: "",
     cep: "",
+    cpfCnpj: "",
   });
 
   // Filtrar clientes pela busca
@@ -81,6 +88,7 @@ export default function Clientes() {
       email: cliente.email || "",
       endereco: cliente.endereco || "",
       cep: cliente.cep || "",
+      cpfCnpj: formatarCpfCnpj(cliente.cpfCnpj),
     });
     setMostrarDialogEditar(true);
   };
@@ -94,6 +102,7 @@ export default function Clientes() {
       email: "",
       endereco: "",
       cep: "",
+      cpfCnpj: "",
     });
   };
 
@@ -105,6 +114,11 @@ export default function Clientes() {
       return;
     }
 
+    if (!validarCpfCnpj(formData.cpfCnpj)) {
+      toast.error("CPF/CNPJ inválido");
+      return;
+    }
+
     setSalvando(true);
     try {
       const clienteAtualizado = await clienteRepo.atualizar(clienteEditando.id, {
@@ -113,6 +127,7 @@ export default function Clientes() {
         email: formData.email || undefined,
         endereco: formData.endereco || undefined,
         cep: formData.cep?.replace(/\D/g, "") || undefined,
+        cpfCnpj: formData.cpfCnpj.replace(/\D/g, "") || undefined,
       });
       atualizarCliente(clienteEditando.id, clienteAtualizado);
       toast.success("Cliente atualizado com sucesso!");
@@ -249,6 +264,7 @@ export default function Clientes() {
                       <Button
                         variant="ghost"
                         size="sm"
+                        data-testid="botao-editar-cliente"
                         onClick={() => handleAbrirDialogEditar(cliente)}
                         className="h-8 w-8 p-0"
                       >
@@ -276,6 +292,14 @@ export default function Clientes() {
                       <div className="flex items-center gap-2 text-sm text-foreground/70">
                         <Mail size={14} />
                         <span>{cliente.email}</span>
+                      </div>
+                    )}
+                    {cliente.cpfCnpj && (
+                      // Documento parcialmente mascarado: só os 3 primeiros
+                      // dígitos ficam visíveis na listagem.
+                      <div className="flex items-center gap-2 text-sm text-foreground/70">
+                        <IdCard size={14} />
+                        <span>{mascararCpfCnpjParcial(cliente.cpfCnpj)}</span>
                       </div>
                     )}
                     {cliente.endereco && (
@@ -338,6 +362,19 @@ export default function Clientes() {
                 type="email"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                className="bg-card border-foreground/10"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cpfCnpj">CPF/CNPJ</Label>
+              <Input
+                id="cpfCnpj"
+                inputMode="numeric"
+                placeholder="Opcional"
+                value={formData.cpfCnpj}
+                onChange={(e) =>
+                  setFormData({ ...formData, cpfCnpj: formatarCpfCnpj(e.target.value) })
+                }
                 className="bg-card border-foreground/10"
               />
             </div>

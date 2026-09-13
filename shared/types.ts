@@ -35,6 +35,7 @@ export interface DadosCadastro {
   entradaId?: string; // ID da entrada existente quando em modo de edição
   orcamentoId?: string; // ID do orçamento quando editando a partir de um orçamento
   telefone?: string;
+  cpfCnpj?: string; // CPF ou CNPJ do cliente (opcional)
   endereco?: string;
   cep?: string;
   moto: string;
@@ -65,6 +66,7 @@ export interface Cliente {
   email?: string;
   endereco?: string;
   cep?: string;
+  cpfCnpj?: string; // Opcional; sai impresso na OS quando preenchido
   numeroServicos: number;
   criadoEm: Date;
   atualizadoEm: Date;

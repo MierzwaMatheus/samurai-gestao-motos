@@ -18,6 +18,7 @@ import { Switch } from "@/components/ui/switch";
 import { ImagePlus, Truck, Search, MapPin, Store } from "lucide-react";
 import { toast } from "sonner";
 import { ClienteSearch } from "@/components/ClienteSearch";
+import { formatarCpfCnpj, validarCpfCnpj } from "@/utils/cpfCnpj";
 import { GerenciarServicos } from "@/components/GerenciarServicos";
 import { ViaCepService } from "@/infrastructure/api/ViaCepService";
 import { BuscarEnderecoPorCepUseCase } from "@/domain/usecases/BuscarEnderecoPorCepUseCase";
@@ -127,6 +128,7 @@ export default function Cadastro() {
     tipo: "entrada",
     cliente: "",
     telefone: "",
+    cpfCnpj: "",
     endereco: "",
     cep: "",
     moto: "",
@@ -399,6 +401,7 @@ export default function Cadastro() {
         cliente: cliente.nome,
         clienteId: cliente.id,
         telefone: cliente.telefone || "",
+        cpfCnpj: formatarCpfCnpj(cliente.cpfCnpj),
         endereco: cliente.endereco || "",
         cep: cliente.cep || "",
       });
@@ -408,6 +411,7 @@ export default function Cadastro() {
         cliente: "",
         clienteId: undefined,
         telefone: "",
+        cpfCnpj: "",
         endereco: "",
         cep: "",
       });
@@ -424,6 +428,7 @@ export default function Cadastro() {
         cliente: "",
         clienteId: undefined,
         telefone: "",
+        cpfCnpj: "",
         endereco: "",
         cep: "",
       });
@@ -536,6 +541,11 @@ export default function Cadastro() {
 
     if (!formData.moto) {
       toast.error("Preencha todos os campos obrigatórios (*)");
+      return;
+    }
+
+    if (!validarCpfCnpj(formData.cpfCnpj)) {
+      toast.error("CPF/CNPJ inválido");
       return;
     }
 
@@ -751,6 +761,28 @@ export default function Cadastro() {
                     }}
                     className="bg-card border-foreground/10"
                     required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="cpfCnpj"
+                    className="text-xs uppercase tracking-widest"
+                  >
+                    CPF/CNPJ
+                  </Label>
+                  <Input
+                    id="cpfCnpj"
+                    name="cpfCnpj"
+                    inputMode="numeric"
+                    placeholder="Opcional"
+                    value={formData.cpfCnpj}
+                    onChange={e =>
+                      setFormData({
+                        ...formData,
+                        cpfCnpj: formatarCpfCnpj(e.target.value),
+                      })
+                    }
+                    className="bg-card border-foreground/10"
                   />
                 </div>
               </>
