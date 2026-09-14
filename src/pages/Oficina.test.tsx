@@ -919,3 +919,119 @@ describe("Oficina — ciclo 3 (galeria de fotos da moto consome Foto[])", () => 
     );
   });
 });
+
+// ============================================================================
+// Filtro Pago / Pendente na aba Concluídos
+// ----------------------------------------------------------------------------
+// O filtro é server-side: a página não fatia a lista localmente, ela
+// repassa `statusPagamento` ao `useMotosOficina` da aba Concluídos, que
+// por sua vez combina com a busca (AND) no backend. Assim o contador
+// "Mostrando X de Y" e o scroll infinito continuam corretos.
+// ============================================================================
+describe("Oficina — filtro Pago/Pendente na aba Concluídos", () => {
+  /** Último `opts` com que a instância de Concluídos (2ª chamada) foi montada. */
+  const ultimoOptsConcluidos = () => {
+    const chamadas = useMotosOficinaMock.mock.calls;
+    // As instâncias alternam: índices ímpares são a de Concluídos.
+    for (let i = chamadas.length - 1; i >= 0; i--) {
+      if (i % 2 === 1) return chamadas[i][1] as Record<string, unknown>;
+    }
+    return undefined;
+  };
+
+  const abrirConcluidos = () => {
+    fireEvent.click(screen.getByRole("tab", { name: /Concluídos/i }));
+  };
+
+  it("começa em 'Todos', sem enviar filtro de pagamento ao servidor", async () => {
+    mockUseMotosOficina();
+    render(<Oficina />);
+    abrirConcluidos();
+
+    expect(ultimoOptsConcluidos()?.statusPagamento).toBeUndefined();
+  });
+
+  it("envia statusPagamento ['pago'] ao escolher Pago", async () => {
+    mockUseMotosOficina();
+    render(<Oficina />);
+    abrirConcluidos();
+
+    fireEvent.click(screen.getByTestId("oficina-filtro-pagamento-pago"));
+
+    expect(ultimoOptsConcluidos()?.statusPagamento).toEqual(["pago"]);
+  });
+
+  it("envia statusPagamento ['pendente'] ao escolher Pendente", async () => {
+    mockUseMotosOficina();
+    render(<Oficina />);
+    abrirConcluidos();
+
+    fireEvent.click(screen.getByTestId("oficina-filtro-pagamento-pendente"));
+
+    expect(ultimoOptsConcluidos()?.statusPagamento).toEqual(["pendente"]);
+  });
+
+  it("volta a não filtrar ao escolher Todos de novo", async () => {
+    mockUseMotosOficina();
+    render(<Oficina />);
+    abrirConcluidos();
+
+    fireEvent.click(screen.getByTestId("oficina-filtro-pagamento-pago"));
+    fireEvent.click(screen.getByTestId("oficina-filtro-pagamento-todos"));
+
+    expect(ultimoOptsConcluidos()?.statusPagamento).toBeUndefined();
+  });
+
+  it("recarrega a lista de Concluídos ao trocar o filtro de pagamento", () => {
+    const { concluidos } = mockUseMotosOficina();
+    render(<Oficina />);
+    abrirConcluidos();
+
+    const antes = concluidos.recarregar.mock.calls.length;
+    fireEvent.click(screen.getByTestId("oficina-filtro-pagamento-pago"));
+
+    // Sem isso o botão fica marcado mas a lista continua a anterior.
+    expect(concluidos.recarregar.mock.calls.length).toBeGreaterThan(antes);
+  });
+
+  it("não dispara recarga extra de Concluídos na montagem", () => {
+    const { concluidos } = mockUseMotosOficina();
+    render(<Oficina />);
+
+    // Só a carga inicial — o efeito do filtro não pode duplicar a request.
+    expect(concluidos.recarregar).toHaveBeenCalledTimes(1);
+  });
+
+  it("não aplica o filtro de pagamento à aba Em Andamento", async () => {
+    mockUseMotosOficina();
+    render(<Oficina />);
+    abrirConcluidos();
+
+    fireEvent.click(screen.getByTestId("oficina-filtro-pagamento-pago"));
+
+    const chamadasEmAndamento = useMotosOficinaMock.mock.calls.filter(
+      (_c, i) => i % 2 === 0
+    );
+    for (const chamada of chamadasEmAndamento) {
+      expect(
+        (chamada[1] as Record<string, unknown>).statusPagamento
+      ).toBeUndefined();
+    }
+  });
+
+  it("mantém a busca textual da aba ao trocar o filtro de pagamento", async () => {
+    const { concluidos } = mockUseMotosOficina();
+    render(<Oficina />);
+    abrirConcluidos();
+
+    fireEvent.change(screen.getByTestId("oficina-concluidos-busca"), {
+      target: { value: "CG" },
+    });
+    fireEvent.click(screen.getByTestId("oficina-filtro-pagamento-pago"));
+
+    // O termo digitado continua no input e o filtro foi para o servidor.
+    expect(screen.getByTestId("oficina-concluidos-busca")).toHaveValue("CG");
+    expect(concluidos.setBusca).toHaveBeenCalled();
+    expect(ultimoOptsConcluidos()?.statusPagamento).toEqual(["pago"]);
+  });
+});

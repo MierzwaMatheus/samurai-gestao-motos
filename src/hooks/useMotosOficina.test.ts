@@ -451,4 +451,142 @@ describe("useMotosOficina — ciclo 6 (paginado + busca server-side debounced 30
     expect(result.current.error).toBe("Falha de conexão");
     expect(result.current.loading).toBe(false);
   });
+
+  it("repassa statusPagamento ao repositório e o mantém ao carregar mais", async () => {
+    const entradaRepo = buildEntradaRepo() as unknown as EntradaRepository;
+
+    (entradaRepo.buscarPagina as ReturnType<typeof vi.fn>).mockResolvedValue({
+      items: [makeMotoCompleta("entrada-1")],
+      total: 5,
+      page: 1,
+      pageSize: 1,
+    });
+
+    const { result } = renderHook(() =>
+      useMotosOficina(entradaRepo, {
+        page: 1,
+        pageSize: 1,
+        statusEntrega: ["entregue", "retirado"],
+        statusPagamento: ["pago"],
+      })
+    );
+
+    await act(async () => {
+      await result.current.recarregar();
+    });
+
+    expect(entradaRepo.buscarPagina).toHaveBeenLastCalledWith({
+      page: 1,
+      pageSize: 1,
+      statusEntrega: ["entregue", "retirado"],
+      statusPagamento: ["pago"],
+    });
+
+    // O filtro não pode se perder na próxima página do scroll infinito.
+    await act(async () => {
+      await result.current.carregarMais();
+    });
+
+    expect(entradaRepo.buscarPagina).toHaveBeenLastCalledWith({
+      page: 2,
+      pageSize: 1,
+      statusEntrega: ["entregue", "retirado"],
+      statusPagamento: ["pago"],
+    });
+  });
+
+  it("mantém statusPagamento quando a busca textual dispara", async () => {
+    vi.useFakeTimers();
+    const entradaRepo = buildEntradaRepo() as unknown as EntradaRepository;
+
+    (entradaRepo.buscarPagina as ReturnType<typeof vi.fn>).mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 10,
+    });
+
+    const { result } = renderHook(() =>
+      useMotosOficina(entradaRepo, {
+        page: 1,
+        pageSize: 10,
+        statusPagamento: ["pendente"],
+      })
+    );
+
+    act(() => {
+      result.current.setBusca("CG");
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+
+    // Busca e filtro de pagamento convivem na mesma request (AND).
+    expect(entradaRepo.buscarPagina).toHaveBeenLastCalledWith({
+      page: 1,
+      pageSize: 10,
+      statusPagamento: ["pendente"],
+      busca: "CG",
+    });
+
+    vi.useRealTimers();
+  });
+
+  it("passa a usar o novo statusPagamento quando o filtro muda", async () => {
+    const entradaRepo = buildEntradaRepo() as unknown as EntradaRepository;
+
+    (entradaRepo.buscarPagina as ReturnType<typeof vi.fn>).mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 10,
+    });
+
+    const { result, rerender } = renderHook(
+      ({ statusPagamento }: { statusPagamento?: ("pendente" | "pago")[] }) =>
+        useMotosOficina(entradaRepo, { page: 1, pageSize: 10, statusPagamento }),
+      { initialProps: { statusPagamento: ["pago"] as ("pendente" | "pago")[] } }
+    );
+
+    await act(async () => {
+      await result.current.recarregar();
+    });
+
+    rerender({ statusPagamento: ["pendente"] as ("pendente" | "pago")[] });
+
+    await act(async () => {
+      await result.current.recarregar();
+    });
+
+    // Sem recriar o callback de carga, a request continuaria usando o
+    // filtro antigo capturado no closure.
+    expect(entradaRepo.buscarPagina).toHaveBeenLastCalledWith({
+      page: 1,
+      pageSize: 10,
+      statusPagamento: ["pendente"],
+    });
+  });
+
+  it("não envia statusPagamento quando o filtro é 'Todos' (omitido)", async () => {
+    const entradaRepo = buildEntradaRepo() as unknown as EntradaRepository;
+
+    (entradaRepo.buscarPagina as ReturnType<typeof vi.fn>).mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 10,
+    });
+
+    const { result } = renderHook(() =>
+      useMotosOficina(entradaRepo, { page: 1, pageSize: 10 })
+    );
+
+    await act(async () => {
+      await result.current.recarregar();
+    });
+
+    const argumentos = (entradaRepo.buscarPagina as ReturnType<typeof vi.fn>)
+      .mock.calls[0][0];
+    expect(argumentos.statusPagamento).toBeUndefined();
+  });
 });

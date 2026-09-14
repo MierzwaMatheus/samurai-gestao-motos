@@ -231,6 +231,125 @@ describe("SupabaseEntradaRepository — paginação", () => {
     ]);
   });
 
+  it("aplica .in('status_pagamento', [...]) quando statusPagamento é informado", async () => {
+    buildBucket();
+    const { entradasChain } = setupPagedEntradas();
+
+    await new SupabaseEntradaRepository().buscarPagina({
+      page: 1,
+      pageSize: 10,
+      statusPagamento: ["pago"],
+    });
+
+    expect(entradasChain.in).toHaveBeenCalledWith("status_pagamento", ["pago"]);
+  });
+
+  it("inclui registros sem status_pagamento ao filtrar por 'pendente'", async () => {
+    buildBucket();
+    const { entradasChain } = setupPagedEntradas();
+
+    await new SupabaseEntradaRepository().buscarPagina({
+      page: 1,
+      pageSize: 10,
+      statusPagamento: ["pendente"],
+    });
+
+    // Entradas antigas têm status_pagamento NULL mas a UI já as mostra
+    // como pendentes — o filtro precisa trazê-las junto.
+    const clausulas = entradasChain.or.mock.calls.map(
+      (c: unknown[]) => c[0] as string
+    );
+    expect(
+      clausulas.some(
+        (cl) =>
+          cl.includes("status_pagamento.is.null") &&
+          cl.includes("status_pagamento.eq.pendente")
+      )
+    ).toBe(true);
+    expect(entradasChain.in).not.toHaveBeenCalledWith(
+      "status_pagamento",
+      expect.any(Array)
+    );
+  });
+
+  it("usa .in('status_pagamento', ['pago']) sem incluir nulos ao filtrar por 'pago'", async () => {
+    buildBucket();
+    const { entradasChain } = setupPagedEntradas();
+
+    await new SupabaseEntradaRepository().buscarPagina({
+      page: 1,
+      pageSize: 10,
+      statusPagamento: ["pago"],
+    });
+
+    expect(entradasChain.in).toHaveBeenCalledWith("status_pagamento", ["pago"]);
+    const clausulas = entradasChain.or.mock.calls.map(
+      (c: unknown[]) => c[0] as string
+    );
+    expect(clausulas.some((cl) => cl.includes("status_pagamento.is.null"))).toBe(
+      false
+    );
+  });
+
+  it("não aplica .in('status_pagamento', ...) quando statusPagamento é omitido", async () => {
+    buildBucket();
+    const { entradasChain } = setupPagedEntradas();
+
+    await new SupabaseEntradaRepository().buscarPagina({
+      page: 1,
+      pageSize: 10,
+    });
+
+    expect(entradasChain.in).not.toHaveBeenCalledWith(
+      "status_pagamento",
+      expect.any(Array)
+    );
+  });
+
+  it("não aplica .in('status_pagamento', ...) quando a lista vem vazia", async () => {
+    buildBucket();
+    const { entradasChain } = setupPagedEntradas();
+
+    await new SupabaseEntradaRepository().buscarPagina({
+      page: 1,
+      pageSize: 10,
+      statusPagamento: [],
+    });
+
+    expect(entradasChain.in).not.toHaveBeenCalledWith(
+      "status_pagamento",
+      expect.any(Array)
+    );
+  });
+
+  it("combina statusPagamento com statusEntrega e busca na mesma consulta", async () => {
+    buildBucket();
+    const { entradasChain } = setupPagedEntradas();
+
+    await new SupabaseEntradaRepository().buscarPagina({
+      page: 1,
+      pageSize: 10,
+      statusEntrega: ["entregue", "retirado"],
+      statusPagamento: ["pendente"],
+      busca: "CG",
+    });
+
+    // Os três filtros convivem: entrega via .in(); pagamento "pendente" e
+    // busca via .or() — o PostgREST combina múltiplos .or() com AND.
+    expect(entradasChain.in).toHaveBeenCalledWith("status_entrega", [
+      "entregue",
+      "retirado",
+    ]);
+    const clausulas = entradasChain.or.mock.calls.map(
+      (c: unknown[]) => c[0] as string
+    );
+    expect(clausulas).toHaveLength(2);
+    expect(
+      clausulas.some((cl) => cl.includes("status_pagamento.is.null"))
+    ).toBe(true);
+    expect(clausulas.some((cl) => cl.includes("CG"))).toBe(true);
+  });
+
   it("aplica .in('status', [...]) quando status é informado", async () => {
     buildBucket();
     const { entradasChain } = setupPagedEntradas();

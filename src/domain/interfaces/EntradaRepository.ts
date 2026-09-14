@@ -12,6 +12,7 @@ import { Pagina } from "@/domain/interfaces/OrcamentoRepository";
  * - tipo: filtra entradas pelo tipo ("entrada" | "orcamento")
  * - status: lista de status da oficina aceitos ("pendente" | "alinhando" | "concluido")
  * - statusEntrega: lista de status de entrega aceitos ("pendente" | "entregue" | "retirado")
+ * - statusPagamento: lista de status de pagamento aceitos ("pendente" | "pago")
  * - busca: termo livre aplicado em cliente/moto/placa/serviço
  */
 export interface BuscarPaginaEntradasParams {
@@ -20,6 +21,7 @@ export interface BuscarPaginaEntradasParams {
   tipo?: Entrada["tipo"];
   status?: Entrada["status"][];
   statusEntrega?: NonNullable<Entrada["statusEntrega"]>[];
+  statusPagamento?: NonNullable<Entrada["statusPagamento"]>[];
   busca?: string;
 }
 

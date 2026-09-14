@@ -81,6 +81,18 @@ export default function Oficina() {
   //   - Concluídos    → status_entrega IN ('entregue', 'retirado')
   // A coluna `status` da entrada (sempre 'concluido' para entradas já
   // processadas) NÃO serve para esse split — usar `statusEntrega`.
+  // Filtro de pagamento da aba Concluídos. "todos" não envia filtro ao
+  // servidor; "pago"/"pendente" viram `statusPagamento` na query, que o
+  // backend combina (AND) com a busca textual — por isso o contador e o
+  // scroll infinito continuam refletindo o total filtrado.
+  const [filtroPagamento, setFiltroPagamento] = useState<
+    "todos" | "pago" | "pendente"
+  >("todos");
+  const statusPagamentoFiltro = useMemo(
+    () => (filtroPagamento === "todos" ? undefined : [filtroPagamento]),
+    [filtroPagamento]
+  );
+
   const oficinaEmAndamento = useMotosOficina(entradaRepo, {
     pageSize: 10,
     tipo: "entrada",
@@ -90,6 +102,7 @@ export default function Oficina() {
     pageSize: 10,
     tipo: "entrada",
     statusEntrega: ["entregue", "retirado"],
+    statusPagamento: statusPagamentoFiltro,
   });
 
   // Helper que atualiza uma moto em ambas as instâncias (a moto pode
@@ -114,6 +127,19 @@ export default function Oficina() {
     recarregar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Trocar o filtro de pagamento muda a query da aba Concluídos, então a
+  // lista precisa ser refeita a partir da página 1. O ref evita disparar
+  // uma segunda request na montagem (a carga inicial já acontece acima).
+  const filtroPagamentoMontado = useRef(false);
+  useEffect(() => {
+    if (!filtroPagamentoMontado.current) {
+      filtroPagamentoMontado.current = true;
+      return;
+    }
+    void oficinaConcluidos.recarregar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtroPagamento]);
 
   const { atualizarStatusPagamento, atualizarFormaPagamento } = usePagamento();
 
@@ -978,6 +1004,34 @@ export default function Oficina() {
                     className="pl-10 bg-card border-foreground/10"
                     data-testid="oficina-concluidos-busca"
                   />
+                </div>
+
+                {/* Filtro de pagamento: Todos / Pago / Pendente */}
+                <div
+                  className="flex gap-2"
+                  role="group"
+                  aria-label="Filtrar por pagamento"
+                >
+                  {(
+                    [
+                      { valor: "todos", rotulo: "Todos" },
+                      { valor: "pago", rotulo: "💰 Pago" },
+                      { valor: "pendente", rotulo: "⏳ Pendente" },
+                    ] as const
+                  ).map(({ valor, rotulo }) => (
+                    <Button
+                      key={valor}
+                      type="button"
+                      size="sm"
+                      variant={filtroPagamento === valor ? "default" : "outline"}
+                      aria-pressed={filtroPagamento === valor}
+                      onClick={() => setFiltroPagamento(valor)}
+                      className="flex-1"
+                      data-testid={`oficina-filtro-pagamento-${valor}`}
+                    >
+                      {rotulo}
+                    </Button>
+                  ))}
                 </div>
 
                 {/* Contador discreto "Mostrando X de Y" abaixo do input */}

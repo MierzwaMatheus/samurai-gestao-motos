@@ -125,7 +125,8 @@ export class SupabaseEntradaRepository implements EntradaRepository {
   async buscarPagina(
     params: BuscarPaginaEntradasParams
   ): Promise<Pagina<MotoCompleta>> {
-    const { page, pageSize, tipo, status, statusEntrega, busca } = params;
+    const { page, pageSize, tipo, status, statusEntrega, statusPagamento, busca } =
+      params;
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
 
@@ -159,6 +160,22 @@ export class SupabaseEntradaRepository implements EntradaRepository {
       }
       if (statusEntrega && statusEntrega.length > 0) {
         builder = builder.in("status_entrega", statusEntrega);
+      }
+      if (statusPagamento && statusPagamento.length > 0) {
+        // Entradas antigas (anteriores à migration 18) têm
+        // `status_pagamento` NULL, mas a UI já as exibe como pendentes.
+        // Para que o filtro "Pendente" não deixe nenhuma de fora — e
+        // Pago + Pendente continue somando o total — o ramo pendente vai
+        // por `.or(is.null, eq.pendente)` em vez de `.in()`.
+        if (statusPagamento.includes("pendente")) {
+          const clausulas = statusPagamento.map(
+            (valor) => `status_pagamento.eq.${valor}`
+          );
+          clausulas.push("status_pagamento.is.null");
+          builder = builder.or(clausulas.join(","));
+        } else {
+          builder = builder.in("status_pagamento", statusPagamento);
+        }
       }
       if (busca && busca.trim().length > 0) {
         const term = busca.trim();

@@ -10,6 +10,8 @@ import { Entrada, MotoCompleta } from "@shared/types";
  * - tipo:      filtro server-side pelo tipo de entrada.
  * - status:    filtro server-side pelos status da oficina aceitos.
  * - statusEntrega: filtro server-side pelos status de entrega aceitos.
+ * - statusPagamento: filtro server-side pelos status de pagamento aceitos
+ *                    ("pendente" | "pago"). Omitido = sem filtro ("Todos").
  * - busca:     termo livre enviado ao backend (cliente/moto/placa/serviço).
  *
  * Os filtros `tipo` / `statusEntrega` / `busca` são aplicados **no
@@ -22,6 +24,7 @@ export interface UseMotosOficinaOpts {
   tipo?: Entrada["tipo"];
   status?: Entrada["status"][];
   statusEntrega?: NonNullable<Entrada["statusEntrega"]>[];
+  statusPagamento?: NonNullable<Entrada["statusPagamento"]>[];
   busca?: string;
 }
 
@@ -52,6 +55,7 @@ export function useMotosOficina(
   const tipo = opts.tipo;
   const status = opts.status;
   const statusEntrega = opts.statusEntrega;
+  const statusPagamento = opts.statusPagamento;
   const buscaInicial = opts.busca;
 
   const [motos, setMotos] = useState<MotoCompleta[]>([]);
@@ -84,6 +88,7 @@ export function useMotosOficina(
           tipo,
           status,
           statusEntrega,
+          statusPagamento,
           busca: params.busca,
         });
         if (requestId !== requestRef.current) return;
@@ -102,7 +107,7 @@ export function useMotosOficina(
         }
       }
     },
-    [entradaRepo, pageSize, tipo, status, statusEntrega]
+    [entradaRepo, pageSize, tipo, status, statusEntrega, statusPagamento]
   );
 
   const recarregar = useCallback(async () => {
